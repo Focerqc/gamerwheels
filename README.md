@@ -66,6 +66,21 @@ git push -u origin main
 
 ---
 
+## Deploy to Render (Web Service) in 60 Seconds
+
+1. On your [Render Dashboard](https://dashboard.render.com), click **+ New** -> **Web Service** (shown on the "Create a new Service" screen).
+2. Connect your **`gamerwheels`** GitHub repository.
+3. Configure settings (or let `render.yaml` configure automatically):
+   - **Environment**: `Node`
+   - **Build Command**: `npm install`
+   - **Start Command**: `node server.js`
+   - **Plan**: `Free`
+   - **Health Check Path**: `/health`
+4. Click **Create Web Service**.
+5. Render will deploy the application and give you a free `onrender.com` HTTPS/WSS URL to share and ride with friends!
+
+---
+
 ## Deploy to Railway in 60 Seconds
 
 1. Go to [Railway.app](https://railway.app) and log in.
