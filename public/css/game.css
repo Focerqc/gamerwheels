@@ -1081,6 +1081,100 @@ body.exp9-standalone-page .exp9-hud-layer {
    Multiplayer .IO Overlay Styles (Leaderboard, Online Badge, Trick Feed, Join)
    ========================================================================== */
 
+/* Server Environment Toggle & Badges (Live vs Testing Server) */
+.exp9-server-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  pointer-events: auto;
+}
+
+.exp9-server-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.65rem;
+  backdrop-filter: blur(12px);
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  user-select: none;
+}
+
+.exp9-server-badge.testing {
+  background: rgba(245, 158, 11, 0.2);
+  border: 1px solid rgba(245, 158, 11, 0.65);
+  color: #fbbf24;
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.25);
+  animation: testBadgeGlow 2.5s infinite ease-in-out;
+}
+
+@keyframes testBadgeGlow {
+  0%, 100% { box-shadow: 0 0 10px rgba(245, 158, 11, 0.2); }
+  50% { box-shadow: 0 0 18px rgba(245, 158, 11, 0.45); }
+}
+
+.exp9-server-badge.local {
+  background: rgba(6, 182, 212, 0.16);
+  border: 1px solid rgba(6, 182, 212, 0.5);
+  color: #38bdf8;
+}
+
+.exp9-server-badge .local-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 8px #38bdf8;
+}
+
+.exp9-server-switch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.exp9-server-switch-btn.beta {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.28), rgba(168, 85, 247, 0.38));
+  border: 1px solid rgba(168, 85, 247, 0.7);
+  color: #e9d5ff;
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.3);
+}
+
+.exp9-server-switch-btn.beta:hover {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.45), rgba(168, 85, 247, 0.55));
+  border-color: #d8b4fe;
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.6);
+}
+
+.exp9-server-switch-btn.official {
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  color: #f1f5f9;
+}
+
+.exp9-server-switch-btn.official:hover {
+  background: rgba(51, 65, 85, 0.95);
+  border-color: #38bdf8;
+  color: #38bdf8;
+  transform: translateY(-1px);
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.4);
+}
+
 /* Online Riders Indicator Badge */
 .exp9-online-badge {
   display: inline-flex;

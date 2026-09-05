@@ -296,9 +296,9 @@
     hemiLight.position.set(0, 60, 0);
     scene.add(hemiLight);
 
-    // Directional Sun Light (strong directional shading for hills and berms)
+    // Directional Sun Light (cross-lighting angle for dramatic hill relief and jump shadows)
     sunLight = new THREE.DirectionalLight(0xfffbeb, 1.35);
-    sunLight.position.set(50, 75, 40);
+    sunLight.position.set(-45, 75, 42);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.width = 2048;
     sunLight.shadow.mapSize.height = 2048;
@@ -662,6 +662,54 @@
       roughness: 0.85,
       metalness: 0.05,
     });
+
+    // Custom Topographic Elevation Contour Shader & Slope-Dependent Rock Tinting
+    groundMat.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader.replace(
+        '#include <common>',
+        `#include <common>
+         varying vec3 vWorldPosition;
+         varying vec3 vWorldNormal;`
+      );
+      shader.vertexShader = shader.vertexShader.replace(
+        '#include <worldpos_vertex>',
+        `#include <worldpos_vertex>
+         vWorldPosition = (modelMatrix * vec4(transformed, 1.0)).xyz;
+         vWorldNormal = normalize(mat3(modelMatrix) * normal);`
+      );
+
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <common>',
+        `#include <common>
+         varying vec3 vWorldPosition;
+         varying vec3 vWorldNormal;`
+      );
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <dithering_fragment>',
+        `#include <dithering_fragment>
+         // Topographic Elevation Contour Lines & Slope Shading
+         float elevY = vWorldPosition.y;
+         float distPlaza = length(vWorldPosition.xz);
+         if (distPlaza > 18.0) {
+           // Major 1.0m elevation contour isolines
+           float fw1 = max(fwidth(elevY) * 1.8, 0.035);
+           float isoline1 = 1.0 - smoothstep(0.0, fw1, abs(fract(elevY + 0.5) - 0.5));
+
+           // Minor 0.25m elevation contour isolines
+           float fw2 = max(fwidth(elevY * 4.0) * 1.6, 0.025);
+           float isoline2 = 1.0 - smoothstep(0.0, fw2, abs(fract(elevY * 4.0 + 0.5) - 0.5));
+
+           // Apply crisp dark contour rings
+           gl_FragColor.rgb *= (1.0 - isoline1 * 0.32 - isoline2 * 0.14);
+
+           // Slope-dependent surface tinting: steeper drops & berm walls shade darker/rockier
+           float slopeVal = clamp(1.0 - vWorldNormal.y, 0.0, 1.0);
+           float slopeDarkening = smoothstep(0.12, 0.85, slopeVal) * 0.42;
+           gl_FragColor.rgb = mix(gl_FragColor.rgb, gl_FragColor.rgb * 0.48, slopeDarkening);
+         }`
+      );
+    };
+
     const groundMesh = new THREE.Mesh(groundGeo, groundMat);
     groundMesh.receiveShadow = true;
     scene.add(groundMesh);
@@ -708,30 +756,31 @@
     populateScenery();
   }
 
-  // Solid mathematical 3D wedge prism (zero rotation/centroid distortion)
-  function createWedgeMesh(width, length, yStart, yEnd, mat) {
+  // Solid mathematical 3D wedge prism with skirt foundation footers (sinks into ground to eliminate gaps)
+  function createWedgeMesh(width, length, yStart, yEnd, mat, skirtDepth = 0.55) {
     mat.side = THREE.DoubleSide;
     const halfW = width / 2;
+    const yBottom = -skirtDepth;
     const geo = new THREE.BufferGeometry();
     const vertices = new Float32Array([
       // Top slope (2 triangles, CCW upward normals)
       -halfW, yStart, 0,   -halfW, yEnd, length,  halfW, yEnd, length,
       -halfW, yStart, 0,   halfW, yEnd, length,   halfW, yStart, 0,
-      // Bottom face
-      -halfW, 0, 0,        halfW, 0, 0,           halfW, 0, length,
-      -halfW, 0, 0,        halfW, 0, length,      -halfW, 0, length,
-      // Left side face
-      -halfW, 0, 0,        -halfW, yEnd, length,  -halfW, yStart, 0,
-      -halfW, 0, 0,        -halfW, 0, length,     -halfW, yEnd, length,
-      // Right side face
-      halfW, 0, 0,         halfW, yStart, 0,      halfW, yEnd, length,
-      halfW, 0, 0,         halfW, yEnd, length,   halfW, 0, length,
+      // Bottom foundation face (anchored at yBottom)
+      -halfW, yBottom, 0,        halfW, yBottom, 0,           halfW, yBottom, length,
+      -halfW, yBottom, 0,        halfW, yBottom, length,      -halfW, yBottom, length,
+      // Left side face (slope down to foundation footer)
+      -halfW, yBottom, 0,        -halfW, yEnd, length,  -halfW, yStart, 0,
+      -halfW, yBottom, 0,        -halfW, yBottom, length,     -halfW, yEnd, length,
+      // Right side face (slope down to foundation footer)
+      halfW, yBottom, 0,         halfW, yStart, 0,      halfW, yEnd, length,
+      halfW, yBottom, 0,         halfW, yEnd, length,   halfW, yBottom, length,
       // Front face (at 0)
-      -halfW, 0, 0,        -halfW, yStart, 0,     halfW, yStart, 0,
-      -halfW, 0, 0,        halfW, yStart, 0,      halfW, 0, 0,
+      -halfW, yBottom, 0,        -halfW, yStart, 0,     halfW, yStart, 0,
+      -halfW, yBottom, 0,        halfW, yStart, 0,      halfW, yBottom, 0,
       // Back face (at length)
-      -halfW, 0, length,   halfW, 0, length,      halfW, yEnd, length,
-      -halfW, 0, length,   halfW, yEnd, length,   -halfW, yEnd, length,
+      -halfW, yBottom, length,   halfW, yBottom, length,      halfW, yEnd, length,
+      -halfW, yBottom, length,   halfW, yEnd, length,   -halfW, yEnd, length,
     ]);
     geo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
     geo.computeVertexNormals();
@@ -2522,6 +2571,39 @@
     );
     taillightLens.position.set(0, TIRE_RADIUS + 0.015, -0.345);
     boardGroup.add(taillightLens);
+
+    // 3. Forward Headlight Ground Glow Beam Cookie (Dynamic projected pool on terrain)
+    const beamCanvas = document.createElement('canvas');
+    beamCanvas.width = 128;
+    beamCanvas.height = 256;
+    const bCtx = beamCanvas.getContext('2d');
+    const bGrad = bCtx.createLinearGradient(64, 0, 64, 256);
+    bGrad.addColorStop(0.0, 'rgba(236, 254, 255, 0.72)');
+    bGrad.addColorStop(0.25, 'rgba(186, 230, 253, 0.42)');
+    bGrad.addColorStop(0.65, 'rgba(125, 211, 252, 0.16)');
+    bGrad.addColorStop(1.0, 'rgba(56, 189, 248, 0.0)');
+    bCtx.fillStyle = bGrad;
+    bCtx.beginPath();
+    bCtx.moveTo(56, 0);
+    bCtx.lineTo(72, 0);
+    bCtx.lineTo(124, 256);
+    bCtx.lineTo(4, 256);
+    bCtx.closePath();
+    bCtx.fill();
+
+    const beamTex = new THREE.CanvasTexture(beamCanvas);
+    const beamGeo = new THREE.PlaneGeometry(3.6, 8.0);
+    beamGeo.rotateX(-Math.PI / 2);
+    const beamMat = new THREE.MeshBasicMaterial({
+      map: beamTex,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      opacity: 0.48
+    });
+    const beamMesh = new THREE.Mesh(beamGeo, beamMat);
+    beamMesh.position.set(0, 0.015, 4.3);
+    boardGroup.add(beamMesh);
   }
 
   // ==========================================================================
@@ -3349,24 +3431,32 @@
 
     // 4. Terrain & Ramp Slope Pitch & Carving Roll Alignment
     if (!p.isAirborne && !state.grind.active) {
-      const eps = 0.45;
-      const hForward = getSurfaceElevation(p.x + Math.sin(p.heading) * eps, p.z + Math.cos(p.heading) * eps);
-      const hBackward = getSurfaceElevation(p.x - Math.sin(p.heading) * eps, p.z - Math.cos(p.heading) * eps);
-      const hRight = getSurfaceElevation(p.x + Math.cos(p.heading) * eps, p.z - Math.sin(p.heading) * eps);
-      const hLeft = getSurfaceElevation(p.x - Math.cos(p.heading) * eps, p.z + Math.sin(p.heading) * eps);
+      // Direct terrain sampling under front bumper (nose) and rear bumper (tail)
+      const bumperDist = 0.37;
+      const noseX = p.x + Math.sin(p.heading) * bumperDist;
+      const noseZ = p.z + Math.cos(p.heading) * bumperDist;
+      const tailX = p.x - Math.sin(p.heading) * bumperDist;
+      const tailZ = p.z - Math.cos(p.heading) * bumperDist;
+
+      const hNose = getSurfaceElevation(noseX, noseZ);
+      const hTail = getSurfaceElevation(tailX, tailZ);
+
+      const latDist = 0.14;
+      const hRight = getSurfaceElevation(p.x + Math.cos(p.heading) * latDist, p.z - Math.sin(p.heading) * latDist);
+      const hLeft = getSurfaceElevation(p.x - Math.cos(p.heading) * latDist, p.z + Math.sin(p.heading) * latDist);
 
       // In Three.js with 'YXZ' rotation order, local +Z is forward.
       // Negative rotation around local X elevates the front nose (+Y).
-      // When going uphill (hForward > hBackward), pitch must be negative so nose lifts up!
-      const slopePitch = -Math.atan2(hForward - hBackward, eps * 2);
-      const slopeRoll = Math.atan2(hRight - hLeft, eps * 2);
+      // When going uphill (hNose > hTail), pitch must be negative so nose lifts up!
+      const slopePitch = -Math.atan2(hNose - hTail, bumperDist * 2);
+      const slopeRoll = Math.atan2(hRight - hLeft, latDist * 2);
 
       // Rider acceleration tilt (pitch nose down slightly on acceleration, up on brake)
       const accelRate = (inputMagnitude * MAX_SPEED - p.speed) / MAX_SPEED;
       const riderPitch = THREE.MathUtils.clamp(-accelRate * 0.04, -0.03, 0.03);
 
-      p.pitch = THREE.MathUtils.lerp(p.pitch, slopePitch + riderPitch, dt * 14);
-      p.roll = THREE.MathUtils.lerp(p.roll, p.roll * 0.75 + THREE.MathUtils.clamp(slopeRoll, -0.15, 0.15), dt * 8);
+      p.pitch = THREE.MathUtils.lerp(p.pitch, slopePitch + riderPitch, dt * 18);
+      p.roll = THREE.MathUtils.lerp(p.roll, p.roll * 0.75 + THREE.MathUtils.clamp(slopeRoll, -0.15, 0.15), dt * 10);
     }
 
     // 5. Position Integration & Boundary Clamping
@@ -3484,6 +3574,32 @@
       }
     }
 
+    // Hard Bumper Clearance Clamping (Strictly prevents nose and tail from penetrating terrain or ramps)
+    if (!p.isAirborne && !state.grind.active) {
+      const bumperDist = 0.37;
+      const nX = p.x + Math.sin(p.heading) * bumperDist;
+      const nZ = p.z + Math.cos(p.heading) * bumperDist;
+      const tX = p.x - Math.sin(p.heading) * bumperDist;
+      const tZ = p.z - Math.cos(p.heading) * bumperDist;
+      const elevNose = getSurfaceElevation(nX, nZ);
+      const elevTail = getSurfaceElevation(tX, tZ);
+
+      const minBumperClearance = 0.045; // 4.5cm guaranteed clearance
+      const directSlopePitch = -Math.atan2(elevNose - elevTail, bumperDist * 2);
+
+      // Max downward pitch before nose clips into terrain:
+      const maxPitchForNose = Math.asin(THREE.MathUtils.clamp((p.y - elevNose - minBumperClearance) / bumperDist, -1.0, 1.0));
+      // Max upward pitch before tail drags into terrain:
+      const minPitchForTail = Math.asin(THREE.MathUtils.clamp((elevTail + minBumperClearance - p.y) / bumperDist, -1.0, 1.0));
+
+      if (maxPitchForNose >= minPitchForTail) {
+        p.pitch = THREE.MathUtils.clamp(p.pitch, minPitchForTail, maxPitchForNose);
+      } else {
+        p.y = Math.max(p.y, Math.max(elevNose, elevTail) + minBumperClearance);
+        p.pitch = directSlopePitch;
+      }
+    }
+
     // 7. Update 3D Board Transforms
     boardGroup.position.set(p.x, p.y, p.z);
     boardGroup.rotation.y = p.heading;
@@ -3495,13 +3611,26 @@
       wheelMesh.rotateX((p.speed / TIRE_RADIUS) * dt);
     }
 
-    // 8. Update Drop Shadow Decal
+    // 8. Update Drop Shadow Decal (Oriented flush to ground slope normal + scales with jump height)
+    const epsShadow = 0.35;
+    const hShadowFwd = getSurfaceElevation(p.x + Math.sin(p.heading) * epsShadow, p.z + Math.cos(p.heading) * epsShadow);
+    const hShadowBack = getSurfaceElevation(p.x - Math.sin(p.heading) * epsShadow, p.z - Math.cos(p.heading) * epsShadow);
+    const hShadowRight = getSurfaceElevation(p.x + Math.cos(p.heading) * epsShadow, p.z - Math.sin(p.heading) * epsShadow);
+    const hShadowLeft = getSurfaceElevation(p.x - Math.cos(p.heading) * epsShadow, p.z + Math.sin(p.heading) * epsShadow);
+
+    const shadowSlopePitch = -Math.atan2(hShadowFwd - hShadowBack, epsShadow * 2);
+    const shadowSlopeRoll = Math.atan2(hShadowRight - hShadowLeft, epsShadow * 2);
+
     shadowMesh.position.set(p.x, p.groundY + 0.018, p.z);
+    shadowMesh.rotation.order = 'YXZ';
     shadowMesh.rotation.y = p.heading;
+    shadowMesh.rotation.x = shadowSlopePitch;
+    shadowMesh.rotation.z = shadowSlopeRoll;
+
     const jumpHeight = Math.max(0, p.y - p.groundY);
-    const shadowScale = THREE.MathUtils.clamp(1 - jumpHeight * 0.35, 0.45, 1.0);
+    const shadowScale = THREE.MathUtils.clamp(1.0 - jumpHeight * 0.22, 0.35, 1.0);
     shadowMesh.scale.set(shadowScale, shadowScale, shadowScale);
-    shadowMesh.material.opacity = THREE.MathUtils.clamp(0.65 - jumpHeight * 0.25, 0.18, 0.65);
+    shadowMesh.material.opacity = THREE.MathUtils.clamp(0.68 - jumpHeight * 0.20, 0.15, 0.68);
 
     // 9. Particles
     if (p.speed > 1.2 && !p.isAirborne) {
@@ -4169,9 +4298,9 @@
       updateCameraProjection();
     }
 
-    // Follow sun light target so shadow is always sharp
+    // Follow sun light target so shadow is always sharp and casts cross-lighting relief
     if (sunLight) {
-      sunLight.position.set(p.x + 45, p.y + 75, p.z + 35);
+      sunLight.position.set(p.x - 45, p.y + 75, p.z + 42);
       sunLight.target.position.set(p.x, p.y, p.z);
     }
   }

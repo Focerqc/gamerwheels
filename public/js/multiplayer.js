@@ -52,6 +52,8 @@
     trickTickerEl = document.getElementById('trickTicker');
     tickerTextEl = document.getElementById('tickerText');
 
+    initServerToggle();
+
     // Preset random name
     if (nameInput) {
       nameInput.value = selfName;
@@ -97,6 +99,47 @@
         sendChat(emote);
       });
     });
+  }
+
+  function initServerToggle() {
+    const container = document.getElementById('serverToggle');
+    if (!container) return;
+
+    const hostname = window.location.hostname.toLowerCase();
+    if (hostname.includes('testing-gamerwheels')) {
+      // On Bleeding-Edge Test Server
+      container.innerHTML = `
+        <div class="exp9-server-badge testing" title="You are playing on the Bleeding-Edge Test Server">
+          <span>⚠️</span>
+          <span>TEST SERVER</span>
+        </div>
+        <a href="https://gamerwheels.onrender.com" class="exp9-server-switch-btn official" title="Return to Official Live Game">
+          <span>🔙 Official Game</span>
+        </a>
+      `;
+    } else if (hostname.includes('gamerwheels.onrender.com')) {
+      // On Official Live Server
+      container.innerHTML = `
+        <a href="https://testing-gamerwheels.onrender.com" class="exp9-server-switch-btn beta" title="Drop into the Bleeding-Edge Test Server">
+          <span>🧪</span>
+          <span>TESTING SERVER ➔</span>
+        </a>
+      `;
+    } else {
+      // Local development or custom host
+      container.innerHTML = `
+        <div class="exp9-server-badge local" title="Local Development Server">
+          <span class="local-dot"></span>
+          <span>LOCAL DEV</span>
+        </div>
+        <a href="https://testing-gamerwheels.onrender.com" target="_blank" rel="noopener noreferrer" class="exp9-server-switch-btn beta" title="Open Test Server in new tab">
+          <span>🧪 Test</span>
+        </a>
+        <a href="https://gamerwheels.onrender.com" target="_blank" rel="noopener noreferrer" class="exp9-server-switch-btn official" title="Open Live Server in new tab">
+          <span>Official</span>
+        </a>
+      `;
+    }
   }
 
   function handleJoin() {
