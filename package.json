@@ -1,0 +1,29 @@
+{
+  "name": "gamerwheels",
+  "version": "1.0.0",
+  "description": "GamerWheels — 2.5D Isometric PEV / Onewheel Free-Roam Trail Carve & Street Park Multiplayer .IO Game",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "onewheel",
+    "pev",
+    "threejs",
+    "socketio",
+    "multiplayer",
+    "iogame",
+    "railway"
+  ],
+  "author": "Quinn Foster",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "quinnfoster-site": "file:../quinnfoster-site PC FOLDER",
+    "socket.io": "^4.7.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,0 +1,1473 @@
+/* ==========================================================================
+   Quinn Foster - Personal Website Hub Design System
+   Modern, Minimalist, Responsive & Visually Striking Aesthetic
+   ========================================================================== */
+
+/* Google Fonts Import */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Permanent+Marker&display=swap');
+
+:root {
+  /* Color Palette - Modern Dark Slate & Vibrant Accents */
+  --bg-primary: #090d16;
+  --bg-secondary: #111726;
+  --surface-card: rgba(22, 30, 49, 0.65);
+  --surface-card-hover: rgba(30, 41, 67, 0.8);
+  --surface-border: rgba(255, 255, 255, 0.08);
+  --surface-border-accent: rgba(99, 102, 241, 0.3);
+  
+  --text-primary: #f3f4f6;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+  
+  --accent-primary: #6366f1;
+  --accent-secondary: #8b5cf6;
+  --accent-teal: #14b8a6;
+  --accent-amber: #f59e0b;
+  --accent-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
+  --accent-glow: rgba(99, 102, 241, 0.25);
+  
+  /* Typography */
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Spacing & Sizing */
+  --container-max: 1600px;
+  --viewport-pane-width: 480px;
+  --viewport-pane-height: 580px;
+  --viewport-pane-height-stacked: 650px;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-full: 9999px;
+  
+  /* Animations */
+  --transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 25px rgba(99, 102, 241, 0.15);
+}
+
+/* Reset & Global Base */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  color-scheme: dark;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.6;
+  overflow-x: hidden;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+
+/* ==========================================================================
+   Experience 9: GamerWheels Game Styles
+   ========================================================================== */
+
+.exp9-page-main {
+  max-width: 1440px;
+}
+
+.exp9-game-wrapper {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+/* Proper Full Game Viewport Frame */
+.exp9-viewport-container {
+  position: relative;
+  width: 100%;
+  height: 750px;
+  background: #090e17;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65), 0 0 35px rgba(99, 102, 241, 0.15);
+  user-select: none;
+  touch-action: none;
+}
+
+#gameCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* HUD Overlay Layer */
+.exp9-hud-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+/* Top Left: Brand, Speedo & Compass */
+.exp9-hud-top-left {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  pointer-events: auto;
+}
+
+/* Corner Game Brand Card */
+.exp9-brand-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 86px;
+  padding: 0.5rem 1rem;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+}
+
+.exp9-brand-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #a5b4fc;
+  text-transform: uppercase;
+  margin-bottom: 0.15rem;
+}
+
+.exp9-brand-terrain {
+  color: #38bdf8;
+  font-weight: 700;
+}
+
+.exp9-brand-title {
+  font-size: 1.35rem;
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  background: linear-gradient(135deg, #ffffff 40%, #c7d2fe 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.exp9-speedo-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 86px;
+  height: 86px;
+  background: rgba(15, 23, 42, 0.82);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+  padding: 0.4rem;
+}
+
+.exp9-speedo-num {
+  font-family: var(--font-mono);
+  font-size: 1.65rem;
+  font-weight: 800;
+  color: #38bdf8;
+  line-height: 1;
+}
+
+.exp9-speedo-unit {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+  margin-bottom: 0.35rem;
+}
+
+.exp9-speedo-bar-track {
+  width: 80%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.exp9-speedo-bar-fill {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #38bdf8, #818cf8, #f43f5e);
+  transition: width 0.08s ease;
+}
+
+.exp9-compass-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  background: rgba(15, 23, 42, 0.78);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+}
+
+.exp9-compass-arrow {
+  transition: transform 0.1s linear;
+}
+
+.exp9-compass-text {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #94a3b8;
+  margin-top: 0.15rem;
+}
+
+/* Top Center Area Toast Banner */
+.exp9-area-toast {
+  position: absolute;
+  top: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(-30px);
+  opacity: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.5rem 1.1rem;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-full);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+.exp9-area-toast.visible {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+.exp9-area-badge {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-full);
+}
+
+.badge-jump {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.badge-chill {
+  background: rgba(20, 184, 166, 0.2);
+  color: #14b8a6;
+  border: 1px solid rgba(20, 184, 166, 0.4);
+}
+
+.exp9-area-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+/* Top Row: Speedo & Compass (Left), Checkpoints Bar (Center), Action Controls (Right) */
+.exp9-hud-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 0.75rem;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Checkpoint Jump Line Navigation Bar */
+.exp9-checkpoints-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 9999px;
+  padding: 0.25rem 0.4rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+  max-width: calc(100% - 240px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.exp9-checkpoints-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.exp9-cp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  color: #94a3b8;
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+}
+
+.exp9-cp-btn:hover {
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.exp9-cp-btn.active {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.4), rgba(168, 85, 247, 0.4));
+  border-color: rgba(99, 102, 241, 0.7);
+  color: #ffffff;
+  box-shadow: 0 0 14px rgba(99, 102, 241, 0.4);
+}
+
+.exp9-cp-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.exp9-cp-btn.active .exp9-cp-num {
+  background: #6366f1;
+  color: #ffffff;
+}
+
+.exp9-cp-label {
+  letter-spacing: 0.02em;
+}
+
+/* Top Right Action Buttons */
+.exp9-hud-top-right {
+  display: flex;
+  gap: 0.5rem;
+  pointer-events: auto;
+  align-items: center;
+}
+
+.exp9-hud-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.8rem;
+  background: rgba(15, 23, 42, 0.82);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  color: #cbd5e1;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.exp9-hud-btn:hover {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(99, 102, 241, 0.4);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+/* Trick Toast Notification */
+.exp9-trick-toast {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.85);
+  opacity: 0;
+  padding: 0.5rem 1.25rem;
+  background: rgba(245, 158, 11, 0.25);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  border-radius: var(--radius-md);
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.3);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+.exp9-trick-toast.visible {
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 1;
+}
+
+.exp9-trick-text {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #fef08a;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+/* Action Controls: Zoom Buttons Group */
+.exp9-zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  padding: 0.15rem;
+}
+
+.exp9-zoom-btn {
+  padding: 0.35rem 0.5rem;
+  min-width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: calc(var(--radius-md) - 2px);
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+.exp9-zoom-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  transform: scale(1.05);
+}
+
+.exp9-zoom-btn:active {
+  transform: scale(0.95);
+}
+
+/* Interactive Rail Grind Balance HUD */
+.exp9-balance-hud {
+  position: absolute;
+  bottom: 22%;
+  left: 50%;
+  transform: translateX(-50%) scale(0.9);
+  opacity: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.65), 0 0 24px rgba(245, 158, 11, 0.25);
+  border-radius: var(--radius-lg);
+  padding: 0.65rem 1.4rem 0.55rem;
+  transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 25;
+}
+
+.exp9-balance-hud.active {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+
+.exp9-balance-label {
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #facc15;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+  text-transform: uppercase;
+}
+
+.exp9-balance-track {
+  position: relative;
+  width: 170px;
+  height: 12px;
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  overflow: visible;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.exp9-balance-sweetspot {
+  position: absolute;
+  width: 52px;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.2) 0%, rgba(34, 197, 94, 0.75) 50%, rgba(34, 197, 94, 0.2) 100%);
+  border-left: 1px dashed rgba(34, 197, 94, 0.8);
+  border-right: 1px dashed rgba(34, 197, 94, 0.8);
+  border-radius: 4px;
+}
+
+.exp9-balance-needle {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 6px;
+  background: #f8fafc;
+  border-radius: 3px;
+  box-shadow: 0 0 8px #ffffff, 0 2px 4px rgba(0, 0, 0, 0.8);
+  transform: translateX(0);
+  transition: background 0.1s ease;
+}
+
+.exp9-balance-needle.danger {
+  background: #ef4444;
+  box-shadow: 0 0 10px #ef4444;
+}
+
+.exp9-balance-hint {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.03em;
+}
+
+/* Virtual Left Drive Joystick (Bottom Left) */
+.exp9-joystick-zone {
+  position: absolute;
+  bottom: max(3.8rem, calc(2.8rem + env(safe-area-inset-bottom)));
+  left: max(2.2rem, calc(1.6rem + env(safe-area-inset-left)));
+  width: 160px;
+  height: 160px;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none !important;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+}
+
+.exp9-joystick-zone:active {
+  cursor: grabbing;
+}
+
+.exp9-joystick-base {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  background: radial-gradient(circle, rgba(15, 23, 42, 0.4) 0%, rgba(15, 23, 42, 0.65) 100%);
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 25px rgba(255, 255, 255, 0.02), inset 0 0 0 50px rgba(99, 102, 241, 0.05), 0 8px 32px rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none !important;
+}
+
+.exp9-joystick-thumb {
+  width: 52px;
+  height: 52px;
+  background: radial-gradient(circle, #6366f1 0%, #4338ca 100%);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.6);
+  pointer-events: none;
+  transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.exp9-joystick-thumb.active {
+  transition: none !important;
+}
+
+/* Virtual Right Twist & Trick Joystick (Bottom Right) */
+.exp9-right-joystick-zone {
+  position: absolute;
+  bottom: max(3.8rem, calc(2.8rem + env(safe-area-inset-bottom)));
+  right: max(9.4rem, calc(8.4rem + env(safe-area-inset-right)));
+  width: 150px;
+  height: 150px;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none !important;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+}
+
+.exp9-right-joystick-zone:active {
+  cursor: grabbing;
+}
+
+.exp9-right-joystick-base {
+  position: relative;
+  width: 130px;
+  height: 130px;
+  background: radial-gradient(circle, rgba(15, 23, 42, 0.4) 0%, rgba(15, 23, 42, 0.65) 100%);
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(245, 158, 11, 0.35);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 25px rgba(255, 255, 255, 0.02), inset 0 0 0 45px rgba(245, 158, 11, 0.05), 0 8px 32px rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none !important;
+}
+
+.exp9-right-joystick-thumb {
+  width: 50px;
+  height: 50px;
+  background: radial-gradient(circle, #f59e0b 0%, #d97706 100%);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.65);
+  pointer-events: none;
+  transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.exp9-right-joystick-thumb.active {
+  transition: none !important;
+}
+
+/* Touch Jump Button (Bottom Right) */
+.exp9-jump-btn-zone {
+  position: absolute;
+  bottom: max(4.4rem, calc(3.4rem + env(safe-area-inset-bottom)));
+  right: max(1.8rem, calc(1.4rem + env(safe-area-inset-right)));
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+.exp9-jump-btn {
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #8b5cf6 0%, #6d28d9 100%);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 6px 18px rgba(139, 92, 246, 0.4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 0.95rem;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.exp9-jump-btn:active {
+  transform: scale(0.92);
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.6);
+}
+
+.exp9-jump-btn small {
+  font-size: 0.65rem;
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+/* Desktop Controls Helper Legend */
+.exp9-desktop-controls-hint {
+  position: absolute;
+  bottom: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 1.25rem;
+  padding: 0.45rem 1rem;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-full);
+  font-size: 0.78rem;
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.exp9-desktop-controls-hint kbd {
+  display: inline-block;
+  padding: 0.12rem 0.38rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+  margin: 0 0.15rem;
+}
+
+/* Collapsible Game Info Accordion */
+.exp9-accordion-wrapper {
+  width: 100%;
+  margin-top: 0.25rem;
+}
+
+.exp9-accordion-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.25rem;
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.exp9-accordion-btn:hover {
+  background: rgba(30, 41, 59, 0.85);
+  border-color: rgba(99, 102, 241, 0.35);
+  color: #ffffff;
+}
+
+.exp9-accordion-btn.active {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(99, 102, 241, 0.5);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  color: #ffffff;
+}
+
+.exp9-accordion-btn-left {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: #a5b4fc;
+}
+
+.exp9-accordion-title {
+  color: #f8fafc;
+}
+
+.exp9-accordion-btn-right {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.exp9-accordion-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.exp9-accordion-chevron {
+  transition: transform 0.25s ease;
+  color: #a5b4fc;
+}
+
+.exp9-accordion-btn.active .exp9-accordion-chevron {
+  transform: rotate(180deg);
+}
+
+.exp9-accordion-panel {
+  display: none;
+  padding: 1.25rem;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  border-top: none;
+  border-bottom-left-radius: var(--radius-md);
+  border-bottom-right-radius: var(--radius-md);
+}
+
+.exp9-accordion-panel.open {
+  display: block;
+}
+
+/* Trails Breakdown Grid */
+.exp9-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 1.5rem;
+  margin-top: 0;
+}
+
+.exp9-info-card {
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  padding: 1.35rem;
+}
+
+.exp9-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.15rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.exp9-card-header h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #f8fafc;
+  margin: 0;
+}
+
+.exp9-trail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.exp9-trail-item {
+  padding: 0.75rem 0.9rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sm);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.exp9-trail-item:hover {
+  background: rgba(99, 102, 241, 0.05);
+  border-color: rgba(99, 102, 241, 0.25);
+}
+
+.exp9-trail-tag {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 0.12rem 0.45rem;
+  border-radius: var(--radius-full);
+  margin-bottom: 0.25rem;
+}
+
+.exp9-trail-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin-bottom: 0.2rem;
+}
+
+.exp9-trail-desc {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.exp9-features-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.exp9-feat-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.65rem 0.85rem;
+  background: rgba(255, 255, 255, 0.025);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.exp9-feat-row strong {
+  color: #a5b4fc;
+}
+
+.exp9-feat-row kbd {
+  display: inline-block;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.72rem;
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+}
+
+/* Touchscreen & Tablet Device Ergonomics (iPad & Mobile) */
+@media (pointer: coarse) {
+  .exp9-desktop-controls-hint {
+    display: none !important;
+  }
+  .exp9-joystick-zone {
+    bottom: max(4.0rem, calc(2.8rem + env(safe-area-inset-bottom)));
+    left: max(2.4rem, calc(1.8rem + env(safe-area-inset-left)));
+  }
+  .exp9-right-joystick-zone {
+    bottom: max(4.0rem, calc(2.8rem + env(safe-area-inset-bottom)));
+    right: max(9.0rem, calc(8.0rem + env(safe-area-inset-right)));
+  }
+  .exp9-jump-btn-zone {
+    bottom: max(4.6rem, calc(3.4rem + env(safe-area-inset-bottom)));
+    right: max(2.0rem, calc(1.5rem + env(safe-area-inset-right)));
+  }
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  .exp9-viewport-container {
+    height: 540px;
+  }
+  .exp9-desktop-controls-hint {
+    display: none;
+  }
+  .exp9-brand-card {
+    height: 72px;
+    padding: 0.35rem 0.65rem;
+  }
+  .exp9-brand-title {
+    font-size: 1.05rem;
+  }
+  .exp9-speedo-card {
+    width: 72px;
+    height: 72px;
+  }
+  .exp9-speedo-num {
+    font-size: 1.35rem;
+  }
+  .exp9-compass-card {
+    width: 50px;
+    height: 50px;
+  }
+  .exp9-hud-top-row {
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .exp9-checkpoints-bar {
+    order: 3;
+    width: 100%;
+    max-width: 100%;
+    justify-content: flex-start;
+    padding: 0.2rem 0.3rem;
+  }
+  .exp9-cp-btn {
+    padding: 0.2rem 0.45rem;
+    font-size: 0.7rem;
+  }
+}
+
+/* ==========================================================================
+   Experience 9: Pure Fullscreen Standalone Mode & Zero-Scroll Locking
+   ========================================================================== */
+html.exp9-standalone-page,
+body.exp9-standalone-page {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100vw !important;
+  max-height: 100dvh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  -webkit-overflow-scrolling: auto !important;
+  touch-action: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -webkit-touch-callout: none !important;
+  background: #0a0f1d !important;
+}
+
+body.exp9-standalone-page .exp9-viewport-container {
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  max-width: 100vw !important;
+  max-height: 100dvh !important;
+  min-height: 100% !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  touch-action: none !important;
+  overscroll-behavior: none !important;
+  z-index: 1;
+}
+
+body.exp9-standalone-page #gameCanvas {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  display: block !important;
+  touch-action: none !important;
+}
+
+/* Exit Button: Danger / Glass Accent */
+.exp9-hud-btn.exp9-exit-btn {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  color: #fca5a5;
+  text-decoration: none;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.exp9-hud-btn.exp9-exit-btn:hover {
+  background: rgba(239, 68, 68, 0.4);
+  border-color: rgba(239, 68, 68, 0.8);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.45);
+}
+
+.exp9-hud-btn.exp9-exit-btn:active {
+  transform: scale(0.96);
+}
+
+/* Safe Area Inset Support for Standalone HUD */
+body.exp9-standalone-page .exp9-hud-layer {
+  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-right: max(1.25rem, env(safe-area-inset-right));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  padding-left: max(1.25rem, env(safe-area-inset-left));
+}
+
+@media (max-width: 640px) {
+  body.exp9-standalone-page .exp9-hud-layer {
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+    padding-right: max(0.5rem, env(safe-area-inset-right));
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+    padding-left: max(0.5rem, env(safe-area-inset-left));
+  }
+}
+
+
+
+
+/* ==========================================================================
+   Multiplayer .IO Overlay Styles (Leaderboard, Online Badge, Trick Feed, Join)
+   ========================================================================== */
+
+/* Online Riders Indicator Badge */
+.exp9-online-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.8rem;
+  background: rgba(15, 23, 42, 0.82);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #34d399;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+  user-select: none;
+  pointer-events: auto;
+}
+
+.exp9-online-badge .live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #10b981;
+  box-shadow: 0 0 10px #10b981;
+  animation: liveDotPulse 1.8s infinite ease-in-out;
+}
+
+@keyframes liveDotPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.6; }
+}
+
+/* .IO Top Riders Leaderboard Card (Top Right below controls) */
+.exp9-leaderboard-card {
+  position: absolute;
+  top: 5rem;
+  right: 1.25rem;
+  width: 220px;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  padding: 0.65rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  pointer-events: auto;
+  user-select: none;
+  z-index: 20;
+}
+
+.exp9-leaderboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #fbbf24;
+  text-transform: uppercase;
+}
+
+.exp9-leaderboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.exp9-leaderboard-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  padding: 0.2rem 0.3rem;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s ease;
+}
+
+.exp9-leaderboard-row.self {
+  background: rgba(99, 102, 241, 0.22);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+}
+
+.exp9-leaderboard-user {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exp9-leaderboard-rank {
+  font-family: var(--font-mono);
+  font-weight: 800;
+  font-size: 0.7rem;
+  color: #94a3b8;
+  width: 14px;
+}
+
+.exp9-leaderboard-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.exp9-leaderboard-name {
+  font-weight: 600;
+  color: #f1f5f9;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.exp9-leaderboard-score {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #38bdf8;
+}
+
+/* Global Trick Ticker Banner (Top Center) */
+.exp9-global-ticker {
+  position: absolute;
+  top: 4.8rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1.1rem;
+  background: rgba(30, 27, 75, 0.88);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(168, 85, 247, 0.45);
+  border-radius: var(--radius-full);
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.35);
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -10px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  z-index: 25;
+}
+
+.exp9-global-ticker.visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.exp9-ticker-icon {
+  font-size: 1rem;
+}
+
+.exp9-ticker-text {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #f3e8ff;
+  letter-spacing: 0.02em;
+}
+
+/* Join & Customize Modal Overlay (.IO Drop-in) */
+.exp9-join-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 7, 15, 0.85);
+  backdrop-filter: blur(16px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1rem;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+.exp9-join-modal-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.exp9-join-card {
+  width: 100%;
+  max-width: 440px;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.75), 0 0 40px rgba(99, 102, 241, 0.2);
+  padding: 2rem 2.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+  text-align: center;
+}
+
+.exp9-join-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.exp9-join-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #a5b4fc;
+  text-transform: uppercase;
+}
+
+.exp9-join-title {
+  font-size: 2.2rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, #ffffff 40%, #818cf8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  line-height: 1.1;
+}
+
+.exp9-join-subtitle {
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.exp9-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  text-align: left;
+}
+
+.exp9-input-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #cbd5e1;
+}
+
+.exp9-name-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-md);
+  color: #ffffff;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  font-weight: 600;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.exp9-name-input:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 15px rgba(99, 102, 241, 0.3);
+  background: rgba(30, 41, 59, 1);
+}
+
+/* Color Swatches Grid */
+.exp9-color-palette {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: center;
+  align-items: center;
+  margin-top: 0.2rem;
+}
+
+.exp9-color-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease;
+  position: relative;
+}
+
+.exp9-color-swatch:hover {
+  transform: scale(1.15);
+}
+
+.exp9-color-swatch.active {
+  border-color: #ffffff;
+  transform: scale(1.2);
+  box-shadow: 0 0 14px currentColor;
+}
+
+/* Join Button */
+.exp9-btn-ride {
+  width: 100%;
+  padding: 0.95rem;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
+  border: none;
+  border-radius: var(--radius-md);
+  color: #ffffff;
+  font-family: var(--font-sans);
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  box-shadow: 0 8px 25px rgba(99, 102, 241, 0.45);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  text-transform: uppercase;
+}
+
+.exp9-btn-ride:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(99, 102, 241, 0.6);
+}
+
+.exp9-btn-ride:active {
+  transform: scale(0.98);
+}
+
+/* Quick Chat Input Box */
+.exp9-chat-bar {
+  position: absolute;
+  bottom: 2.2rem;
+  left: 140px;
+  display: flex;
+  gap: 0.4rem;
+  pointer-events: auto;
+  z-index: 20;
+}
+
+.exp9-chat-input {
+  width: 220px;
+  padding: 0.4rem 0.8rem;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-full);
+  color: #ffffff;
+  font-size: 0.8rem;
+  outline: none;
+  transition: width 0.2s ease, border-color 0.2s ease;
+}
+
+.exp9-chat-input:focus {
+  width: 320px;
+  border-color: #6366f1;
+}
+
+/* Quick Emote Reactions Bar */
+.exp9-emotes-bar {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.exp9-emote-btn {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-full);
+  font-size: 0.95rem;
+  padding: 0.3rem 0.5rem;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.exp9-emote-btn:hover {
+  transform: scale(1.2);
+}
+
+@media (max-width: 768px) {
+  .exp9-leaderboard-card {
+    top: auto;
+    bottom: 5.5rem;
+    right: 0.75rem;
+    width: 170px;
+    padding: 0.45rem 0.6rem;
+  }
+  .exp9-chat-bar {
+    display: none;
+  }
+}

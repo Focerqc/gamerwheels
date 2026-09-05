@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en" class="exp9-standalone-page">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0a0f1d">
+  <meta name="description" content="GamerWheels .IO — Real-time Multiplayer 2.5D Isometric PEV / Onewheel Free-Roam Trail Carve & Street Park Game">
+  <title>GamerWheels .IO — Multiplayer Onewheel Physics Game</title>
+
+  <!-- Preconnect Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+
+  <!-- Three.js 3D Engine & GLTF Loader -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+
+  <!-- Socket.io Client for Real-Time Multiplayer -->
+  <script src="/socket.io/socket.io.js"></script>
+
+  <!-- Game Styling -->
+  <link rel="stylesheet" href="css/game.css">
+</head>
+<body class="exp9-standalone-page">
+
+  <!-- Full-Bleed Standalone Game Viewport Frame -->
+  <div class="exp9-viewport-container" id="gameContainer">
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Dynamic Game HUD Overlay -->
+    <div class="exp9-hud-layer">
+      
+      <!-- Top Row: Game Brand, Speedo & Compass (Left), Checkpoints Bar (Center), Action Controls (Right) -->
+      <div class="exp9-hud-top-row">
+        <!-- Top Left: Game Brand, Speedometer & Compass -->
+        <div class="exp9-hud-top-left">
+          <!-- Corner Game Name & Terrain Badge -->
+          <div class="exp9-brand-card">
+            <div class="exp9-brand-badge">
+              <span class="pulse-dot"></span>
+              <span class="exp9-brand-terrain" id="hudTerrainVal">Central Plaza</span>
+            </div>
+            <div class="exp9-brand-title">GamerWheels</div>
+          </div>
+
+          <div class="exp9-speedo-card">
+            <div class="exp9-speedo-num" id="hudSpeedVal">0.0</div>
+            <div class="exp9-speedo-unit">MPH</div>
+            <div class="exp9-speedo-bar-track">
+              <div class="exp9-speedo-bar-fill" id="hudSpeedBar"></div>
+            </div>
+          </div>
+
+          <!-- Compass / Town Pointer -->
+          <div class="exp9-compass-card" id="compassCard" title="Points toward Town Square center">
+            <svg class="exp9-compass-arrow" id="compassArrow" viewBox="0 0 24 24" width="20" height="20">
+              <polygon points="12,2 17,20 12,16 7,20" fill="#6366f1" />
+            </svg>
+            <span class="exp9-compass-text" id="compassDist">0m</span>
+          </div>
+        </div>
+
+        <!-- Top Center: Checkpoints Quick Bar -->
+        <div class="exp9-checkpoints-bar" id="checkpointsBar">
+          <button type="button" class="exp9-cp-btn active" data-cp="0" title="Central Plaza (Key: 1)">
+            <span class="exp9-cp-num">1</span>
+            <span class="exp9-cp-label">Plaza</span>
+          </button>
+          <button type="button" class="exp9-cp-btn" data-cp="1" title="Mega Drop & Giant Jump (Key: 2)">
+            <span class="exp9-cp-num">2</span>
+            <span class="exp9-cp-label">Mega Drop</span>
+          </button>
+          <button type="button" class="exp9-cp-btn" data-cp="2" title="Pine Ridge Slopestyle Timber Trail (Key: 3)">
+            <span class="exp9-cp-num">3</span>
+            <span class="exp9-cp-label">Slopestyle</span>
+          </button>
+          <button type="button" class="exp9-cp-btn" data-cp="3" title="Slickrock Motocross Canyon Course (Key: 4)">
+            <span class="exp9-cp-num">4</span>
+            <span class="exp9-cp-label">Motocross</span>
+          </button>
+          <button type="button" class="exp9-cp-btn" data-cp="4" title="Desert Berms (Key: 5)">
+            <span class="exp9-cp-num">5</span>
+            <span class="exp9-cp-label">Desert Berms</span>
+          </button>
+        </div>
+
+        <!-- Top Right: Multiplayer Badge & Action Controls -->
+        <div class="exp9-hud-top-right">
+          <!-- Live Online Counter Badge -->
+          <div class="exp9-online-badge" title="Riders currently connected">
+            <span class="live-dot"></span>
+            <span id="onlineCount">1 Rider</span>
+          </div>
+
+          <!-- Zoom In / Out -->
+          <div class="exp9-zoom-controls" title="Adjust Camera Zoom">
+            <button type="button" class="exp9-hud-btn exp9-zoom-btn" id="btnZoomIn" title="Zoom In (+ / Wheel Up)" aria-label="Zoom In">
+              <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+            <button type="button" class="exp9-hud-btn exp9-zoom-btn" id="btnZoomOut" title="Zoom Out (− / Wheel Down)" aria-label="Zoom Out">
+              <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M20 12H4" />
+              </svg>
+            </button>
+          </div>
+
+          <button type="button" class="exp9-hud-btn" id="btnRespawn" title="Respawn at Town Square (Key: R)">
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>Reset (R)</span>
+          </button>
+          <button type="button" class="exp9-hud-btn" id="btnFullscreen" title="Toggle Fullscreen">
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Top Right: .IO Live Leaderboard Card -->
+      <div class="exp9-leaderboard-card">
+        <div class="exp9-leaderboard-header">
+          <span>👑 Top Riders</span>
+          <span>Score</span>
+        </div>
+        <div class="exp9-leaderboard-list" id="leaderboardList">
+          <!-- Populated dynamically via multiplayer.js -->
+        </div>
+      </div>
+
+      <!-- Global Trick Ticker Banner (Top Center) -->
+      <div class="exp9-global-ticker" id="trickTicker">
+        <span class="exp9-ticker-icon">⚡</span>
+        <span class="exp9-ticker-text" id="tickerText">Quinn landed Mega Drop Jump! (+1,000 pts)</span>
+      </div>
+
+      <!-- Center Float: Local Trick / Action Toast -->
+      <div class="exp9-trick-toast" id="trickToast">
+        <span class="exp9-trick-text" id="trickText"></span>
+      </div>
+
+      <!-- Interactive Rail Grind Balance HUD -->
+      <div class="exp9-balance-hud" id="balanceHud">
+        <div class="exp9-balance-label" id="balanceLabel">NOSESLIDE</div>
+        <div class="exp9-balance-track">
+          <div class="exp9-balance-sweetspot"></div>
+          <div class="exp9-balance-needle" id="balanceNeedle"></div>
+        </div>
+        <div class="exp9-balance-hint">Tap ▲ / ▼ or Right Stick to balance</div>
+      </div>
+
+      <!-- Bottom Chat & Emote Bar -->
+      <div class="exp9-chat-bar">
+        <input type="text" class="exp9-chat-input" id="chatInput" placeholder="Press Enter to chat..." maxlength="60" />
+        <div class="exp9-emotes-bar">
+          <button type="button" class="exp9-emote-btn" title="Send 🔥">🔥</button>
+          <button type="button" class="exp9-emote-btn" title="Send ⚡">⚡</button>
+          <button type="button" class="exp9-emote-btn" title="Send 🤙">🤙</button>
+          <button type="button" class="exp9-emote-btn" title="Send 🚀">🚀</button>
+        </div>
+      </div>
+
+      <!-- Mobile Virtual Drive Joystick (Bottom Left) -->
+      <div class="exp9-joystick-zone" id="joystickZone" title="Drive & Steer (WASD)">
+        <div class="exp9-joystick-base" id="joystickBase">
+          <div class="exp9-joystick-thumb" id="joystickThumb"></div>
+        </div>
+      </div>
+
+      <!-- Mobile Virtual Twist, Flip & Balance Joystick (Bottom Right) -->
+      <div class="exp9-right-joystick-zone" id="rightJoystickZone" title="Twist, Backflip & Balance (Arrows)">
+        <div class="exp9-right-joystick-base" id="rightJoystickBase">
+          <div class="exp9-right-joystick-thumb" id="rightJoystickThumb"></div>
+        </div>
+      </div>
+
+      <!-- Mobile Jump Button (Bottom Right next to Twist Stick) -->
+      <div class="exp9-jump-btn-zone">
+        <button type="button" class="exp9-jump-btn" id="btnTouchJump" aria-label="Jump / Bunny Hop">
+          <span>HOP</span>
+          <small>Space</small>
+        </button>
+      </div>
+
+      <!-- Quick Controls Hint Legend (Desktop) -->
+      <div class="exp9-desktop-controls-hint">
+        <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Drive</span>
+        <span><kbd>▲</kbd><kbd>◄</kbd><kbd>▼</kbd><kbd>►</kbd> Twist, Flip & Balance</span>
+        <span><kbd>Space</kbd> Hop</span>
+        <span><kbd>Scroll</kbd> / <kbd>[</kbd><kbd>]</kbd> Zoom</span>
+        <span><kbd>1</kbd>–<kbd>5</kbd> Checkpoints</span>
+        <span><kbd>R</kbd> Reset</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Join & Board Customization Modal (.IO Drop-in) -->
+  <div class="exp9-join-modal-overlay" id="joinModal">
+    <div class="exp9-join-card">
+      <div class="exp9-join-brand">
+        <div class="exp9-join-badge">⚡ Real-time Multiplayer PEV Game</div>
+        <div class="exp9-join-title">GamerWheels .IO</div>
+        <div class="exp9-join-subtitle">Freestyle Onewheel Carve & Street Park Session</div>
+      </div>
+
+      <!-- Nickname Input -->
+      <div class="exp9-input-group">
+        <label for="nameInput" class="exp9-input-label">Rider Nickname</label>
+        <input type="text" id="nameInput" class="exp9-name-input" placeholder="Enter your rider name..." maxlength="16" autofocus />
+      </div>
+
+      <!-- Board Rail Color Selector -->
+      <div class="exp9-input-group">
+        <label class="exp9-input-label">CNC Rail Custom Color</label>
+        <div class="exp9-color-palette">
+          <button type="button" class="exp9-color-swatch active" data-color="#ef233c" style="background: #ef233c;" title="Blaze Red"></button>
+          <button type="button" class="exp9-color-swatch" data-color="#06b6d4" style="background: #06b6d4;" title="Cyber Cyan"></button>
+          <button type="button" class="exp9-color-swatch" data-color="#10b981" style="background: #10b981;" title="Neon Lime"></button>
+          <button type="button" class="exp9-color-swatch" data-color="#f59e0b" style="background: #f59e0b;" title="Sunset Gold"></button>
+          <button type="button" class="exp9-color-swatch" data-color="#8b5cf6" style="background: #8b5cf6;" title="Electric Purple"></button>
+          <button type="button" class="exp9-color-swatch" data-color="#ec4899" style="background: #ec4899;" title="Hot Pink"></button>
+          <button type="button" class="exp9-color-swatch" data-color="#f8fafc" style="background: #f8fafc;" title="Frost White"></button>
+        </div>
+      </div>
+
+      <!-- Ride Button -->
+      <button type="button" class="exp9-btn-ride" id="btnRide">
+        DROP IN & RIDE 🤙
+      </button>
+    </div>
+  </div>
+
+  <!-- Game Engines -->
+  <script src="js/game.js"></script>
+  <script src="js/multiplayer.js"></script>
+</body>
+</html>
