@@ -84,6 +84,7 @@
       heading: -Math.PI * 0.75, // board yaw angle (radians)
       pitch: 0,                 // nose-down/up tilt
       roll: 0,                  // carving bank roll
+      remoteTilt: 0,            // VESC remote pitch trim offset (radians)
       isAirborne: false,
       isGrinding: false,
       airtime: 0,
@@ -117,6 +118,12 @@
       spin360Done: false,
       flipDone: false,
     },
+    carve: {
+      active: false,
+      carvedHeading: 0,
+      savedKeySig: '',
+      savedJoyAngle: null,
+    },
     input: {
       up: false,
       down: false,
@@ -126,7 +133,7 @@
       jumpPressed: false,
       joystickActive: false,
       joystickVector: { x: 0, y: 0 },
-      // Right Twist / Flip / Balance Stick (Arrows on desktop)
+      // Right Twist / Flip / Balance / Carve Stick (Arrows on desktop)
       twistUp: false,
       twistDown: false,
       twistLeft: false,
@@ -2734,6 +2741,8 @@
       state.input.joystickVector.y = 0;
       state.input.rightJoystickVector.x = 0;
       state.input.rightJoystickVector.y = 0;
+      if (state.carve) state.carve.active = false;
+      if (state.player) state.player.remoteTilt = 0;
     }
 
     window.addEventListener('blur', resetInputs);
@@ -2982,6 +2991,8 @@
     state.player.heading = cp.heading;
     state.player.pitch = 0;
     state.player.roll = 0;
+    state.player.remoteTilt = 0;
+    if (state.carve) state.carve.active = false;
     state.player.isAirborne = false;
     state.player.airtime = 0;
     state.player.isGrinding = false;
@@ -3253,6 +3264,23 @@
     const worldDirZ = (-inputX - inputY) * 0.7071;
     const inputMagnitude = Math.min(1.0, Math.hypot(inputX, inputY));
 
+    // Sample Right Stick / Arrow Inputs (Carve, Remote Tilt & Aerial Tricks)
+    let twistX = 0;
+    let twistY = 0;
+    if (state.input.rightJoystickActive) {
+      twistX = state.input.rightJoystickVector.x;
+      twistY = state.input.rightJoystickVector.y;
+    } else {
+      if (state.input.twistRight) twistX += 1;
+      if (state.input.twistLeft) twistX -= 1;
+      if (state.input.twistUp) twistY += 1;
+      if (state.input.twistDown) twistY -= 1;
+    }
+
+    const isCarving = !p.isAirborne && !state.grind.active && Math.abs(twistX) > 0.05;
+    const keySignature = `${state.input.up ? 'U' : ''}${state.input.down ? 'D' : ''}${state.input.left ? 'L' : ''}${state.input.right ? 'R' : ''}`;
+    const currentJoyAngle = state.input.joystickActive ? Math.atan2(state.input.joystickVector.y, state.input.joystickVector.x) : null;
+
     // Unit forward and lateral vectors based on current board heading
     const fwdX = Math.sin(p.heading);
     const fwdZ = Math.cos(p.heading);
@@ -3265,16 +3293,52 @@
 
     // 2. Motor Acceleration & Steering (Forces applied relative to board heading)
     if (inputMagnitude > 0.05) {
-      // Steer heading smoothly towards input direction
-      const desiredHeading = Math.atan2(worldDirX, worldDirZ);
-      let angleDiff = desiredHeading - p.heading;
-      while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-      while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-      p.heading += angleDiff * Math.min(1.0, dt * TURN_SPEED);
+      let desiredHeading = Math.atan2(worldDirX, worldDirZ);
 
-      // Carve Roll banking
-      const rollTarget = THREE.MathUtils.clamp(-angleDiff * 1.5, -0.15, 0.15);
-      p.roll = THREE.MathUtils.lerp(p.roll, rollTarget, dt * 10);
+      if (isCarving) {
+        // Arrow Keys / Right Stick have full carving steering authority
+        // Negative twistX rotates clockwise around Y (turns right on screen)
+        const carveTurnRate = 5.8;
+        const carveDelta = -twistX * carveTurnRate * dt;
+        p.heading += carveDelta;
+
+        state.carve.active = true;
+        state.carve.carvedHeading = p.heading;
+        state.carve.savedKeySig = keySignature;
+        state.carve.savedJoyAngle = currentJoyAngle;
+      } else if (state.carve.active) {
+        // Exiting carve: check if the same drive throttle is still held (e.g. W held as forward throttle)
+        const keysMatch = keySignature === state.carve.savedKeySig;
+        let joyMatches = false;
+        if (state.input.joystickActive && state.carve.savedJoyAngle !== null && currentJoyAngle !== null) {
+          let joyDiff = Math.abs(currentJoyAngle - state.carve.savedJoyAngle);
+          while (joyDiff > Math.PI) joyDiff = Math.abs(joyDiff - Math.PI * 2);
+          joyMatches = joyDiff < 0.45;
+        }
+
+        if (keysMatch || joyMatches) {
+          // Keep driving forward along carved heading without snapping back!
+          desiredHeading = p.heading;
+        } else {
+          // Player actively changed direction keys / stick angle: resume standard steering
+          state.carve.active = false;
+        }
+
+        let angleDiff = desiredHeading - p.heading;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        p.heading += angleDiff * Math.min(1.0, dt * TURN_SPEED);
+      } else {
+        // Standard directional steering
+        let angleDiff = desiredHeading - p.heading;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        p.heading += angleDiff * Math.min(1.0, dt * TURN_SPEED);
+
+        // Carve Roll banking from turning
+        const rollTarget = THREE.MathUtils.clamp(-angleDiff * 1.5, -0.15, 0.15);
+        p.roll = THREE.MathUtils.lerp(p.roll, rollTarget, dt * 10);
+      }
 
       // Motor thrust accelerates forward along heading (progressive analog torque curve)
       const targetSpeed = MAX_SPEED * inputMagnitude;
@@ -3290,10 +3354,24 @@
         vFwd = THREE.MathUtils.lerp(vFwd, targetSpeed, dt * 4.5);
       }
     } else {
+      if (isCarving) {
+        // Carve steering while coasting or rolling downhill
+        const carveTurnRate = 5.8;
+        const carveDelta = -twistX * carveTurnRate * dt;
+        p.heading += carveDelta;
+      }
+      state.carve.active = false;
+
       // Smooth coasting friction roll-down
       vFwd = THREE.MathUtils.lerp(vFwd, 0, dt * 1.8);
-      p.roll = THREE.MathUtils.lerp(p.roll, 0, dt * 8);
+      if (!isCarving) {
+        p.roll = THREE.MathUtils.lerp(p.roll, 0, dt * 8);
+      }
     }
+
+    // Wrap heading to [-PI, PI]
+    while (p.heading > Math.PI) p.heading -= Math.PI * 2;
+    while (p.heading < -Math.PI) p.heading += Math.PI * 2;
 
     // 3. Downhill Slope Gravity & Counter-Steering ("Fight Gravity")
     // Gravity acts continuously across terrain, hills, and elevated stunt ramps!
@@ -3365,8 +3443,19 @@
       const accelRate = (inputMagnitude * MAX_SPEED - p.speed) / MAX_SPEED;
       const riderPitch = THREE.MathUtils.clamp(-accelRate * 0.04, -0.03, 0.03);
 
-      p.pitch = THREE.MathUtils.lerp(p.pitch, slopePitch + riderPitch, dt * 14);
-      p.roll = THREE.MathUtils.lerp(p.roll, p.roll * 0.75 + THREE.MathUtils.clamp(slopeRoll, -0.15, 0.15), dt * 8);
+      // VESC Remote Tilt: Up tilts nose up (-pitch), Down tilts nose down (+pitch)
+      const targetRemoteTilt = -twistY * 0.16;
+      p.remoteTilt = THREE.MathUtils.lerp(p.remoteTilt || 0, targetRemoteTilt, dt * 10);
+
+      p.pitch = THREE.MathUtils.lerp(p.pitch, slopePitch + riderPitch + p.remoteTilt, dt * 14);
+
+      if (isCarving) {
+        // Bank into the carve: right turn -> roll < 0 (right rail down), left turn -> roll > 0 (left rail down)
+        const targetRoll = -twistX * 0.22 + THREE.MathUtils.clamp(slopeRoll * 0.4, -0.08, 0.08);
+        p.roll = THREE.MathUtils.lerp(p.roll, targetRoll, dt * 12);
+      } else {
+        p.roll = THREE.MathUtils.lerp(p.roll, p.roll * 0.75 + THREE.MathUtils.clamp(slopeRoll, -0.15, 0.15), dt * 8);
+      }
     }
 
     // 5. Position Integration & Boundary Clamping
@@ -3383,6 +3472,8 @@
       p.vy = JUMP_VELOCITY;
       p.isAirborne = true;
       p.airtime = 0;
+      p.remoteTilt = 0;
+      if (state.carve) state.carve.active = false;
       state.input.jumpPressed = false;
       state.aerial.airYaw = 0;
       state.aerial.airPitch = 0;
@@ -3413,7 +3504,8 @@
 
         // Horizontal Twist (Yaw Spin: 180, 360)
         if (Math.abs(twistX) > 0.05) {
-          const spinDelta = twistX * 8.2 * dt;
+          // Inverted so right rotates clockwise (right) and left rotates counter-clockwise (left)
+          const spinDelta = -twistX * 8.2 * dt;
           p.heading += spinDelta;
           state.aerial.airYaw += spinDelta;
 
@@ -3452,6 +3544,8 @@
         p.y = p.groundY;
         p.vy = 0;
         p.isAirborne = false;
+        p.remoteTilt = 0;
+        if (state.carve) state.carve.active = false;
 
         // Wrap pitch to [-PI, PI]
         while (p.pitch > Math.PI) p.pitch -= Math.PI * 2;
