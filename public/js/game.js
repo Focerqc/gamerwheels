@@ -3416,9 +3416,18 @@
 
     // 2. Motor Acceleration & Steering (Forces applied relative to board heading)
     if (inputMagnitude > 0.05) {
-      // Steer heading smoothly towards input direction
       const desiredHeading = Math.atan2(worldDirX, worldDirZ);
-      let angleDiff = desiredHeading - p.heading;
+
+      // Determine if rider is currently rolling fakie (tail forward)
+      // When traveling at speed with velocity oriented backwards relative to board nose
+      let isFakie = false;
+      if (p.speed > 1.8 && vFwd < -0.8) {
+        isFakie = true;
+      }
+
+      // If fakie, steer the board's tail towards desired travel direction
+      const targetBoardHeading = isFakie ? desiredHeading + Math.PI : desiredHeading;
+      let angleDiff = targetBoardHeading - p.heading;
       while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
       while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
       p.heading += angleDiff * Math.min(1.0, dt * TURN_SPEED);
@@ -3427,18 +3436,27 @@
       const rollTarget = THREE.MathUtils.clamp(-angleDiff * 1.5, -0.15, 0.15);
       p.roll = THREE.MathUtils.lerp(p.roll, rollTarget, dt * 10);
 
-      // Motor thrust accelerates forward along heading (progressive analog torque curve)
+      // Motor thrust accelerates along travel direction
       const targetSpeed = MAX_SPEED * inputMagnitude;
-      if (vFwd < targetSpeed) {
-        // Progressive motor torque ramp curve (~3 sec to reach 45 MPH)
-        const speedRatio = THREE.MathUtils.clamp(vFwd / MAX_SPEED, 0, 1);
-        const torqueFactor = 1.0 - speedRatio * 0.52; // Tapers at high speed
-        const motorAccel = 11.5 * torqueFactor;
-        vFwd += motorAccel * dt;
-        if (vFwd > targetSpeed) vFwd = targetSpeed;
-      } else if (targetSpeed < vFwd - 0.5) {
-        // Regenerative braking when pulling back on throttle
-        vFwd = THREE.MathUtils.lerp(vFwd, targetSpeed, dt * 4.5);
+      if (isFakie) {
+        // Accelerate tail-forward in fakie
+        if (vFwd > -targetSpeed) {
+          const speedRatio = THREE.MathUtils.clamp(-vFwd / MAX_SPEED, 0, 1);
+          const torqueFactor = 1.0 - speedRatio * 0.52;
+          vFwd -= 11.5 * torqueFactor * dt;
+          if (vFwd < -targetSpeed) vFwd = -targetSpeed;
+        } else if (vFwd < -targetSpeed + 0.5) {
+          vFwd = THREE.MathUtils.lerp(vFwd, -targetSpeed, dt * 4.5);
+        }
+      } else {
+        if (vFwd < targetSpeed) {
+          const speedRatio = THREE.MathUtils.clamp(vFwd / MAX_SPEED, 0, 1);
+          const torqueFactor = 1.0 - speedRatio * 0.52;
+          vFwd += 11.5 * torqueFactor * dt;
+          if (vFwd > targetSpeed) vFwd = targetSpeed;
+        } else if (targetSpeed < vFwd - 0.5) {
+          vFwd = THREE.MathUtils.lerp(vFwd, targetSpeed, dt * 4.5);
+        }
       }
     } else {
       // Smooth coasting friction roll-down
@@ -3516,8 +3534,31 @@
       const accelRate = (inputMagnitude * MAX_SPEED - p.speed) / MAX_SPEED;
       const riderPitch = THREE.MathUtils.clamp(-accelRate * 0.04, -0.03, 0.03);
 
-      p.pitch = THREE.MathUtils.lerp(p.pitch, slopePitch + riderPitch, dt * 14);
-      p.roll = THREE.MathUtils.lerp(p.roll, p.roll * 0.75 + THREE.MathUtils.clamp(slopeRoll, -0.15, 0.15), dt * 8);
+      // Sample Right Stick / Arrow Inputs on Ground (VESC Remote Tilt & Lean Roll)
+      let groundTwistX = 0;
+      let groundTwistY = 0;
+      if (state.input.rightJoystickActive) {
+        groundTwistX = state.input.rightJoystickVector.x;
+        groundTwistY = state.input.rightJoystickVector.y;
+      } else {
+        if (state.input.twistRight) groundTwistX += 1;
+        if (state.input.twistLeft) groundTwistX -= 1;
+        if (state.input.twistUp) groundTwistY += 1;
+        if (state.input.twistDown) groundTwistY -= 1;
+      }
+
+      // VESC Remote Tilt: Up tilts nose up (-pitch), Down tilts nose down (+pitch)
+      const targetRemoteTilt = -groundTwistY * 0.16;
+      p.remoteTilt = THREE.MathUtils.lerp(p.remoteTilt || 0, targetRemoteTilt, dt * 10);
+
+      p.pitch = THREE.MathUtils.lerp(p.pitch, slopePitch + riderPitch + p.remoteTilt, dt * 14);
+
+      if (Math.abs(groundTwistX) > 0.05) {
+        p.roll = THREE.MathUtils.lerp(p.roll, -groundTwistX * 0.22, dt * 12);
+        p.heading += -groundTwistX * 4.2 * dt;
+      } else {
+        p.roll = THREE.MathUtils.lerp(p.roll, p.roll * 0.75 + THREE.MathUtils.clamp(slopeRoll, -0.15, 0.15), dt * 8);
+      }
     }
 
     // 5. Position Integration & Boundary Clamping
@@ -3552,14 +3593,25 @@
       if (!state.grind.active) {
         let twistX = 0;
         let twistY = 0;
-        if (state.input.joystickActive) {
+
+        // 1. Horizontal Yaw Spin (180, 360): Controlled by either stick X, A/D, or Arrow Left/Right
+        if (state.input.rightJoystickActive && Math.abs(state.input.rightJoystickVector.x) > 0.05) {
+          twistX = state.input.rightJoystickVector.x;
+        } else if (state.input.joystickActive && Math.abs(state.input.joystickVector.x) > 0.05) {
           twistX = state.input.joystickVector.x;
-          twistY = state.input.joystickVector.y;
         } else {
-          if (state.input.right) twistX += 1;
-          if (state.input.left) twistX -= 1;
-          if (state.input.up) twistY += 1;
-          if (state.input.down) twistY -= 1;
+          if (state.input.right || state.input.twistRight) twistX += 1;
+          if (state.input.left || state.input.twistLeft) twistX -= 1;
+        }
+
+        // 2. Vertical Pitch Flips (Backflip / Frontflip):
+        // Dedicated stunt controls: ONLY Right Stick Y or Arrow Up/Down.
+        // Holding W (drive forward) or Left Stick Y will NEVER cause accidental flips!
+        if (state.input.rightJoystickActive && Math.abs(state.input.rightJoystickVector.y) > 0.08) {
+          twistY = state.input.rightJoystickVector.y;
+        } else {
+          if (state.input.twistUp) twistY += 1;
+          if (state.input.twistDown) twistY -= 1;
         }
 
         // Horizontal Twist (Yaw Spin: 180, 360)
@@ -4305,33 +4357,15 @@
     const cs = state.camera;
     const delta = dt || 0.016;
 
-    // 1. Right Stick & Arrow Key Camera Orbit Input
-    let camOrbitX = 0;
-    let camOrbitY = 0;
-    if (state.input.rightJoystickActive) {
-      camOrbitX = state.input.rightJoystickVector.x;
-      camOrbitY = state.input.rightJoystickVector.y;
-    } else {
-      if (state.input.twistRight) camOrbitX += 1;
-      if (state.input.twistLeft) camOrbitX -= 1;
-      if (state.input.twistUp) camOrbitY += 1;
-      if (state.input.twistDown) camOrbitY -= 1;
-    }
-
-    if (Math.abs(camOrbitX) > 0.05 || Math.abs(camOrbitY) > 0.05) {
-      cs.manualTimer = 2.2; // Reset manual free-look timer
-      cs.yaw -= camOrbitX * 3.2 * delta;
-      cs.pitch += camOrbitY * 2.2 * delta;
-      cs.pitch = THREE.MathUtils.clamp(cs.pitch, 0.08, 1.25);
-    }
-
-    // 2. Intelligent Auto-Chase Camera
-    // When riding forward at speed without manual orbit active, smoothly follow behind rider
+    // 1. Intelligent Velocity-Vector Auto-Chase Camera
+    // Follows the rider's MOVEMENT VECTOR (travel velocity vx, vz), NEVER the board's rotational heading!
+    // When airborne (jumping, 180s, 360s, flips), camera yaw remains completely steady along jump momentum!
     if (cs.manualTimer > 0) {
       cs.manualTimer -= delta;
-    } else if (p.speed > 1.2 && !p.isAirborne) {
-      const behindHeading = p.heading + Math.PI;
-      let yawDiff = behindHeading - cs.yaw;
+    } else if (!p.isAirborne && p.speed > 1.2) {
+      const travelHeading = Math.atan2(p.vx, p.vz);
+      const behindTravel = travelHeading + Math.PI;
+      let yawDiff = behindTravel - cs.yaw;
       while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
       while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
       cs.yaw += yawDiff * Math.min(1.0, delta * 2.8);
