@@ -3414,12 +3414,13 @@
     let vFwd = p.vx * fwdX + p.vz * fwdZ;
     let vLat = p.vx * rightX + p.vz * rightZ;
 
-    // 2. Motor Acceleration & Steering (Forces applied relative to board heading)
+    let isBrakingInput = false;
+
+    // 2. Motor Acceleration, Steering, Braking & Coasting
     if (inputMagnitude > 0.05) {
       const desiredHeading = Math.atan2(worldDirX, worldDirZ);
 
       // Determine if rider is currently rolling fakie (tail forward)
-      // When traveling at speed with velocity oriented backwards relative to board nose
       let isFakie = false;
       if (p.speed > 1.8 && vFwd < -0.8) {
         isFakie = true;
@@ -3430,37 +3431,62 @@
       let angleDiff = targetBoardHeading - p.heading;
       while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
       while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-      p.heading += angleDiff * Math.min(1.0, dt * TURN_SPEED);
 
-      // Carve Roll banking
-      const rollTarget = THREE.MathUtils.clamp(-angleDiff * 1.5, -0.15, 0.15);
-      p.roll = THREE.MathUtils.lerp(p.roll, rollTarget, dt * 10);
+      // High-speed braking detection:
+      // When traveling at speed and pulling the stick backward relative to board heading (> 108 deg)
+      isBrakingInput = p.speed > 1.8 && Math.abs(angleDiff) > (Math.PI * 0.60);
 
-      // Motor thrust accelerates along travel direction
-      const targetSpeed = MAX_SPEED * inputMagnitude;
-      if (isFakie) {
-        // Accelerate tail-forward in fakie
-        if (vFwd > -targetSpeed) {
-          const speedRatio = THREE.MathUtils.clamp(-vFwd / MAX_SPEED, 0, 1);
-          const torqueFactor = 1.0 - speedRatio * 0.52;
-          vFwd -= 11.5 * torqueFactor * dt;
-          if (vFwd < -targetSpeed) vFwd = -targetSpeed;
-        } else if (vFwd < -targetSpeed + 0.5) {
-          vFwd = THREE.MathUtils.lerp(vFwd, -targetSpeed, dt * 4.5);
+      if (isBrakingInput) {
+        // --- REGENERATIVE BRAKING AT SPEED ---
+        // Decelerates forward speed without 180-spinning the board
+        const brakeDecel = 16.0; // m/s^2 firm regenerative braking
+        if (vFwd > 0) {
+          vFwd = Math.max(0, vFwd - brakeDecel * inputMagnitude * dt);
+        } else if (vFwd < 0) {
+          vFwd = Math.min(0, vFwd + brakeDecel * inputMagnitude * dt);
+        }
+
+        // Allow lateral carving during braking if stick has horizontal input (e.g. S + A or S + D)
+        if (Math.abs(inputX) > 0.08) {
+          const steerDir = isFakie ? -1 : 1;
+          p.heading -= steerDir * inputX * 3.5 * dt;
+          p.roll = THREE.MathUtils.lerp(p.roll, steerDir * inputX * 0.18, dt * 10);
+        } else {
+          p.roll = THREE.MathUtils.lerp(p.roll, 0, dt * 8);
         }
       } else {
-        if (vFwd < targetSpeed) {
-          const speedRatio = THREE.MathUtils.clamp(vFwd / MAX_SPEED, 0, 1);
-          const torqueFactor = 1.0 - speedRatio * 0.52;
-          vFwd += 11.5 * torqueFactor * dt;
-          if (vFwd > targetSpeed) vFwd = targetSpeed;
-        } else if (targetSpeed < vFwd - 0.5) {
-          vFwd = THREE.MathUtils.lerp(vFwd, targetSpeed, dt * 4.5);
+        // --- NORMAL STEERING & ACCELERATION ---
+        p.heading += angleDiff * Math.min(1.0, dt * TURN_SPEED);
+
+        // Carve Roll banking
+        const rollTarget = THREE.MathUtils.clamp(-angleDiff * 1.5, -0.18, 0.18);
+        p.roll = THREE.MathUtils.lerp(p.roll, rollTarget, dt * 10);
+
+        // Motor thrust accelerates along travel direction
+        const targetSpeed = MAX_SPEED * inputMagnitude;
+        if (isFakie) {
+          if (vFwd > -targetSpeed) {
+            const speedRatio = THREE.MathUtils.clamp(-vFwd / MAX_SPEED, 0, 1);
+            const torqueFactor = 1.0 - speedRatio * 0.52;
+            vFwd -= ACCELERATION * torqueFactor * dt;
+            if (vFwd < -targetSpeed) vFwd = -targetSpeed;
+          } else if (vFwd < -targetSpeed + 0.5) {
+            vFwd = THREE.MathUtils.lerp(vFwd, -targetSpeed, dt * 4.5);
+          }
+        } else {
+          if (vFwd < targetSpeed) {
+            const speedRatio = THREE.MathUtils.clamp(vFwd / MAX_SPEED, 0, 1);
+            const torqueFactor = 1.0 - speedRatio * 0.52;
+            vFwd += ACCELERATION * torqueFactor * dt;
+            if (vFwd > targetSpeed) vFwd = targetSpeed;
+          } else if (targetSpeed < vFwd - 0.5) {
+            vFwd = THREE.MathUtils.lerp(vFwd, targetSpeed, dt * 4.5);
+          }
         }
       }
     } else {
-      // Smooth coasting friction roll-down
-      vFwd = THREE.MathUtils.lerp(vFwd, 0, dt * 1.8);
+      // Smooth coasting friction roll-down (preserves momentum, ultra-low drag!)
+      vFwd = THREE.MathUtils.lerp(vFwd, 0, dt * 0.04);
       p.roll = THREE.MathUtils.lerp(p.roll, 0, dt * 8);
     }
 
@@ -3509,9 +3535,9 @@
 
     // Taillight / Brake Light Dynamic Lighting (Brightens on brake/reverse, shines rearward)
     if (taillightSpot && taillightLens) {
-      const isBraking = (vFwd < 0.2 && inputMagnitude > 0.1) || state.input.down;
-      const targetIntensity = isBraking ? 4.6 : 2.8;
-      const targetEmissive = isBraking ? 2.6 : 1.6;
+      const isBraking = isBrakingInput || (vFwd < 0.2 && inputMagnitude > 0.1) || state.input.down;
+      const targetIntensity = isBraking ? 4.8 : 2.8;
+      const targetEmissive = isBraking ? 2.8 : 1.6;
       taillightSpot.intensity = THREE.MathUtils.lerp(taillightSpot.intensity, targetIntensity, dt * 10);
       taillightLens.material.emissiveIntensity = THREE.MathUtils.lerp(taillightLens.material.emissiveIntensity, targetEmissive, dt * 10);
     }
@@ -3532,18 +3558,20 @@
 
       // Rider acceleration tilt: On a Onewheel, accelerating requires leaning forward so nose dips DOWN (+pitch).
       // Braking / pushback requires leaning back so nose lifts UP (-pitch).
-      const fwdInput = (inputMagnitude > 0.05) ? (worldDirX * fwdX + worldDirZ * fwdZ) : 0;
       let accelPitch = 0;
-      if (fwdInput > 0.05) {
+      if (isBrakingInput || (state.input.down && vFwd > 0.4)) {
+        // Braking at speed: lift nose up / dip tail down (-0.13 rad ~ -7.4 deg)
+        accelPitch = -0.13 * THREE.MathUtils.clamp(inputMagnitude, 0.5, 1.0);
+      } else if (inputMagnitude > 0.05 && vFwd >= -0.3) {
         // Accelerating forward: dip nose down (+0.11 rad ~ 6.3 deg)
         const headroom = THREE.MathUtils.clamp(1.0 - (p.speed / (MAX_SPEED * 1.1)), 0.25, 1.0);
-        accelPitch = fwdInput * 0.11 * headroom;
-      } else if (fwdInput < -0.05 || state.input.down) {
-        // Braking or reversing: lift nose up / dip tail down (-0.12 rad ~ -6.9 deg)
-        accelPitch = -0.12 * Math.max(0.5, inputMagnitude);
+        accelPitch = inputMagnitude * 0.11 * headroom;
+      } else if (vFwd < -0.3 && inputMagnitude > 0.05) {
+        // Reversing: tail dips down (nose lifts up, -pitch)
+        accelPitch = -0.11 * inputMagnitude;
       }
       // Speed lean: cruising forward lean into wind resistance (+0.035 rad ~ 2.0 deg)
-      const speedLean = (p.speed / MAX_SPEED) * 0.035;
+      const speedLean = (vFwd > 0.5) ? (p.speed / MAX_SPEED) * 0.035 : 0;
       const riderPitch = accelPitch + speedLean;
 
       // Sample Right Stick / Arrow Inputs on Ground (VESC Remote Tilt & Lean Roll)
