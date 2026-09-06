@@ -90,6 +90,55 @@
 
         <!-- Top Right: Multiplayer Badge & Action Controls -->
         <div class="exp9-hud-top-right">
+          <!-- Controls Settings Dropdown (To the left of Riders Counter) -->
+          <div class="exp9-controls-dropdown" id="controlsDropdown">
+            <button type="button" class="exp9-hud-btn exp9-controls-btn" id="btnControlsDropdown" title="Controls Settings" aria-haspopup="true" aria-expanded="false">
+              <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+              </svg>
+              <span>Controls</span>
+              <svg class="exp9-dropdown-caret" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            <!-- Dropdown Menu Panel -->
+            <div class="exp9-controls-menu" id="controlsMenu">
+              <div class="exp9-controls-menu-header">
+                <span>⚙️ Controls Settings</span>
+              </div>
+              
+              <div class="exp9-controls-toggle-row">
+                <div class="exp9-toggle-info">
+                  <div class="exp9-toggle-title">On-Screen Jump Button</div>
+                  <div class="exp9-toggle-sub">Show touch HOP button in corner</div>
+                </div>
+                <label class="exp9-switch" for="toggleJumpBtn">
+                  <input type="checkbox" id="toggleJumpBtn" />
+                  <span class="exp9-slider"></span>
+                </label>
+              </div>
+
+              <div class="exp9-controls-divider"></div>
+
+              <div class="exp9-controls-legend">
+                <div class="exp9-legend-title">Stick Controls</div>
+                <div class="exp9-legend-row">
+                  <span class="exp9-badge-tag">Left Stick</span>
+                  <span>Steer & Carve</span>
+                </div>
+                <div class="exp9-legend-row">
+                  <span class="exp9-badge-tag">Right Stick Tap</span>
+                  <span>Tap (&lt;1s) to Hop</span>
+                </div>
+                <div class="exp9-legend-row">
+                  <span class="exp9-badge-tag">Right Stick Hold</span>
+                  <span>Hold (&gt;1s) Cam Orbit</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Live Online Counter Badge -->
           <div class="exp9-online-badge" title="Riders currently connected">
             <span class="live-dot"></span>
@@ -182,7 +231,7 @@
       </div>
 
       <!-- Mobile Jump Button (Bottom Right next to Twist Stick) -->
-      <div class="exp9-jump-btn-zone">
+      <div class="exp9-jump-btn-zone" id="jumpBtnZone">
         <button type="button" class="exp9-jump-btn" id="btnTouchJump" aria-label="Jump / Bunny Hop">
           <span>HOP</span>
           <small>Space</small>

@@ -252,6 +252,70 @@
         }
       });
     }
+
+    // Controls Settings Dropdown & Jump Button Toggle
+    const btnControlsDropdown = document.getElementById('btnControlsDropdown');
+    const controlsMenu = document.getElementById('controlsMenu');
+    const toggleJumpBtn = document.getElementById('toggleJumpBtn');
+    const gameContainer = document.getElementById('gameContainer') || document.querySelector('.exp9-viewport-container');
+
+    function setJumpButtonVisible(visible) {
+      if (gameContainer) {
+        gameContainer.classList.toggle('has-jump-button', visible);
+      }
+      if (toggleJumpBtn) {
+        toggleJumpBtn.checked = visible;
+      }
+      try {
+        localStorage.setItem('gamerwheels_jump_button', visible ? 'true' : 'false');
+      } catch (e) {}
+    }
+
+    // Off by default as requested; persist if explicitly enabled
+    let initialJumpBtn = false;
+    try {
+      const savedJump = localStorage.getItem('gamerwheels_jump_button');
+      if (savedJump !== null) {
+        initialJumpBtn = savedJump === 'true';
+      }
+    } catch (e) {}
+    setJumpButtonVisible(initialJumpBtn);
+
+    if (toggleJumpBtn) {
+      toggleJumpBtn.addEventListener('change', (e) => {
+        setJumpButtonVisible(e.target.checked);
+      });
+    }
+
+    if (btnControlsDropdown && controlsMenu) {
+      btnControlsDropdown.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = controlsMenu.classList.contains('open');
+        controlsMenu.classList.toggle('open', !isOpen);
+        btnControlsDropdown.setAttribute('aria-expanded', !isOpen);
+        btnControlsDropdown.classList.toggle('active', !isOpen);
+      });
+
+      controlsMenu.addEventListener('click', (e) => {
+        e.stopPropagation();
+      });
+
+      window.addEventListener('click', () => {
+        if (controlsMenu.classList.contains('open')) {
+          controlsMenu.classList.remove('open');
+          btnControlsDropdown.setAttribute('aria-expanded', 'false');
+          btnControlsDropdown.classList.remove('active');
+        }
+      });
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && controlsMenu.classList.contains('open')) {
+          controlsMenu.classList.remove('open');
+          btnControlsDropdown.setAttribute('aria-expanded', 'false');
+          btnControlsDropdown.classList.remove('active');
+        }
+      });
+    }
   }
 
   // ==========================================================================
@@ -2759,7 +2823,8 @@
         if (e.target.closest('.exp9-joystick-zone') || 
             e.target.closest('.exp9-right-joystick-zone') || 
             e.target.closest('.exp9-jump-btn-zone') ||
-            e.target.closest('.exp9-hud-top-bar') ||
+            e.target.closest('.exp9-controls-dropdown') ||
+            e.target.closest('.exp9-hud-top-row') ||
             e.target.closest('.exp9-checkpoints-bar')) {
           return;
         }
@@ -2915,12 +2980,25 @@
 
     let activePointerId = null;
     let baseRect = null;
+    let pressStartTime = 0;
+    let holdTimer = null;
     const maxRadius = 60; // Expanded travel area for balance & trick analog control
 
     function handleStart(clientX, clientY, pointerId, target) {
       activePointerId = pointerId;
+      pressStartTime = performance.now();
       state.input.rightJoystickActive = true;
       rightJoystickThumb.classList.add('active');
+      rightJoystickThumb.classList.remove('holding');
+
+      // Visual indicator timer when held for over 1 second
+      if (holdTimer) clearTimeout(holdTimer);
+      holdTimer = setTimeout(() => {
+        if (state.input.rightJoystickActive) {
+          rightJoystickThumb.classList.add('holding');
+        }
+      }, 1000);
+
       baseRect = rightJoystickBase.getBoundingClientRect();
       if (target && target.setPointerCapture && pointerId !== undefined) {
         try { target.setPointerCapture(pointerId); } catch (e) {}
@@ -2958,16 +3036,35 @@
       }
     }
 
-    function handleEnd(pointerId, target) {
+    function handleEnd(pointerId, target, isCancelled = false) {
       if (activePointerId !== null && pointerId !== undefined && pointerId !== activePointerId) return;
       activePointerId = null;
+
+      if (holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
+
+      const pressDuration = performance.now() - pressStartTime;
+
       state.input.rightJoystickActive = false;
       state.input.rightJoystickVector.x = 0;
       state.input.rightJoystickVector.y = 0;
       rightJoystickThumb.classList.remove('active');
+      rightJoystickThumb.classList.remove('holding');
       rightJoystickThumb.style.transform = 'translate(0px, 0px)';
       if (target && target.releasePointerCapture && pointerId !== undefined) {
         try { target.releasePointerCapture(pointerId); } catch (e) {}
+      }
+
+      // Tapping and releasing within 1 sec triggers jump (no stick movement required)
+      // Holding for over 1 sec (> 1000ms) does NOT trigger jump on release
+      if (!isCancelled && pressDuration < 1000) {
+        state.input.jumpPressed = true;
+        state.input.jump = true;
+        setTimeout(() => {
+          state.input.jump = false;
+        }, 80);
       }
     }
 
@@ -2989,13 +3086,13 @@
 
     window.addEventListener('pointerup', (e) => {
       if (activePointerId !== null && e.pointerId === activePointerId) {
-        handleEnd(e.pointerId, rightJoystickZone);
+        handleEnd(e.pointerId, rightJoystickZone, false);
       }
     });
 
     window.addEventListener('pointercancel', (e) => {
       if (activePointerId !== null && e.pointerId === activePointerId) {
-        handleEnd(e.pointerId, rightJoystickZone);
+        handleEnd(e.pointerId, rightJoystickZone, true);
       }
     });
   }
@@ -3299,9 +3396,9 @@
     // Forward vector away from camera on ground plane:
     const fwdCamX = -sinCam;
     const fwdCamZ = -cosCam;
-    // Right vector to the right of camera view:
-    const rightCamX = -cosCam;
-    const rightCamZ = sinCam;
+    // Right vector to the right of camera view (90 deg clockwise from fwdCam on ground plane):
+    const rightCamX = cosCam;
+    const rightCamZ = -sinCam;
 
     const worldDirX = inputY * fwdCamX + inputX * rightCamX;
     const worldDirZ = inputY * fwdCamZ + inputX * rightCamZ;
@@ -3456,11 +3553,11 @@
         let twistX = 0;
         let twistY = 0;
         if (state.input.joystickActive) {
-          twistX = -state.input.joystickVector.x;
+          twistX = state.input.joystickVector.x;
           twistY = state.input.joystickVector.y;
         } else {
-          if (state.input.left) twistX += 1;
-          if (state.input.right) twistX -= 1;
+          if (state.input.right) twistX += 1;
+          if (state.input.left) twistX -= 1;
           if (state.input.up) twistY += 1;
           if (state.input.down) twistY -= 1;
         }
