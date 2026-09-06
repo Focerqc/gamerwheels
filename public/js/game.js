@@ -13,7 +13,7 @@
   const MAX_SPEED = 20.12;       // ~45.0 MPH (flat ground top speed)
   const ACCELERATION = 14.0;     // m/s^2 progressive motor torque rate
   const DECELERATION = 16.0;     // m/s^2 (regenerative braking & coasting)
-  const JUMP_VELOCITY = 7.8;     // m/s initial bunny-hop impulse
+  const JUMP_VELOCITY = 8.5;     // m/s initial bunny-hop impulse
   const TIRE_RADIUS = 0.14;      // ~11 inch tire radius in meters
   const TURN_SPEED = 9.0;        // rad/s angular turning responsiveness
 
@@ -3530,9 +3530,21 @@
       const slopePitch = -Math.atan2(hForward - hBackward, eps * 2);
       const slopeRoll = Math.atan2(hRight - hLeft, eps * 2);
 
-      // Rider acceleration tilt (pitch nose down slightly on acceleration, up on brake)
-      const accelRate = (inputMagnitude * MAX_SPEED - p.speed) / MAX_SPEED;
-      const riderPitch = THREE.MathUtils.clamp(-accelRate * 0.04, -0.03, 0.03);
+      // Rider acceleration tilt: On a Onewheel, accelerating requires leaning forward so nose dips DOWN (+pitch).
+      // Braking / pushback requires leaning back so nose lifts UP (-pitch).
+      const fwdInput = (inputMagnitude > 0.05) ? (worldDirX * fwdX + worldDirZ * fwdZ) : 0;
+      let accelPitch = 0;
+      if (fwdInput > 0.05) {
+        // Accelerating forward: dip nose down (+0.11 rad ~ 6.3 deg)
+        const headroom = THREE.MathUtils.clamp(1.0 - (p.speed / (MAX_SPEED * 1.1)), 0.25, 1.0);
+        accelPitch = fwdInput * 0.11 * headroom;
+      } else if (fwdInput < -0.05 || state.input.down) {
+        // Braking or reversing: lift nose up / dip tail down (-0.12 rad ~ -6.9 deg)
+        accelPitch = -0.12 * Math.max(0.5, inputMagnitude);
+      }
+      // Speed lean: cruising forward lean into wind resistance (+0.035 rad ~ 2.0 deg)
+      const speedLean = (p.speed / MAX_SPEED) * 0.035;
+      const riderPitch = accelPitch + speedLean;
 
       // Sample Right Stick / Arrow Inputs on Ground (VESC Remote Tilt & Lean Roll)
       let groundTwistX = 0;
@@ -3554,7 +3566,7 @@
       p.pitch = THREE.MathUtils.lerp(p.pitch, slopePitch + riderPitch + p.remoteTilt, dt * 14);
 
       if (Math.abs(groundTwistX) > 0.05) {
-        p.roll = THREE.MathUtils.lerp(p.roll, -groundTwistX * 0.22, dt * 12);
+        p.roll = THREE.MathUtils.lerp(p.roll, groundTwistX * 0.22, dt * 12);
         p.heading += -groundTwistX * 4.2 * dt;
       } else {
         p.roll = THREE.MathUtils.lerp(p.roll, p.roll * 0.75 + THREE.MathUtils.clamp(slopeRoll, -0.15, 0.15), dt * 8);
@@ -3581,6 +3593,22 @@
       state.aerial.spin180Done = false;
       state.aerial.spin360Done = false;
       state.aerial.flipDone = false;
+
+      // Pop spin impulse if spin/steer input is active at takeoff
+      let launchSpin = 0;
+      if (state.input.twistRight) launchSpin += 1;
+      if (state.input.twistLeft) launchSpin -= 1;
+      if (state.input.rightJoystickActive) launchSpin += state.input.rightJoystickVector.x;
+      if (state.input.right) launchSpin += 1;
+      if (state.input.left) launchSpin -= 1;
+      if (state.input.joystickActive) launchSpin += state.input.joystickVector.x;
+      launchSpin = THREE.MathUtils.clamp(launchSpin, -1, 1);
+
+      if (Math.abs(launchSpin) > 0.1) {
+        const popImpulse = -launchSpin * 0.45; // ~26 deg initial pop snap
+        p.heading += popImpulse;
+        state.aerial.airYaw += popImpulse;
+      }
     }
 
     // Airborne Gravity Simulation & Aerial Rigid-Body Rotation
@@ -3594,14 +3622,17 @@
         let twistX = 0;
         let twistY = 0;
 
-        // 1. Horizontal Yaw Spin (180, 360): Controlled by either stick X, A/D, or Arrow Left/Right
+        // 1. Horizontal Yaw Spin (180, 360): Controlled by Right Stick, Arrow Left/Right, Left Stick, or A/D
         if (state.input.rightJoystickActive && Math.abs(state.input.rightJoystickVector.x) > 0.05) {
           twistX = state.input.rightJoystickVector.x;
+        } else if (state.input.twistRight || state.input.twistLeft) {
+          if (state.input.twistRight) twistX += 1;
+          if (state.input.twistLeft) twistX -= 1;
         } else if (state.input.joystickActive && Math.abs(state.input.joystickVector.x) > 0.05) {
           twistX = state.input.joystickVector.x;
         } else {
-          if (state.input.right || state.input.twistRight) twistX += 1;
-          if (state.input.left || state.input.twistLeft) twistX -= 1;
+          if (state.input.right) twistX += 1;
+          if (state.input.left) twistX -= 1;
         }
 
         // 2. Vertical Pitch Flips (Backflip / Frontflip):
@@ -3617,7 +3648,8 @@
         // Horizontal Twist (Yaw Spin: 180, 360)
         if (Math.abs(twistX) > 0.05) {
           // Inverted so right rotates clockwise (right) and left rotates counter-clockwise (left)
-          const spinDelta = -twistX * 8.2 * dt;
+          // Spin rate increased to 14.5 rad/s so full 180/360 spins can easily be executed during hops
+          const spinDelta = -twistX * 14.5 * dt;
           p.heading += spinDelta;
           state.aerial.airYaw += spinDelta;
 
