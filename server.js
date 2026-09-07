@@ -216,6 +216,320 @@ const DEFAULT_COLORS = [
   '#f8fafc'  // Frost White
 ];
 
+// =============================================================================
+// Bot (AI Opponent) System
+// Bots live in the `players` Map and ride the world_snapshot pipeline.
+// Clients see them as normal remote riders — no client code changes required.
+// =============================================================================
+const BOT_NAMES_T    = ['[BOT] Rashid', '[BOT] Viktor', '[BOT] Dima'];
+const BOT_NAMES_CT   = ['[BOT] Carter', '[BOT] Reyes',  '[BOT] Chen'];
+const BOT_NAMES_PARK = ['[BOT] Skully',  '[BOT] Pipe',   '[BOT] Ramp'];
+const BOT_COLORS_T    = ['#f59e0b', '#ef4444'];
+const BOT_COLORS_CT   = ['#06b6d4', '#10b981'];
+const BOT_COLORS_PARK = ['#8b5cf6', '#ec4899'];
+
+// Dust2 patrol waypoints {x, z, y} — checkpoint elevations + 0.2m standing height
+const BOT_DUST2_WAYPOINTS = [
+  { x:  -8.0, z:  32.0, y: 2.58 },   // 0: T Spawn Terrace
+  { x:   0.5, z:  11.3, y: 0.38 },   // 1: Mid Doors
+  { x:  20.0, z: -25.0, y: 2.03 },   // 2: A Bomb Site
+  { x: -25.0, z: -15.0, y: 0.38 },   // 3: B Bomb Site
+  { x: -25.0, z: -35.0, y: 4.78 },   // 4: CT Spawn
+];
+
+// Park patrol waypoints — skip Mega Drop (7m tower, bots can't jump there)
+const BOT_PARK_WAYPOINTS = [
+  { x:   0.0, z:   0.0, y: 0.38 },   // 0: Plaza Center
+  { x:  55.0, z:  42.0, y: 3.62 },   // 1: Pine Ridge Slopestyle
+  { x: -58.0, z:  42.0, y: 3.42 },   // 2: Slickrock MX
+  { x:   0.0, z:  56.0, y: 0.42 },   // 3: Desert Berms
+];
+
+// Bot AI state map: botId -> bot object (also inserted into `players` Map)
+const bots = new Map();
+let botIdCounter = 0;
+
+/**
+ * Create a bot for the given team and map.
+ * @param {'T'|'CT'|'PARK'} team
+ * @param {'dust2'|'park'} mapId
+ */
+function createBot(team, mapId = 'dust2') {
+  const id = `bot-${++botIdCounter}`;
+  const isPark = mapId === 'park';
+  const isT    = team === 'T';
+
+  const namePool  = isPark ? BOT_NAMES_PARK  : (isT ? BOT_NAMES_T  : BOT_NAMES_CT);
+  const colorPool = isPark ? BOT_COLORS_PARK : (isT ? BOT_COLORS_T : BOT_COLORS_CT);
+  const waypoints = isPark ? BOT_PARK_WAYPOINTS : BOT_DUST2_WAYPOINTS;
+
+  // T bots start from T-spawn (idx 0), CT from CT-spawn (idx 4), park bots spread out
+  const startWpIdx = isPark
+    ? (botIdCounter % waypoints.length)
+    : (isT ? 0 : 4);
+  const wp = waypoints[startWpIdx];
+
+  const bot = {
+    id,
+    name:  namePool[botIdCounter % namePool.length],
+    color: colorPool[botIdCounter % colorPool.length],
+    mapId,
+    team: isPark ? 'T' : team, // park bots have no real team; use T as neutral
+    isBot: true,
+    isReady: false,
+    hp: 100, maxHp: 100, armor: 100,
+    isAlive: true,
+    kills: 0, deaths: 0, score: 0,
+    x: wp.x + (Math.random() - 0.5) * 2,
+    y: wp.y,
+    z: wp.z + (Math.random() - 0.5) * 2,
+    vx: 0, vy: 0, vz: 0,
+    heading: Math.random() * Math.PI * 2,
+    pitch: 0, roll: 0, speed: 0,
+    isAirborne: false, isGrinding: false,
+    trick: '',
+    currentZone: isPark ? 'Central Town Square' : 'Dust 2',
+    lastUpdate: Date.now(),
+    // AI steering state
+    waypointIdx: startWpIdx,
+    fsm: 'patrol',         // 'patrol' | 'attack'
+    lastFireTime: 0,       // ms timestamp of last shot
+    respawnWpIdx: startWpIdx, // waypoint to respawn at
+  };
+
+  bots.set(id, bot);
+  players.set(id, bot);
+  return bot;
+}
+
+function removeBot(botId) {
+  const bot = bots.get(botId);
+  const mapId = bot ? bot.mapId : 'dust2';
+  bots.delete(botId);
+  players.delete(botId);
+  io.to(mapId).emit('player_left', { id: botId });
+}
+
+/**
+ * Keep each team/map topped up to TARGET_PER_TEAM members (real + bots).
+ * @param {'dust2'|'park'|null} changedMap  Pass map to scope update; null = all maps.
+ */
+function rebalanceBots(changedMap = null) {
+  const MAPS_TO_CHECK = changedMap ? [changedMap] : SUPPORTED_MAPS;
+
+  for (const mapId of MAPS_TO_CHECK) {
+    if (mapId === 'dust2') {
+      const TARGET = 2;
+      let tReal = 0, ctReal = 0;
+      for (const p of players.values()) {
+        if (p.mapId !== 'dust2' || p.isBot) continue;
+        if (p.team === 'T') tReal++; else ctReal++;
+      }
+      const tWant  = Math.max(0, TARGET - tReal);
+      const ctWant = Math.max(0, TARGET - ctReal);
+      const tBots  = [...bots.values()].filter(b => b.mapId === 'dust2' && b.team === 'T');
+      const ctBots = [...bots.values()].filter(b => b.mapId === 'dust2' && b.team === 'CT');
+
+      while (tBots.length  > tWant)  removeBot(tBots.pop().id);
+      while (ctBots.length > ctWant) removeBot(ctBots.pop().id);
+      while (tBots.length  < tWant)  { const b = createBot('T',  'dust2'); tBots.push(b);  io.to('dust2').emit('player_joined', b); }
+      while (ctBots.length < ctWant) { const b = createBot('CT', 'dust2'); ctBots.push(b); io.to('dust2').emit('player_joined', b); }
+
+      console.log(`[Bots|dust2] T: ${tWant} bots (${tReal} real) | CT: ${ctWant} bots (${ctReal} real)`);
+
+    } else if (mapId === 'park') {
+      const TARGET   = 2; // 2 neutral roaming bots on park
+      const realPark = [...players.values()].filter(p => p.mapId === 'park' && !p.isBot).length;
+      const want     = Math.max(0, TARGET - Math.min(realPark, TARGET));
+      const parkBots = [...bots.values()].filter(b => b.mapId === 'park');
+
+      while (parkBots.length > want) removeBot(parkBots.pop().id);
+      while (parkBots.length < want) {
+        const b = createBot('PARK', 'park');
+        parkBots.push(b);
+        io.to('park').emit('player_joined', b);
+      }
+      console.log(`[Bots|park] ${want} bots (${realPark} real)`);
+    }
+  }
+}
+
+/** Respawn a dead bot back to its home waypoint after a delay (ms). */
+function scheduleBotRespawn(bot, delayMs = 4000) {
+  setTimeout(() => {
+    if (!bots.has(bot.id)) return; // bot was removed during the delay
+    const waypoints = bot.mapId === 'park' ? BOT_PARK_WAYPOINTS : BOT_DUST2_WAYPOINTS;
+    const wp = waypoints[bot.respawnWpIdx];
+    bot.hp = 100;
+    bot.armor = 100;
+    bot.isAlive = true;
+    bot.fsm = 'patrol';
+    bot.x = wp.x + (Math.random() - 0.5) * 2;
+    bot.y = wp.y;
+    bot.z = wp.z + (Math.random() - 0.5) * 2;
+    bot.speed = 0;
+    bot.waypointIdx = bot.respawnWpIdx;
+    bot.lastUpdate = Date.now();
+    io.to(bot.mapId).emit('player_respawned', {
+      id: bot.id, hp: 100, armor: 100,
+      x: bot.x, y: bot.y, z: bot.z
+    });
+  }, delayMs);
+}
+
+/**
+ * Advance all bot positions each server tick.
+ * Handles patrol (both maps) and attack FSM (dust2 tactical only).
+ * @param {number} dt - Delta time in seconds
+ */
+function tickBots(dt) {
+  const BOT_SPEED      = 6.0;   // m/s patrol cruise
+  const ARRIVE_DIST    = 1.5;   // m — waypoint switch threshold
+  const TURN_RATE      = 4.0;   // rad/s heading lerp
+  const ATTACK_RANGE   = 28;    // m — detection radius for shooting
+  const FIRE_COOLDOWN  = 2000;  // ms between shots
+  const BOT_DAMAGE     = 22;    // HP per shot (Glock-level)
+  const ARMOR_LOSS     = 8;     // armor lost per shot
+
+  const now = Date.now();
+  const dust2Tactical = mapStates.dust2.mode === 'tactical';
+
+  for (const bot of bots.values()) {
+    if (!bot.isAlive) continue;
+
+    const waypoints = bot.mapId === 'park' ? BOT_PARK_WAYPOINTS : BOT_DUST2_WAYPOINTS;
+
+    // ── Attack FSM (dust2 tactical mode only) ──────────────────────────────
+    let attackTarget = null;
+    if (bot.mapId === 'dust2' && dust2Tactical) {
+      let nearestDist = Infinity;
+      for (const p of players.values()) {
+        if (p.isBot || p.mapId !== 'dust2' || !p.isAlive) continue;
+        const d = Math.hypot(p.x - bot.x, p.z - bot.z);
+        if (d < nearestDist) { nearestDist = d; attackTarget = p; }
+      }
+
+      if (attackTarget && nearestDist < ATTACK_RANGE) {
+        bot.fsm = 'attack';
+
+        // Fire if cooldown elapsed
+        if (now - bot.lastFireTime > FIRE_COOLDOWN) {
+          bot.lastFireTime = now;
+
+          // Bullet tracer (visual on all clients)
+          io.to('dust2').emit('player_fired', {
+            id: bot.id,
+            origin: { x: bot.x, y: bot.y + 0.9, z: bot.z },
+            target: { x: attackTarget.x, y: attackTarget.y + 0.9, z: attackTarget.z },
+            weaponId: 'glock',
+            soundType: 'pistol'
+          });
+
+          // Apply damage directly server-side
+          if (attackTarget.isAlive) {
+            let dmg = BOT_DAMAGE;
+            if (attackTarget.armor > 0) {
+              dmg = Math.round(dmg * 0.65); // armor absorbs 35%
+              attackTarget.armor = Math.max(0, attackTarget.armor - ARMOR_LOSS);
+            }
+            attackTarget.hp = Math.max(0, attackTarget.hp - dmg);
+
+            // Pain feedback to victim
+            io.to(attackTarget.id).emit('damage_taken', {
+              attackerId:   bot.id,
+              attackerName: bot.name,
+              damage:       dmg,
+              isHeadshot:   false,
+              hp:           attackTarget.hp,
+              armor:        attackTarget.armor,
+            });
+
+            // Health update to whole room
+            io.to('dust2').emit('player_health_update', {
+              id:      attackTarget.id,
+              hp:      attackTarget.hp,
+              armor:   attackTarget.armor,
+              isAlive: attackTarget.hp > 0,
+            });
+
+            // Kill
+            if (attackTarget.hp <= 0) {
+              attackTarget.isAlive = false;
+              attackTarget.deaths  = (attackTarget.deaths || 0) + 1;
+              bot.kills  = (bot.kills  || 0) + 1;
+              bot.score  = (bot.score  || 0) + 300;
+              io.to('dust2').emit('player_killed', {
+                killerId:   bot.id,
+                killerName: bot.name,
+                victimId:   attackTarget.id,
+                victimName: attackTarget.name,
+                weaponId:   'glock',
+                isHeadshot: false,
+              });
+              // Respawn victim after 3s (mirrors real player_hit respawn)
+              setTimeout(() => {
+                if (!players.has(attackTarget.id)) return;
+                attackTarget.hp = 100; attackTarget.armor = 100;
+                attackTarget.isAlive = true;
+                io.to('dust2').emit('player_respawned', {
+                  id: attackTarget.id, hp: 100, armor: 100,
+                  x: attackTarget.x, y: attackTarget.y, z: attackTarget.z
+                });
+              }, 3000);
+            }
+          }
+        }
+      } else {
+        bot.fsm = 'patrol';
+      }
+    }
+
+    // ── Steering ───────────────────────────────────────────────────────────
+    let targetX, targetZ, targetY;
+    if (bot.fsm === 'attack' && attackTarget) {
+      // Chase: steer toward player
+      targetX = attackTarget.x;
+      targetZ = attackTarget.z;
+      targetY = bot.y; // keep current y during chase
+    } else {
+      // Patrol: steer toward next waypoint
+      const wp = waypoints[bot.waypointIdx];
+      targetX = wp.x;
+      targetZ = wp.z;
+      targetY = wp.y;
+    }
+
+    const dx   = targetX - bot.x;
+    const dz   = targetZ - bot.z;
+    const dist = Math.hypot(dx, dz);
+
+    // Advance patrol waypoint when close enough
+    if (bot.fsm === 'patrol' && dist < ARRIVE_DIST) {
+      bot.waypointIdx = (bot.waypointIdx + 1) % waypoints.length;
+    }
+
+    const desiredHeading = Math.atan2(dx, dz);
+    let dh = desiredHeading - bot.heading;
+    while (dh < -Math.PI) dh += Math.PI * 2;
+    while (dh >  Math.PI) dh -= Math.PI * 2;
+    bot.heading += dh * Math.min(1.0, TURN_RATE * dt);
+
+    // Arrive speed scaling (only during patrol; full speed when chasing)
+    const arriveScale = bot.fsm === 'attack'
+      ? 1.0
+      : Math.min(1.0, dist / (ARRIVE_DIST * 4));
+    bot.speed = BOT_SPEED * arriveScale;
+
+    bot.roll = dh * -0.12; // gentle carving roll
+
+    bot.x += Math.sin(bot.heading) * bot.speed * dt;
+    bot.z += Math.cos(bot.heading) * bot.speed * dt;
+    if (bot.fsm === 'patrol') bot.y = targetY;
+
+    bot.lastUpdate = now;
+  }
+}
+
 io.on('connection', (socket) => {
   console.log(`[+] Rider connected: ${socket.id}`);
 
@@ -276,6 +590,16 @@ io.on('connection', (socket) => {
   socket.to(defaultMap).emit('player_joined', initialPlayer);
   updateMapReadyState(defaultMap);
 
+  // Rebalance bots to account for this new real player
+  rebalanceBots(defaultMap);
+
+  // Send existing bots in this map to the newly connected client
+  for (const bot of bots.values()) {
+    if (bot.mapId === defaultMap) {
+      socket.emit('player_joined', bot);
+    }
+  }
+
   // Client requests to switch map room
   socket.on('change_map', (data) => {
     const p = players.get(socket.id);
@@ -296,6 +620,7 @@ io.on('connection', (socket) => {
     // Notify previous room
     io.to(oldMap).emit('player_left', { id: socket.id });
     updateMapReadyState(oldMap);
+    rebalanceBots(oldMap); // fill the vacated slot in old map
 
     // Notify new room
     socket.to(newMap).emit('player_joined', p);
@@ -307,6 +632,12 @@ io.on('connection', (socket) => {
     });
     socket.emit('team_assigned', { team: p.team || 'T', hasBomb: !!p.hasBomb });
     updateMapReadyState(newMap);
+    rebalanceBots(newMap); // adjust bots now that player arrived
+
+    // Send existing bots in new map to this client
+    for (const bot of bots.values()) {
+      if (bot.mapId === newMap) socket.emit('player_joined', bot);
+    }
   });
 
   function forceStartMatch(mapId = 'dust2') {
@@ -659,29 +990,33 @@ io.on('connection', (socket) => {
         isHeadshot
       });
 
-      // Automatic respawn after 3 seconds
-      setTimeout(() => {
-        if (players.has(victim.id)) {
-          victim.hp = 100;
-          victim.armor = 100;
-          victim.isAlive = true;
-          victim.x = (Math.random() - 0.5) * 8;
-          victim.y = 0.25;
-          victim.z = (Math.random() - 0.5) * 8;
-          victim.speed = 0;
-          victim.vx = 0;
-          victim.vy = 0;
-          victim.vz = 0;
-          io.to(victim.mapId).emit('player_respawned', {
-            id: victim.id,
-            hp: victim.hp,
-            armor: victim.armor,
-            x: victim.x,
-            y: victim.y,
-            z: victim.z
-          });
-        }
-      }, 3000);
+      // Bots respawn at their patrol waypoint; real players respawn in place after 3s
+      if (victim.isBot) {
+        scheduleBotRespawn(victim, 4000);
+      } else {
+        setTimeout(() => {
+          if (players.has(victim.id)) {
+            victim.hp = 100;
+            victim.armor = 100;
+            victim.isAlive = true;
+            victim.x = (Math.random() - 0.5) * 8;
+            victim.y = 0.25;
+            victim.z = (Math.random() - 0.5) * 8;
+            victim.speed = 0;
+            victim.vx = 0;
+            victim.vy = 0;
+            victim.vz = 0;
+            io.to(victim.mapId).emit('player_respawned', {
+              id: victim.id,
+              hp: victim.hp,
+              armor: victim.armor,
+              x: victim.x,
+              y: victim.y,
+              z: victim.z
+            });
+          }
+        }, 3000);
+      }
     }
   });
 
@@ -711,6 +1046,8 @@ io.on('connection', (socket) => {
       players.delete(socket.id);
       io.to(mapId).emit('player_left', { id: socket.id });
       updateMapReadyState(mapId);
+      // Rebalance bots to fill the vacated team slot on whichever map they left
+      rebalanceBots(mapId);
     }
   });
 });
@@ -719,17 +1056,29 @@ io.on('connection', (socket) => {
 const TICK_RATE = 25; // 25 times per second
 const TICK_INTERVAL_MS = 1000 / TICK_RATE;
 
+// Spawn initial bots on both maps before any players connect
+rebalanceBots('dust2');
+rebalanceBots('park');
+
 setInterval(() => {
+  const dt = TICK_INTERVAL_MS / 1000; // delta time in seconds for this tick
+
+  // Advance bot AI positions (patrol + combat)
+  tickBots(dt);
+
   if (players.size === 0) return;
 
   const now = Date.now();
   // Prune disconnected ghosts if no update received in 30 seconds
+  // (skip bots — they are managed by rebalanceBots, not lastUpdate timeout)
   for (const [id, p] of players.entries()) {
+    if (p.isBot) continue;
     if (now - p.lastUpdate > 30000) {
       const mapId = p.mapId;
       players.delete(id);
       io.to(mapId).emit('player_left', { id });
       updateMapReadyState(mapId);
+      rebalanceBots(mapId);
     }
   }
 
