@@ -10,66 +10,139 @@
 
   // --- Constants & Config ---
   const GRAVITY = -28.0;         // m/s^2
-  const MAX_SPEED = 20.12;       // ~45.0 MPH (flat ground top speed)
+  const DEFAULT_MAX_SPEED = 20.12; // ~45.0 MPH (flat ground top speed for park)
+  const DUST2_MAX_SPEED = 30.0 / 2.23694; // 30.0 MPH (~13.411 m/s) speed limit for dust2 map
+  const MAX_SPEED = DEFAULT_MAX_SPEED;
   const ACCELERATION = 14.0;     // m/s^2 progressive motor torque rate
   const DECELERATION = 16.0;     // m/s^2 (regenerative braking & coasting)
   const JUMP_VELOCITY = 8.5;     // m/s initial bunny-hop impulse
   const TIRE_RADIUS = 0.14;      // ~11 inch tire radius in meters
   const TURN_SPEED = 9.0;        // rad/s angular turning responsiveness
 
-  // --- Checkpoints Data ---
-  const CHECKPOINTS = [
-    {
-      id: 0,
-      name: 'Plaza Park',
-      zone: 'Central Town Square',
-      x: 0,
-      z: 0,
-      heading: -Math.PI * 0.75, // Screen-up facing
-      spawnYOffset: 0.18,
-      desc: 'Central skate park with funboxes, tabletop jumps, rails, and ledges'
-    },
-    {
-      id: 1,
-      name: 'Mega Drop',
-      zone: 'Thunder Peak',
-      x: 0,
-      z: -74,
-      heading: 0, // Facing South down the runway
-      spawnYOffset: 7.22, // On top of 7m tower deck
-      desc: '7-meter tall drop-in tower into massive canyon launch kicker'
-    },
-    {
-      id: 2,
-      name: 'Pine Ridge Slopestyle',
-      zone: 'Pine Ridge Timber Course',
-      x: 55,
-      z: 42,
-      heading: Math.PI, // Facing North down the slopestyle line
-      spawnYOffset: 3.42, // On top of timber staging deck
-      desc: 'Red Bull mountain bike slopestyle course with timber step-ups, bridges, whale tail & wallride'
-    },
-    {
-      id: 3,
-      name: 'Slickrock Motocross',
-      zone: 'Slickrock Canyon MX',
-      x: -58,
-      z: 42,
-      heading: Math.PI, // Facing North into MX jump line
-      spawnYOffset: 3.22, // On top of MX starting mound
-      desc: 'High-speed motocross jump line with 16m monster dirt tabletop, rhythm whoops & canyon gap'
-    },
-    {
-      id: 4,
-      name: 'Desert Berms',
-      zone: 'Cactus Canyon',
-      x: 0,
-      z: 56,
-      heading: Math.PI, // Facing North into desert carving berms
-      spawnYOffset: 0.22,
-      desc: 'High-speed banked desert berm carving bowls and rollers'
-    }
-  ];
+  // Map-specific speed limit helpers
+  function getMapMaxSpeed() {
+    return (currentMapId === 'dust2') ? DUST2_MAX_SPEED : DEFAULT_MAX_SPEED;
+  }
+
+  function getMapDownhillSpeedCap() {
+    return (currentMapId === 'dust2') ? DUST2_MAX_SPEED : 26.8;
+  }
+
+  // --- Checkpoints Data (Per-Map) ---
+  const MAP_CHECKPOINTS = {
+    dust2: [
+      {
+        id: 0,
+        name: 'T Spawn (Terrace)',
+        zone: 'T Terrace / Spawn',
+        x: -8.0,
+        z: 32.0,
+        heading: 0,
+        spawnYOffset: 2.38,
+        desc: 'Terrorist staging ramp and terrace overlooking courtyard & tunnels'
+      },
+      {
+        id: 1,
+        name: 'CT Spawn',
+        zone: 'CT Spawn Base',
+        x: -25.0,
+        z: -35.0,
+        heading: Math.PI,
+        spawnYOffset: 4.58,
+        desc: 'Counter-Terrorist base ramp below Short A and B slope'
+      },
+      {
+        id: 2,
+        name: 'Mid Doors',
+        zone: 'Middle Cross',
+        x: 0.5,
+        z: 11.3,
+        heading: 0,
+        spawnYOffset: 0.18,
+        desc: 'Mid double doors connecting Suicide to CT Spawn'
+      },
+      {
+        id: 3,
+        name: 'A Bomb Site',
+        zone: 'Bombsite A Platform',
+        x: 20.0,
+        z: -25.0,
+        heading: -Math.PI * 0.5,
+        spawnYOffset: 1.83,
+        desc: 'Elevated A bombsite overlooking Long A and Short Catwalk'
+      },
+      {
+        id: 4,
+        name: 'B Bomb Site',
+        zone: 'Bombsite B Plat',
+        x: -25.0,
+        z: -15.0,
+        heading: Math.PI * 0.5,
+        spawnYOffset: 0.18,
+        desc: 'Bombsite B platform with scaffolding, tunnels & car'
+      }
+    ],
+    park: [
+      {
+        id: 0,
+        name: 'Plaza Park',
+        zone: 'Central Town Square',
+        x: 0,
+        z: 0,
+        heading: -Math.PI * 0.75, // Screen-up facing
+        spawnYOffset: 0.18,
+        desc: 'Central skate park with funboxes, tabletop jumps, rails, and ledges'
+      },
+      {
+        id: 1,
+        name: 'Mega Drop',
+        zone: 'Thunder Peak',
+        x: 0,
+        z: -74,
+        heading: 0, // Facing South down the runway
+        spawnYOffset: 7.22, // On top of 7m tower deck
+        desc: '7-meter tall drop-in tower into massive canyon launch kicker'
+      },
+      {
+        id: 2,
+        name: 'Pine Ridge Slopestyle',
+        zone: 'Pine Ridge Timber Course',
+        x: 55,
+        z: 42,
+        heading: Math.PI, // Facing North down the slopestyle line
+        spawnYOffset: 3.42, // On top of timber staging deck
+        desc: 'Red Bull mountain bike slopestyle course with timber step-ups, bridges, whale tail & wallride'
+      },
+      {
+        id: 3,
+        name: 'Slickrock Motocross',
+        zone: 'Slickrock Canyon MX',
+        x: -58,
+        z: 42,
+        heading: Math.PI, // Facing North into MX jump line
+        spawnYOffset: 3.22, // On top of MX starting mound
+        desc: 'High-speed motocross jump line with 16m monster dirt tabletop, rhythm whoops & canyon gap'
+      },
+      {
+        id: 4,
+        name: 'Desert Berms',
+        zone: 'Cactus Canyon',
+        x: 0,
+        z: 56,
+        heading: Math.PI, // Facing North into desert carving berms
+        spawnYOffset: 0.22,
+        desc: 'High-speed banked desert berm carving bowls and rollers'
+      }
+    ]
+  };
+
+  let currentMapId = 'dust2';
+  let CHECKPOINTS = MAP_CHECKPOINTS.dust2;
+  let parkWorldGroup = null;
+  let dust2Group = null;
+  let dust2Model = null;
+  let dust2WalkMeshes = [];
+  let isDust2Loading = false;
 
   // --- Game State ---
   const state = {
@@ -172,6 +245,10 @@
     loadX7BoardModel();
     initControls();
     initParticlesAndFX();
+
+    // Initialize starting map (Dust 2)
+    switchMap('dust2', true);
+
     window.addEventListener('resize', onWindowResize);
     document.addEventListener('fullscreenchange', onWindowResize);
     document.addEventListener('webkitfullscreenchange', onWindowResize);
@@ -224,6 +301,22 @@
     if (btnFullscreen) btnFullscreen.addEventListener('click', toggleFullscreen);
     if (btnZoomIn) btnZoomIn.addEventListener('click', () => adjustZoom(-3));
     if (btnZoomOut) btnZoomOut.addEventListener('click', () => adjustZoom(+3));
+
+    // Weapon Buy Menu Controls
+    const btnOpenBuyMenu = document.getElementById('btnOpenBuyMenu');
+    const btnCloseBuyMenu = document.getElementById('btnCloseBuyMenu');
+    if (btnOpenBuyMenu) btnOpenBuyMenu.addEventListener('click', toggleBuyMenu);
+    if (btnCloseBuyMenu) btnCloseBuyMenu.addEventListener('click', closeBuyMenu);
+
+    document.querySelectorAll('.exp9-buy-tab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        const cat = tab.getAttribute('data-category');
+        if (cat) renderBuyMenuGrid(cat);
+      });
+    });
+
+    updateWeaponHUD();
+    updateBuyMenuCash();
 
     // Checkpoint navigation buttons
     cpButtons = Array.from(document.querySelectorAll('.exp9-cp-btn'));
@@ -316,6 +409,59 @@
         }
       });
     }
+
+    // Map Selector Dropdown
+    const btnMapDropdown = document.getElementById('btnMapDropdown');
+    const mapMenu = document.getElementById('mapMenu');
+
+    if (btnMapDropdown && mapMenu) {
+      btnMapDropdown.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = mapMenu.classList.contains('open');
+        mapMenu.classList.toggle('open', !isOpen);
+        btnMapDropdown.setAttribute('aria-expanded', !isOpen);
+        btnMapDropdown.classList.toggle('active', !isOpen);
+      });
+
+      mapMenu.addEventListener('click', (e) => {
+        e.stopPropagation();
+      });
+
+      window.addEventListener('click', () => {
+        if (mapMenu.classList.contains('open')) {
+          mapMenu.classList.remove('open');
+          btnMapDropdown.setAttribute('aria-expanded', 'false');
+          btnMapDropdown.classList.remove('active');
+        }
+      });
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && mapMenu.classList.contains('open')) {
+          mapMenu.classList.remove('open');
+          btnMapDropdown.setAttribute('aria-expanded', 'false');
+          btnMapDropdown.classList.remove('active');
+        }
+      });
+    }
+
+    const mapItems = document.querySelectorAll('.exp9-map-item');
+    mapItems.forEach((item) => {
+      item.addEventListener('click', () => {
+        const targetMap = item.getAttribute('data-map');
+        if (targetMap === '2fort') {
+          showTrickToast('🔒 2FORT IS LOCKED: COMING SOON');
+          return;
+        }
+        if (mapMenu) {
+          mapMenu.classList.remove('open');
+          if (btnMapDropdown) {
+            btnMapDropdown.classList.remove('active');
+            btnMapDropdown.setAttribute('aria-expanded', 'false');
+          }
+        }
+        switchMap(targetMap);
+      });
+    });
   }
 
   // ==========================================================================
@@ -651,6 +797,14 @@
   // 4. World Generation: Topography, Park, Stunt Jumps & Biomes
   // ==========================================================================
   function buildWorld() {
+    parkWorldGroup = new THREE.Group();
+    dust2Group = new THREE.Group();
+
+    const origSceneAdd = scene.add.bind(scene);
+    scene.add = function (...objs) {
+      parkWorldGroup.add(...objs);
+    };
+
     // 1. Base Contoured Terrain Mesh (160x160 grid for smooth hills)
     const groundGeo = new THREE.PlaneGeometry(300, 300, 160, 160);
     groundGeo.rotateX(-Math.PI / 2);
@@ -771,6 +925,10 @@
 
     // 6. Scenery (Trees, Rocks, Cacti placed on contour elevation)
     populateScenery();
+
+    scene.add = origSceneAdd;
+    scene.add(parkWorldGroup);
+    scene.add(dust2Group);
   }
 
   // Solid mathematical 3D wedge prism (zero rotation/centroid distortion)
@@ -2684,14 +2842,50 @@
         e.preventDefault();
       }
 
-      // 2. CHECKPOINT HOTKEYS (Keys 1 - 5)
-      if (e.code === 'Digit1' || e.code === 'Numpad1') { teleportToCheckpoint(0); return; }
-      if (e.code === 'Digit2' || e.code === 'Numpad2') { teleportToCheckpoint(1); return; }
-      if (e.code === 'Digit3' || e.code === 'Numpad3') { teleportToCheckpoint(2); return; }
-      if (e.code === 'Digit4' || e.code === 'Numpad4') { teleportToCheckpoint(3); return; }
-      if (e.code === 'Digit5' || e.code === 'Numpad5') { teleportToCheckpoint(4); return; }
+      // 2. BUY MENU & COMBAT SHORTCUTS
+      if (e.code === 'KeyB') {
+        if (!['INPUT', 'TEXTAREA'].includes(document.activeElement && document.activeElement.tagName)) {
+          toggleBuyMenu();
+          return;
+        }
+      }
+      if (e.code === 'Escape') {
+        closeBuyMenu();
+        return;
+      }
+      if (e.code === 'KeyJ') {
+        fireCurrentWeapon();
+        return;
+      }
 
-      // 3. ZOOM HOTKEYS
+      // 3. CHECKPOINT HOTKEYS (Keys 1 - 5) OR BUY MENU CATEGORY SWITCHING
+      if (e.code === 'Digit1' || e.code === 'Numpad1') {
+        if (isBuyMenuOpen()) { renderBuyMenuGrid('pistols'); return; }
+        if (!isTacticalMatchActive()) { teleportToCheckpoint(0); }
+        return;
+      }
+      if (e.code === 'Digit2' || e.code === 'Numpad2') {
+        if (isBuyMenuOpen()) { renderBuyMenuGrid('smgs'); return; }
+        if (!isTacticalMatchActive()) { teleportToCheckpoint(1); }
+        return;
+      }
+      if (e.code === 'Digit3' || e.code === 'Numpad3') {
+        if (isBuyMenuOpen()) { renderBuyMenuGrid('rifles'); return; }
+        if (!isTacticalMatchActive()) { teleportToCheckpoint(2); }
+        return;
+      }
+      if (e.code === 'Digit4' || e.code === 'Numpad4') {
+        if (isBuyMenuOpen()) { renderBuyMenuGrid('heavy'); return; }
+        if (!isTacticalMatchActive()) { teleportToCheckpoint(3); }
+        return;
+      }
+      if (e.code === 'Digit5' || e.code === 'Numpad5') {
+        if (isBuyMenuOpen()) { renderBuyMenuGrid('gear'); return; }
+        if (!isTacticalMatchActive()) { teleportToCheckpoint(4); }
+        return;
+      }
+
+      // 4. ZOOM HOTKEYS
       if (e.code === 'BracketLeft' || e.code === 'Minus' || e.code === 'NumpadSubtract') {
         adjustZoom(+2.5); // Zoom out
         return;
@@ -2701,7 +2895,7 @@
         return;
       }
 
-      // 4. MOVEMENT & TRICK / BALANCE INPUTS
+      // 5. MOVEMENT & TRICK / BALANCE INPUTS
       switch (e.code) {
         // Left Stick / Movement (WASD on desktop)
         case 'KeyW':
@@ -2715,6 +2909,9 @@
           break;
         case 'KeyD':
           state.input.right = true;
+          break;
+        case 'KeyE':
+          state.input.plant = true;
           break;
 
         // Right Stick / Twist, Flip & Grind Balance (Arrow Keys on desktop)
@@ -2744,7 +2941,13 @@
           state.input.jump = true;
           break;
         case 'KeyR':
-          respawnPlayer();
+          if (combat.equippedPrimary && combat.equippedPrimary.ammoInMag < combat.equippedPrimary.magSize) {
+            reloadCurrentWeapon();
+          } else if (combat.equippedSecondary && combat.equippedSecondary.ammoInMag < combat.equippedSecondary.magSize) {
+            reloadCurrentWeapon();
+          } else {
+            respawnPlayer();
+          }
           break;
       }
     });
@@ -2762,6 +2965,9 @@
           break;
         case 'KeyD':
           state.input.right = false;
+          break;
+        case 'KeyE':
+          state.input.plant = false;
           break;
         case 'ArrowUp':
           state.input.twistUp = false;
@@ -2813,19 +3019,91 @@
         adjustZoom(Math.sign(e.deltaY) * 0.8);
       }, { passive: false });
 
-      // Desktop Mouse Drag Camera Free-Look Orbit
+      // Desktop Mouse Look Camera Aiming (Pointer Lock) & Shooting Controls
+      let isPointerLocked = false;
+
+      function updatePointerLockState() {
+        isPointerLocked = (document.pointerLockElement === container || (canvas && document.pointerLockElement === canvas));
+        const crosshair = document.getElementById('tacticalCrosshair');
+        if (crosshair) {
+          crosshair.style.opacity = isPointerLocked ? '0.95' : '0.65';
+        }
+      }
+
+      document.addEventListener('pointerlockchange', updatePointerLockState);
+      document.addEventListener('mozpointerlockchange', updatePointerLockState);
+
+      // Request Pointer Lock on clicking inside game canvas (outside interactive UI)
+      window.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return; // Only left click
+
+        const isInsideUI = e.target.closest && (
+          e.target.closest('.exp9-buymenu-overlay') ||
+          e.target.closest('.exp9-join-modal-overlay') ||
+          e.target.closest('.exp9-controls-menu') ||
+          e.target.closest('.exp9-controls-dropdown') ||
+          e.target.closest('.exp9-chat-bar') ||
+          e.target.closest('.exp9-hud-top-row') ||
+          e.target.closest('.exp9-checkpoints-bar') ||
+          e.target.closest('.exp9-joystick-zone') ||
+          e.target.closest('.exp9-right-joystick-zone') ||
+          e.target.closest('.exp9-ready-btn')
+        );
+
+        if (isInsideUI) return;
+
+        updatePointerLockState();
+
+        if (isPointerLocked) {
+          combat.isFiring = true;
+          fireCurrentWeapon();
+        } else {
+          // If buy menu is closed, engage mouse look
+          if (!isBuyMenuOpen()) {
+            try {
+              if (container && container.requestPointerLock) {
+                container.requestPointerLock();
+              }
+            } catch (err) {}
+          }
+        }
+      });
+
+      window.addEventListener('mouseup', (e) => {
+        if (e.button === 0) {
+          combat.isFiring = false;
+        }
+      });
+
+      // Mouse Aiming / Camera Rotation with Pointer Lock
+      window.addEventListener('mousemove', (e) => {
+        updatePointerLockState();
+        if (isPointerLocked) {
+          const mouseSens = 0.0024;
+          state.camera.yaw -= (e.movementX || 0) * mouseSens;
+          state.camera.pitch = THREE.MathUtils.clamp(
+            state.camera.pitch + (e.movementY || 0) * mouseSens,
+            -0.15,
+            1.25
+          );
+          state.camera.manualTimer = 999999; // Never auto-chase camera while mouse aiming!
+        }
+      });
+
+      // Fallback touch / non-locked drag orbit
       let isMouseDraggingCam = false;
       let lastMouseX = 0;
       let lastMouseY = 0;
 
       container.addEventListener('pointerdown', (e) => {
-        // Don't hijack virtual joystick zones or HUD buttons
-        if (e.target.closest('.exp9-joystick-zone') || 
+        if (isPointerLocked) return;
+        if (e.target.closest && (
+            e.target.closest('.exp9-joystick-zone') || 
             e.target.closest('.exp9-right-joystick-zone') || 
             e.target.closest('.exp9-jump-btn-zone') ||
             e.target.closest('.exp9-controls-dropdown') ||
             e.target.closest('.exp9-hud-top-row') ||
-            e.target.closest('.exp9-checkpoints-bar')) {
+            e.target.closest('.exp9-checkpoints-bar'))) {
           return;
         }
         isMouseDraggingCam = true;
@@ -2834,24 +3112,20 @@
       });
 
       window.addEventListener('pointermove', (e) => {
-        if (isMouseDraggingCam) {
+        if (!isPointerLocked && isMouseDraggingCam) {
           const dx = e.clientX - lastMouseX;
           const dy = e.clientY - lastMouseY;
           lastMouseX = e.clientX;
           lastMouseY = e.clientY;
 
-          state.camera.manualTimer = 2.5; // Pause auto-chase during free-look
+          state.camera.manualTimer = 3.0;
           state.camera.yaw -= dx * 0.0055;
           state.camera.pitch = THREE.MathUtils.clamp(state.camera.pitch + dy * 0.0045, 0.08, 1.25);
         }
       });
 
-      window.addEventListener('pointerup', () => {
-        isMouseDraggingCam = false;
-      });
-      window.addEventListener('pointercancel', () => {
-        isMouseDraggingCam = false;
-      });
+      window.addEventListener('pointerup', () => { isMouseDraggingCam = false; });
+      window.addEventListener('pointercancel', () => { isMouseDraggingCam = false; });
     }
 
     // Touch Jump Button
@@ -3098,15 +3372,23 @@
   }
 
   // ==========================================================================
-  // 9. Checkpoint Teleportation System
+  // 9. Checkpoint Teleportation System & Multi-Map Manager
   // ==========================================================================
   function teleportToCheckpoint(index) {
     if (index < 0 || index >= CHECKPOINTS.length) return;
     const cp = CHECKPOINTS[index];
     state.activeCheckpoint = index;
 
-    const baseElevation = getTerrainElevation(cp.x, cp.z);
-    const spawnY = index === 1 ? cp.spawnYOffset : baseElevation + cp.spawnYOffset;
+    let spawnY = 0.2;
+    if (currentMapId === 'dust2') {
+      const groundH = getDust2SurfaceElevation(cp.x, cp.z, 20.0);
+      spawnY = (groundH !== null && groundH !== undefined && !isNaN(groundH) && groundH > -10)
+        ? groundH + 0.18
+        : (cp.spawnYOffset || 0.2);
+    } else {
+      const baseElevation = getTerrainElevation(cp.x, cp.z);
+      spawnY = index === 1 ? cp.spawnYOffset : baseElevation + cp.spawnYOffset;
+    }
 
     state.player.x = cp.x;
     state.player.y = spawnY;
@@ -3153,14 +3435,877 @@
     });
   }
 
+  function updateCheckpointsUI() {
+    const bar = document.getElementById('checkpointsBar');
+    if (!bar) return;
+    bar.innerHTML = '';
+    cpButtons = [];
+
+    CHECKPOINTS.forEach((cp, idx) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'exp9-cp-btn' + (idx === state.activeCheckpoint ? ' active' : '');
+      btn.setAttribute('data-cp', String(idx));
+      btn.title = `${cp.name} (${cp.desc || ''}) (Key: ${idx + 1})`;
+
+      const numSpan = document.createElement('span');
+      numSpan.className = 'exp9-cp-num';
+      numSpan.textContent = String(idx + 1);
+
+      const labelSpan = document.createElement('span');
+      labelSpan.className = 'exp9-cp-label';
+      labelSpan.textContent = cp.name;
+
+      btn.appendChild(numSpan);
+      btn.appendChild(labelSpan);
+
+      btn.addEventListener('click', () => {
+        teleportToCheckpoint(idx);
+      });
+
+      bar.appendChild(btn);
+      cpButtons.push(btn);
+    });
+  }
+
   function respawnPlayer() {
     teleportToCheckpoint(0);
+  }
+
+  // --- Dust 2 3D Model Loader, Elevation Raycaster & Wall Collision ---
+  const dust2Ray = new THREE.Raycaster();
+  const dust2DownDir = new THREE.Vector3(0, -1, 0);
+  const dust2RayOrigin = new THREE.Vector3();
+
+  const _dust2WallRay = new THREE.Raycaster();
+  const _dust2WallRayOrigin = new THREE.Vector3();
+  const _dust2WallRayDir = new THREE.Vector3();
+  const _dust2NormalMat = new THREE.Matrix3();
+  const _dust2WorldNormal = new THREE.Vector3();
+
+  function getHitWorldNormal(hit) {
+    if (!hit || !hit.object) return null;
+    if (hit.face && hit.face.normal) {
+      _dust2NormalMat.getNormalMatrix(hit.object.matrixWorld);
+      _dust2WorldNormal.copy(hit.face.normal).applyMatrix3(_dust2NormalMat).normalize();
+      return _dust2WorldNormal;
+    }
+    return null;
+  }
+
+  function checkDust2Wall(posX, posY, posZ, dirX, dirZ, testDist) {
+    if (!dust2WalkMeshes || dust2WalkMeshes.length === 0) return null;
+    const len = Math.hypot(dirX, dirZ);
+    if (len < 0.0001) return null;
+
+    const uDirX = dirX / len;
+    const uDirZ = dirZ / len;
+
+    // Continuous solid wall blocker across the Mid Doors window recess openings (x = -3.30).
+    // Prevents riders from driving or clipping into the decorative wall alcoves on either side of Mid Doors.
+    const isMidNicheZ = (posZ >= 7.8 && posZ <= 9.8) || (posZ >= 15.5 && posZ <= 17.5);
+    if (isMidNicheZ && uDirX < 0 && posX >= -3.30 - 0.05) {
+      const distToNicheWall = (posX - (-3.30)) / Math.abs(uDirX);
+      if (distToNicheWall >= 0 && distToNicheWall <= testDist) {
+        return {
+          distance: distToNicheWall,
+          normalX: 1.0,
+          normalY: 0,
+          normalZ: 0,
+          point: new THREE.Vector3(-3.30, posY + 0.22, posZ)
+        };
+      }
+    }
+
+    _dust2WallRayOrigin.set(posX, posY + 0.22, posZ);
+    _dust2WallRayDir.set(uDirX, 0, uDirZ);
+    _dust2WallRay.set(_dust2WallRayOrigin, _dust2WallRayDir);
+    _dust2WallRay.far = testDist;
+
+    const hits = _dust2WallRay.intersectObjects(dust2WalkMeshes, false);
+    if (hits && hits.length > 0) {
+      for (let i = 0; i < hits.length; i++) {
+        const hit = hits[i];
+        const norm = getHitWorldNormal(hit);
+        if (norm && Math.abs(norm.y) < 0.65) {
+          // If normal faces with ray (backface of double-sided mesh), invert it
+          let nx = norm.x;
+          let ny = norm.y;
+          let nz = norm.z;
+          const rayDotNorm = uDirX * nx + uDirZ * nz;
+          if (rayDotNorm > 0) {
+            nx = -nx;
+            ny = -ny;
+            nz = -nz;
+          }
+          return {
+            distance: hit.distance,
+            normalX: nx,
+            normalY: ny,
+            normalZ: nz,
+            point: hit.point
+          };
+        }
+      }
+    }
+    return null;
+  }
+
+  function loadDust2Map(onReady) {
+    if (dust2Model) {
+      if (onReady) onReady();
+      return;
+    }
+    if (isDust2Loading) return;
+    isDust2Loading = true;
+
+    if (typeof THREE.GLTFLoader === 'undefined') {
+      console.warn('[Dust 2] THREE.GLTFLoader not available!');
+      isDust2Loading = false;
+      return;
+    }
+
+    const loader = new THREE.GLTFLoader();
+    loader.load(
+      'models/dust2.glb',
+      (gltf) => {
+        isDust2Loading = false;
+        dust2Model = gltf.scene;
+
+        // Model is already exported in meters at scale 1.0
+        dust2Model.scale.set(1.0, 1.0, 1.0);
+        // Center Dust 2 Mid Doors around the world origin
+        dust2Model.position.set(5.5, 0, 19.25);
+        dust2Model.updateMatrixWorld(true);
+
+        dust2WalkMeshes = [];
+        dust2Model.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+            if (child.material) {
+              child.material.side = THREE.DoubleSide;
+              child.material.roughness = 0.82;
+            }
+            dust2WalkMeshes.push(child);
+          }
+        });
+
+        dust2Group.add(dust2Model);
+        initBombSiteBeacons();
+        console.log(`[Dust 2] Map loaded successfully with ${dust2WalkMeshes.length} meshes!`);
+        if (onReady) onReady();
+      },
+      undefined,
+      (err) => {
+        isDust2Loading = false;
+        console.error('[Dust 2] Failed to load models/dust2.glb:', err);
+      }
+    );
+  }
+
+  function setEnvironmentLighting(mapId) {
+    if (!renderer || !scene) return;
+    if (mapId === 'dust2') {
+      // Warm Moroccan / Desert Sun
+      scene.background.setHex(0xdfcfb2);
+      if (scene.fog) {
+        scene.fog.color.setHex(0xdfcfb2);
+        scene.fog.density = 0.0025;
+      }
+      if (sunLight) {
+        sunLight.color.setHex(0xfffae6);
+        sunLight.intensity = 1.45;
+        sunLight.position.set(45, 80, 45);
+      }
+    } else {
+      // Classic Skatepark Twilight Slate
+      scene.background.setHex(0x0a0f1d);
+      if (scene.fog) {
+        scene.fog.color.setHex(0x0a0f1d);
+        scene.fog.density = 0.0075;
+      }
+      if (sunLight) {
+        sunLight.color.setHex(0xfffbeb);
+        sunLight.intensity = 1.35;
+        sunLight.position.set(50, 75, 40);
+      }
+    }
+  }
+
+  // ==========================================================================
+  // CS Tactical Combat, Weapon Arsenal & Buy Menu System
+  // ==========================================================================
+  const WEAPON_ARSENAL = {
+    pistols: [
+      { id: 'glock', name: 'Glock-18', category: 'Sidearm (T)', price: 200, damage: 28, rpm: 400, magSize: 20, maxAmmo: 120, slot: 2, soundType: 'pistol', desc: 'Default T sidearm with high capacity and rapid tap fire.' },
+      { id: 'usps', name: 'USP-S', category: 'Sidearm (CT)', price: 200, damage: 35, rpm: 352, magSize: 12, maxAmmo: 24, slot: 2, soundType: 'silenced', desc: 'Silenced tactical pistol with laser-like pinpoint accuracy.' },
+      { id: 'p250', name: 'P250', category: 'Sidearm', price: 300, damage: 38, rpm: 400, magSize: 13, maxAmmo: 26, slot: 2, soundType: 'pistol', desc: 'High armor-penetration sidearm for close-quarters carving.' },
+      { id: 'berettas', name: 'Dual Berettas', category: 'Sidearms', price: 400, damage: 38, rpm: 500, magSize: 30, maxAmmo: 120, slot: 2, soundType: 'pistol', desc: 'Akimbo rapid spam pistols with 30-round mag for drive-bys.' },
+      { id: 'deagle', name: 'Desert Eagle', category: 'Hand Cannon', price: 700, damage: 63, rpm: 267, magSize: 7, maxAmmo: 35, slot: 2, soundType: 'heavy_pistol', desc: 'Heavy hand cannon with lethal 1-tap headshot stopping power.' }
+    ],
+    smgs: [
+      { id: 'mac10', name: 'MAC-10', category: 'SMG (T)', price: 1050, damage: 29, rpm: 800, magSize: 30, maxAmmo: 100, slot: 1, soundType: 'smg', desc: 'High-mobility blazing 800 RPM spray machine for fast carving.' },
+      { id: 'mp9', name: 'MP9', category: 'SMG (CT)', price: 1250, damage: 26, rpm: 857, magSize: 30, maxAmmo: 120, slot: 1, soundType: 'smg', desc: 'Laser-accurate high-RPM SMG for aggressive cornering.' },
+      { id: 'p90', name: 'P90', category: 'SMG', price: 2350, damage: 26, rpm: 857, magSize: 50, maxAmmo: 100, slot: 1, soundType: 'smg', desc: '50-round high-capacity bullet hose with low moving recoil.' }
+    ],
+    rifles: [
+      { id: 'galil', name: 'Galil AR', category: 'Rifle (T)', price: 1800, damage: 30, rpm: 666, magSize: 35, maxAmmo: 90, slot: 1, soundType: 'rifle', desc: '35-round budget Terrorist assault rifle.' },
+      { id: 'famas', name: 'FAMAS', category: 'Rifle (CT)', price: 2050, damage: 30, rpm: 666, magSize: 25, maxAmmo: 90, slot: 1, soundType: 'rifle', desc: 'Compact CT assault rifle with tight burst fire.' },
+      { id: 'ak47', name: 'AK-47', category: 'Rifle (T)', price: 2700, damage: 36, rpm: 600, magSize: 30, maxAmmo: 90, slot: 1, soundType: 'rifle', desc: 'The gold standard. 1-tap lethal headshot through helmets.' },
+      { id: 'm4a4', name: 'M4A4', category: 'Rifle (CT)', price: 3100, damage: 33, rpm: 666, magSize: 30, maxAmmo: 90, slot: 1, soundType: 'rifle', desc: 'High-capacity CT primary rifle with reliable spray pattern.' },
+      { id: 'scout', name: 'SSG 08', category: 'Sniper', price: 1700, damage: 88, rpm: 48, magSize: 10, maxAmmo: 90, slot: 1, soundType: 'sniper', desc: 'Lightweight sniper rifle; maintains accuracy while bunny hopping!' },
+      { id: 'awp', name: 'AWP', category: 'Sniper', price: 4750, damage: 115, rpm: 41, magSize: 10, maxAmmo: 30, slot: 1, soundType: 'sniper', desc: 'The legendary 1-shot, 1-kill magnum sniper rifle.' }
+    ],
+    heavy: [
+      { id: 'nova', name: 'Nova', category: 'Shotgun', price: 1050, damage: 120, rpm: 68, magSize: 8, maxAmmo: 32, slot: 1, soundType: 'shotgun', desc: 'Tight-spread pump-action shotgun for corridor defense.' },
+      { id: 'xm1014', name: 'XM1014', category: 'Auto Shotgun', price: 2000, damage: 100, rpm: 240, magSize: 7, maxAmmo: 32, slot: 1, soundType: 'shotgun', desc: 'Full-auto combat shotgun for high-speed drive-by sweeps.' },
+      { id: 'negev', name: 'Negev', category: 'LMG', price: 1700, damage: 35, rpm: 800, magSize: 150, maxAmmo: 300, slot: 1, soundType: 'rifle', desc: '150-round suppressive fire laser beam.' }
+    ],
+    gear: [
+      { id: 'kevlar', name: 'Kevlar + Helmet', category: 'Armor', price: 1000, desc: 'Maximum armor and headshot flinch protection.' },
+      { id: 'hegrenade', name: 'HE Grenade', category: 'Explosive', price: 300, desc: 'High explosive fragmentation grenade.' },
+      { id: 'flashbang', name: 'Flashbang', category: 'Utility', price: 200, desc: 'Blinds opposing riders with brilliant screen flash.' },
+      { id: 'smoke', name: 'Smoke Grenade', category: 'Utility', price: 300, desc: 'Deploys a thick dust cloud for sightline denial.' },
+      { id: 'defuser', name: 'Defuse Kit', category: 'Equipment (CT)', price: 400, desc: 'Cuts bomb defusal time from 10s down to 5s.' }
+    ]
+  };
+
+  const combat = {
+    cash: 16000, // Starts at $16,000 for instant free-roam testing!
+    currentCategory: 'pistols',
+    equippedPrimary: null,
+    equippedSecondary: { ...WEAPON_ARSENAL.pistols[0], ammoInMag: 20, ammoInReserve: 120 },
+    activeSlot: 2, // 1 = primary, 2 = secondary
+    gear: { armor: 100, helmet: true, defuser: false },
+    hasBomb: false,
+    bombPlanted: false,
+    bombSite: null,
+    bombTimer: null,
+    isPlanting: false,
+    plantProgress: 0,
+    lastFireTime: 0,
+    isReloading: false
+  };
+
+  const BOMB_SITES = {
+    A: { name: 'A Bomb Site', x: 20.0, z: -25.0, y: 1.83, radius: 5.5 },
+    B: { name: 'B Bomb Site', x: -25.0, z: -15.0, y: 0.18, radius: 5.5 }
+  };
+
+  let c4Mesh = null;
+  let c4BlinkLight = null;
+  const tracerLines = [];
+  const _shootRay = new THREE.Raycaster();
+  const _shootOrigin = new THREE.Vector3();
+  const _shootDir = new THREE.Vector3();
+
+  let audioCtx = null;
+  function getAudioContext() {
+    if (!audioCtx) {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioContextClass) audioCtx = new AudioContextClass();
+    }
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    return audioCtx;
+  }
+
+  function playGunshotSound(type) {
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      const t = ctx.currentTime;
+      const bufferSize = Math.floor(ctx.sampleRate * 0.18);
+      const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
+
+      const whiteNoise = ctx.createBufferSource();
+      whiteNoise.buffer = noiseBuffer;
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = (type === 'silenced') ? 'lowpass' : 'bandpass';
+      const startFreq = (type === 'sniper') ? 950 : (type === 'heavy_pistol' ? 1400 : (type === 'silenced' ? 600 : 2000));
+      filter.frequency.setValueAtTime(startFreq, t);
+      filter.frequency.exponentialRampToValueAtTime(80, t + 0.15);
+
+      const gain = ctx.createGain();
+      const vol = (type === 'sniper') ? 1.0 : (type === 'silenced' ? 0.35 : 0.7);
+      gain.gain.setValueAtTime(vol, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + (type === 'sniper' ? 0.22 : 0.12));
+
+      whiteNoise.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      whiteNoise.start(t);
+    } catch (err) {
+      console.warn('Audio play error:', err);
+    }
+  }
+
+  function playBombBeepSound(frequency = 1000) {
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      const t = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(frequency, t);
+      gain.gain.setValueAtTime(0.35, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.065);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.07);
+    } catch (err) {}
+  }
+
+  function playExplosionSound() {
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      const t = ctx.currentTime;
+
+      // Sub bass thump
+      const osc = ctx.createOscillator();
+      const oscGain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(140, t);
+      osc.frequency.exponentialRampToValueAtTime(20, t + 1.2);
+      oscGain.gain.setValueAtTime(1.0, t);
+      oscGain.gain.exponentialRampToValueAtTime(0.001, t + 1.4);
+      osc.connect(oscGain);
+      oscGain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 1.5);
+
+      // Low rumble noise
+      const bufferSize = Math.floor(ctx.sampleRate * 1.5);
+      const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
+      const whiteNoise = ctx.createBufferSource();
+      whiteNoise.buffer = noiseBuffer;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(550, t);
+      filter.frequency.exponentialRampToValueAtTime(40, t + 1.5);
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.9, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 1.5);
+      whiteNoise.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      whiteNoise.start(t);
+    } catch (err) {}
+  }
+
+  function playCashSound() {
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      const t = ctx.currentTime;
+      [523.25, 659.25].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.frequency.setValueAtTime(freq, t + i * 0.07);
+        gain.gain.setValueAtTime(0.3, t + i * 0.07);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.07 + 0.3);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t + i * 0.07);
+        osc.stop(t + i * 0.07 + 0.35);
+      });
+    } catch (err) {}
+  }
+
+  function isBuyMenuOpen() {
+    const modal = document.getElementById('buyMenuModal');
+    return modal && !modal.classList.contains('hidden');
+  }
+
+  function openBuyMenu() {
+    if (document.pointerLockElement) {
+      try { document.exitPointerLock(); } catch (err) {}
+    }
+    const modal = document.getElementById('buyMenuModal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    renderBuyMenuGrid(combat.currentCategory);
+    updateBuyMenuCash();
+  }
+
+  function closeBuyMenu() {
+    const modal = document.getElementById('buyMenuModal');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  function toggleBuyMenu() {
+    if (isBuyMenuOpen()) {
+      closeBuyMenu();
+    } else {
+      openBuyMenu();
+    }
+  }
+
+  function updateBuyMenuCash() {
+    const cashEl = document.getElementById('buyMenuCash');
+    const hudCash = document.getElementById('hudPlayerCash');
+    const txt = `$${combat.cash.toLocaleString()}`;
+    if (cashEl) cashEl.textContent = txt;
+    if (hudCash) hudCash.textContent = txt;
+  }
+
+  function renderBuyMenuGrid(category) {
+    combat.currentCategory = category;
+    const grid = document.getElementById('buyMenuGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    document.querySelectorAll('.exp9-buy-tab').forEach((t) => {
+      t.classList.toggle('active', t.getAttribute('data-category') === category);
+    });
+
+    const items = WEAPON_ARSENAL[category] || [];
+    items.forEach((item, index) => {
+      const card = document.createElement('div');
+      const isEquipped = (combat.equippedPrimary && combat.equippedPrimary.id === item.id) ||
+                         (combat.equippedSecondary && combat.equippedSecondary.id === item.id);
+      card.className = 'exp9-weapon-item' + (isEquipped ? ' equipped' : '');
+
+      const canAfford = (combat.cash >= item.price);
+      card.innerHTML = `
+        <div class="exp9-item-top">
+          <span class="exp9-item-name">${index + 1}. ${item.name}</span>
+          <span class="exp9-item-price">$${item.price.toLocaleString()}</span>
+        </div>
+        <div class="exp9-item-desc">${item.desc || ''}</div>
+        <div class="exp9-item-stats">
+          <div class="exp9-stat-row">
+            <span>DAMAGE</span>
+            <div class="exp9-stat-bar-track">
+              <div class="exp9-stat-bar-fill" style="width: ${Math.min(100, (item.damage || 30) * 0.9)}%"></div>
+            </div>
+          </div>
+          <div class="exp9-stat-row">
+            <span>FIRE RATE</span>
+            <div class="exp9-stat-bar-track">
+              <div class="exp9-stat-bar-fill" style="width: ${Math.min(100, (item.rpm || 300) / 9)}%"></div>
+            </div>
+          </div>
+        </div>
+        <button type="button" class="exp9-btn-buy" ${!canAfford ? 'disabled' : ''}>
+          ${isEquipped ? 'EQUIPPED (RE-BUY)' : (canAfford ? 'BUY' : 'INSUFFICIENT FUNDS')}
+        </button>
+      `;
+
+      card.querySelector('.exp9-btn-buy').addEventListener('click', () => {
+        purchaseWeapon(item);
+      });
+
+      grid.appendChild(card);
+    });
+  }
+
+  function purchaseWeapon(item) {
+    if (combat.cash < item.price) return;
+    combat.cash -= item.price;
+    playCashSound();
+
+    if (item.category === 'Armor') {
+      combat.gear.armor = 100;
+      combat.gear.helmet = true;
+      showTrickToast('KEVLAR + HELMET EQUIPPED! 🛡️');
+    } else if (item.slot === 1) {
+      combat.equippedPrimary = { ...item, ammoInMag: item.magSize, ammoInReserve: item.maxAmmo };
+      combat.activeSlot = 1;
+      showTrickToast(`EQUIPPED: ${item.name.toUpperCase()}! 🎯`);
+    } else if (item.slot === 2) {
+      combat.equippedSecondary = { ...item, ammoInMag: item.magSize, ammoInReserve: item.maxAmmo };
+      combat.activeSlot = 2;
+      showTrickToast(`EQUIPPED: ${item.name.toUpperCase()}! 🔫`);
+    } else {
+      showTrickToast(`PURCHASED: ${item.name.toUpperCase()}! ✨`);
+    }
+
+    updateWeaponHUD();
+    updateBuyMenuCash();
+    renderBuyMenuGrid(combat.currentCategory);
+  }
+
+  function updateWeaponHUD() {
+    const wep = combat.activeSlot === 1 ? combat.equippedPrimary : combat.equippedSecondary;
+    const nameEl = document.getElementById('hudWeaponName');
+    const catEl = document.getElementById('hudWeaponCategory');
+    const ammoEl = document.getElementById('hudWeaponAmmo');
+    if (wep) {
+      if (nameEl) nameEl.textContent = wep.name.toUpperCase();
+      if (catEl) catEl.textContent = wep.category.toUpperCase();
+      if (ammoEl) ammoEl.innerHTML = `${wep.ammoInMag} <small>/ ${wep.ammoInReserve}</small>`;
+    }
+  }
+
+  function fireCurrentWeapon() {
+    const wep = combat.activeSlot === 1 ? combat.equippedPrimary : combat.equippedSecondary;
+    if (!wep) return;
+    if (combat.isReloading) return;
+    if (wep.ammoInMag <= 0) {
+      reloadCurrentWeapon();
+      return;
+    }
+
+    const now = performance.now();
+    const shotInterval = (60 / (wep.rpm || 400)) * 1000;
+    if (now - combat.lastFireTime < shotInterval) return;
+    combat.lastFireTime = now;
+
+    wep.ammoInMag--;
+    updateWeaponHUD();
+    playGunshotSound(wep.soundType || 'rifle');
+
+    // Crosshair recoil kick
+    const crosshair = document.getElementById('tacticalCrosshair');
+    if (crosshair) {
+      crosshair.classList.add('recoil');
+      setTimeout(() => crosshair.classList.remove('recoil'), 70);
+    }
+
+    // Camera recoil punch
+    state.camera.pitch = Math.min(1.25, state.camera.pitch - 0.012);
+    state.player.pitch -= 0.015;
+
+    // Raycast tracer directly through center crosshair into 3D world
+    _shootRay.setFromCamera(new THREE.Vector2(0, 0), camera);
+    _shootRay.far = 120.0;
+
+    let targetPoint = null;
+    const meshes = currentMapId === 'dust2' ? dust2WalkMeshes : state.obstacles;
+    if (meshes && meshes.length > 0) {
+      const hits = _shootRay.intersectObjects(meshes, false);
+      if (hits && hits.length > 0) {
+        targetPoint = hits[0].point;
+        emitSparkBurst(targetPoint.x, targetPoint.y, targetPoint.z);
+      }
+    }
+
+    if (!targetPoint) {
+      targetPoint = new THREE.Vector3();
+      _shootRay.ray.at(80.0, targetPoint);
+    }
+
+    // Tracer originates near player's board / hand
+    _shootOrigin.set(state.player.x, state.player.y + 0.45, state.player.z);
+    createBulletTracer(_shootOrigin, targetPoint);
+  }
+
+  function reloadCurrentWeapon() {
+    const wep = combat.activeSlot === 1 ? combat.equippedPrimary : combat.equippedSecondary;
+    if (!wep || combat.isReloading) return;
+    if (wep.ammoInMag >= wep.magSize || wep.ammoInReserve <= 0) return;
+
+    combat.isReloading = true;
+    showTrickToast(`RELOADING ${wep.name.toUpperCase()}...`);
+    const hudWeaponAmmo = document.getElementById('hudWeaponAmmo');
+    if (hudWeaponAmmo) hudWeaponAmmo.innerHTML = `RELOAD...`;
+
+    setTimeout(() => {
+      combat.isReloading = false;
+      const needed = wep.magSize - wep.ammoInMag;
+      const amount = Math.min(needed, wep.ammoInReserve);
+      wep.ammoInMag += amount;
+      wep.ammoInReserve -= amount;
+      updateWeaponHUD();
+    }, 1800);
+  }
+
+  function createBulletTracer(start, end) {
+    const geom = new THREE.BufferGeometry().setFromPoints([start, end]);
+    const mat = new THREE.LineBasicMaterial({ color: 0xfef08a, linewidth: 2, transparent: true, opacity: 0.95 });
+    const line = new THREE.Line(geom, mat);
+    scene.add(line);
+    tracerLines.push({ line, time: 0.06 });
+  }
+
+  function emitSparkBurst(x, y, z) {
+    for (let i = 0; i < 5; i++) {
+      emitGrindSparks(x, y, z);
+    }
+  }
+
+  function initBombSiteBeacons() {
+    if (!dust2Group) return;
+    Object.keys(BOMB_SITES).forEach((key) => {
+      const site = BOMB_SITES[key];
+      const ringGeom = new THREE.RingGeometry(site.radius - 0.35, site.radius, 32);
+      ringGeom.rotateX(-Math.PI / 2);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: key === 'A' ? 0xef4444 : 0xf59e0b,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.55
+      });
+      const ring = new THREE.Mesh(ringGeom, ringMat);
+      ring.position.set(site.x, site.y + 0.03, site.z);
+      dust2Group.add(ring);
+    });
+  }
+
+  function spawnC4InWorld(x, y, z, site) {
+    if (c4Mesh) {
+      scene.remove(c4Mesh);
+    }
+    const c4Group = new THREE.Group();
+    const bodyGeom = new THREE.BoxGeometry(0.32, 0.12, 0.18);
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.6 });
+    const body = new THREE.Mesh(bodyGeom, bodyMat);
+    body.position.y = 0.06;
+    c4Group.add(body);
+
+    const dynGeom = new THREE.CylinderGeometry(0.025, 0.025, 0.30, 8);
+    dynGeom.rotateZ(Math.PI / 2);
+    const dynMat = new THREE.MeshStandardMaterial({ color: 0xb45309 });
+    const dyn1 = new THREE.Mesh(dynGeom, dynMat);
+    dyn1.position.set(0, 0.13, 0.04);
+    const dyn2 = new THREE.Mesh(dynGeom, dynMat);
+    dyn2.position.set(0, 0.13, -0.04);
+    c4Group.add(dyn1, dyn2);
+
+    c4BlinkLight = new THREE.PointLight(0xef4444, 2.5, 3.5);
+    c4BlinkLight.position.set(0, 0.20, 0);
+    c4Group.add(c4BlinkLight);
+
+    c4Group.position.set(x, y, z);
+    scene.add(c4Group);
+    c4Mesh = c4Group;
+  }
+
+  function updateTacticalCombat(dt) {
+    // Update active tracers
+    for (let i = tracerLines.length - 1; i >= 0; i--) {
+      tracerLines[i].time -= dt;
+      if (tracerLines[i].time <= 0) {
+        scene.remove(tracerLines[i].line);
+        tracerLines[i].line.geometry.dispose();
+        tracerLines[i].line.material.dispose();
+        tracerLines.splice(i, 1);
+      }
+    }
+
+    // Automatic weapon continuous spray
+    if (combat.isFiring) {
+      const wep = combat.activeSlot === 1 ? combat.equippedPrimary : combat.equippedSecondary;
+      if (wep && wep.id !== 'nova' && wep.id !== 'scout' && wep.id !== 'awp') {
+        fireCurrentWeapon();
+      }
+    }
+
+    if (currentMapId !== 'dust2') return;
+
+    // Check distance to Bomb Sites
+    const p = state.player;
+    let nearSite = null;
+    for (const key of ['A', 'B']) {
+      const site = BOMB_SITES[key];
+      const d = Math.hypot(p.x - site.x, p.z - site.z);
+      if (d < site.radius && Math.abs(p.y - site.y) < 2.5) {
+        nearSite = key;
+        break;
+      }
+    }
+
+    const bombZoneCard = document.getElementById('bombZoneCard');
+    const plantBarFill = document.getElementById('plantBarFill');
+
+    if (nearSite && combat.hasBomb && !combat.bombPlanted) {
+      if (bombZoneCard) bombZoneCard.classList.remove('hidden');
+
+      if (state.input.plant) {
+        combat.isPlanting = true;
+        combat.plantProgress = Math.min(3.0, combat.plantProgress + dt);
+        if (plantBarFill) plantBarFill.style.width = (combat.plantProgress / 3.0 * 100) + '%';
+
+        if (combat.plantProgress >= 3.0) {
+          combat.hasBomb = false;
+          combat.bombPlanted = true;
+          combat.bombSite = nearSite;
+          combat.isPlanting = false;
+          combat.plantProgress = 0;
+          if (bombZoneCard) bombZoneCard.classList.add('hidden');
+
+          spawnC4InWorld(p.x, p.y, p.z, nearSite);
+
+          if (window.GamerWheelsMultiplayer && window.GamerWheelsMultiplayer.plantC4) {
+            window.GamerWheelsMultiplayer.plantC4(nearSite, p.x, p.y, p.z);
+          }
+          showTrickToast(`💣 BOMB PLANTED AT SITE ${nearSite}! 45s TO DETONATION`);
+        }
+      } else {
+        combat.isPlanting = false;
+        combat.plantProgress = Math.max(0, combat.plantProgress - dt * 2);
+        if (plantBarFill) plantBarFill.style.width = (combat.plantProgress / 3.0 * 100) + '%';
+      }
+    } else {
+      if (bombZoneCard) bombZoneCard.classList.add('hidden');
+      combat.isPlanting = false;
+      combat.plantProgress = 0;
+    }
+  }
+
+  function handleTacticalMatchStart(stateData) {
+    if (currentMapId !== 'dust2') return;
+
+    // In solo test mode or on Terrorist team: spawn at Terrace / T Spawn (Checkpoint 0)
+    if (stateData.isSolo || stateData.team === 'T') {
+      teleportToCheckpoint(0); // T Spawn (Terrace): x: -8.0, z: 32.0, y: 2.38
+      combat.hasBomb = true;
+      combat.bombPlanted = false;
+      combat.bombSite = null;
+      showTrickToast('TERRORIST MISSION (Terrace Spawn): Plant C4 at Site A or B! 💣');
+    } else {
+      teleportToCheckpoint(1); // CT Spawn Base: x: -25.0, z: -35.0, y: 4.58
+      combat.hasBomb = false;
+      showTrickToast('COUNTER-TERRORIST MISSION: Defend Site A and Site B! 🛡️');
+    }
+    updateWeaponHUD();
+    updateBuyMenuCash();
+  }
+
+  function isTacticalMatchActive() {
+    const banner = document.getElementById('matchBanner');
+    return banner && banner.classList.contains('tactical');
+  }
+
+  function switchMap(newMapId, isInitial = false) {
+    if (newMapId === '2fort') {
+      showTrickToast('🔒 2FORT IS LOCKED: COMING SOON');
+      return;
+    }
+    if (newMapId === currentMapId && !isInitial) return;
+
+    currentMapId = newMapId;
+    CHECKPOINTS = MAP_CHECKPOINTS[currentMapId] || MAP_CHECKPOINTS.dust2;
+
+    // Update Top Left UI
+    const currentMapIcon = document.getElementById('currentMapIcon');
+    const currentMapName = document.getElementById('currentMapName');
+    const matchBanner = document.getElementById('matchBanner');
+
+    if (currentMapIcon && currentMapName) {
+      if (currentMapId === 'dust2') {
+        currentMapIcon.textContent = '🏜️';
+        currentMapName.textContent = 'Dust 2';
+        if (hudTerrainVal) hudTerrainVal.textContent = 'Dust 2';
+      } else {
+        currentMapIcon.textContent = '🏙️';
+        currentMapName.textContent = 'Plaza Skatepark';
+        if (hudTerrainVal) hudTerrainVal.textContent = 'Central Plaza';
+      }
+    }
+
+    // Toggle match banner visibility (Dust 2 has CS match loop)
+    if (matchBanner) {
+      matchBanner.style.display = currentMapId === 'dust2' ? 'inline-flex' : 'none';
+    }
+
+    // Update map dropdown active states
+    document.querySelectorAll('.exp9-map-item').forEach((item) => {
+      const m = item.getAttribute('data-map');
+      item.classList.toggle('active', m === currentMapId);
+    });
+
+    // Update 3D visibility & lighting
+    setEnvironmentLighting(currentMapId);
+
+    if (currentMapId === 'dust2') {
+      if (parkWorldGroup) parkWorldGroup.visible = false;
+      if (dust2Group) dust2Group.visible = true;
+      loadDust2Map(() => {
+        teleportToCheckpoint(0);
+      });
+    } else {
+      if (parkWorldGroup) parkWorldGroup.visible = true;
+      if (dust2Group) dust2Group.visible = false;
+      teleportToCheckpoint(0);
+    }
+
+    updateCheckpointsUI();
+
+    // Inform multiplayer server
+    if (window.GamerWheelsMultiplayer && window.GamerWheelsMultiplayer.changeMap) {
+      window.GamerWheelsMultiplayer.changeMap(currentMapId);
+    }
+  }
+
+  function getDust2SurfaceElevation(x, z, currentY) {
+    if (!dust2WalkMeshes || dust2WalkMeshes.length === 0) {
+      return 0.1;
+    }
+
+    const isSpawning = (currentY >= 10.0);
+    const rayStartY = isSpawning ? 12.0 : Math.min(Math.max(currentY + 2.0, 5.0), 6.5);
+    dust2RayOrigin.set(x, rayStartY, z);
+    dust2Ray.set(dust2RayOrigin, dust2DownDir);
+    dust2Ray.far = 25.0;
+
+    const hits = dust2Ray.intersectObjects(dust2WalkMeshes, false);
+    if (hits && hits.length > 0) {
+      const validWalkHits = [];
+      for (let i = 0; i < hits.length; i++) {
+        const hit = hits[i];
+        // Reject building roofs above maximum playable height (5.5m)
+        if (hit.point.y > 5.5) continue;
+
+        // Reject decorative window sill alcoves / non-walkable wall recesses on either side of mid doors
+        if (hit.point.y > 1.8 && hit.point.y < 2.6 && hit.point.x < -3.2 &&
+            ((hit.point.z >= 7.8 && hit.point.z <= 9.8) || (hit.point.z >= 15.5 && hit.point.z <= 17.5))) {
+          continue;
+        }
+
+        const norm = getHitWorldNormal(hit);
+        // Only accept surfaces that are flat or drivable slopes (steeper than ~49 deg is a wall)
+        if (norm && norm.y >= 0.65) {
+          validWalkHits.push(hit.point.y);
+        }
+      }
+
+      if (validWalkHits.length > 0) {
+        // Sort descending by height
+        validWalkHits.sort((a, b) => b - a);
+
+        if (isSpawning) {
+          // For checkpoint teleport or initial spawn, pick highest floor below roof
+          return validWalkHits[0];
+        }
+
+        // When grounded, max step-up is 0.38m; when jumping, ground must be below feet
+        const isAir = (state.player && state.player.isAirborne);
+        const maxAllowedY = isAir ? (currentY + 0.20) : (currentY + 0.38);
+
+        for (let j = 0; j < validWalkHits.length; j++) {
+          const hy = validWalkHits[j];
+          if (hy <= maxAllowedY) {
+            return hy;
+          }
+        }
+
+        // If no walkable surface was at or below maxAllowedY (e.g. against a wall or roof)
+        return currentY;
+      }
+    }
+    return (currentY !== undefined && !isSpawning) ? currentY : 0.1;
   }
 
   // ==========================================================================
   // Unified Surface Elevation Query (Terrain + All Stunt Obstacles & Ramps)
   // ==========================================================================
   function getSurfaceElevation(x, z) {
+    if (currentMapId === 'dust2') {
+      return getDust2SurfaceElevation(x, z, state.player.y);
+    }
+
     let surfaceH = getTerrainElevation(x, z);
 
     for (let i = 0; i < state.obstacles.length; i++) {
@@ -3438,8 +4583,8 @@
 
       if (isBrakingInput) {
         // --- REGENERATIVE BRAKING AT SPEED ---
-        // Decelerates forward speed without 180-spinning the board
-        const brakeDecel = 16.0; // m/s^2 firm regenerative braking
+        // Decelerates forward speed firmly without 180-spinning the board
+        const brakeDecel = 24.0; // m/s^2 firm responsive braking
         if (vFwd > 0) {
           vFwd = Math.max(0, vFwd - brakeDecel * inputMagnitude * dt);
         } else if (vFwd < 0) {
@@ -3463,10 +4608,11 @@
         p.roll = THREE.MathUtils.lerp(p.roll, rollTarget, dt * 10);
 
         // Motor thrust accelerates along travel direction
-        const targetSpeed = MAX_SPEED * inputMagnitude;
+        const mapMaxSpeed = getMapMaxSpeed();
+        const targetSpeed = mapMaxSpeed * inputMagnitude;
         if (isFakie) {
           if (vFwd > -targetSpeed) {
-            const speedRatio = THREE.MathUtils.clamp(-vFwd / MAX_SPEED, 0, 1);
+            const speedRatio = THREE.MathUtils.clamp(-vFwd / mapMaxSpeed, 0, 1);
             const torqueFactor = 1.0 - speedRatio * 0.52;
             vFwd -= ACCELERATION * torqueFactor * dt;
             if (vFwd < -targetSpeed) vFwd = -targetSpeed;
@@ -3475,7 +4621,7 @@
           }
         } else {
           if (vFwd < targetSpeed) {
-            const speedRatio = THREE.MathUtils.clamp(vFwd / MAX_SPEED, 0, 1);
+            const speedRatio = THREE.MathUtils.clamp(vFwd / mapMaxSpeed, 0, 1);
             const torqueFactor = 1.0 - speedRatio * 0.52;
             vFwd += ACCELERATION * torqueFactor * dt;
             if (vFwd > targetSpeed) vFwd = targetSpeed;
@@ -3485,12 +4631,17 @@
         }
       }
     } else {
-      // Smooth coasting friction roll-down (preserves momentum, ultra-low drag!)
-      vFwd = THREE.MathUtils.lerp(vFwd, 0, dt * 0.04);
-      p.roll = THREE.MathUtils.lerp(p.roll, 0, dt * 8);
+      // Natural rolling tire deceleration (responsive halt in ~0.8s when letting go of controls)
+      vFwd = THREE.MathUtils.lerp(vFwd, 0, dt * 4.8);
+      p.roll = THREE.MathUtils.lerp(p.roll, 0, dt * 10);
+
+      // Low-speed complete stop deadband
+      if (Math.abs(vFwd) < 0.28) {
+        vFwd = 0;
+      }
     }
 
-    // 3. Downhill Slope Gravity & Counter-Steering ("Fight Gravity")
+    // 3. Downhill Slope Gravity & Hill-Hold Auto-Brake
     // Gravity acts continuously across terrain, hills, and elevated stunt ramps!
     if (!p.isAirborne && !state.grind.active) {
       const epsG = 0.45;
@@ -3501,22 +4652,35 @@
 
       const gradX = (hE - hW) / (2 * epsG);
       const gradZ = (hS - hN) / (2 * epsG);
+      const slopeMagnitude = Math.hypot(gradX, gradZ);
 
       const downhillX = -gradX;
       const downhillZ = -gradZ;
 
-      // Project downhill gravity onto board forward and lateral axes
-      const gravFwd = downhillX * fwdX + downhillZ * fwdZ;
-      const gravLat = downhillX * rightX + downhillZ * rightZ;
+      const isDriving = (inputMagnitude > 0.05);
+      const minSlopeToRoll = isDriving ? 0.075 : 0.22;
 
-      const SLOPE_GRAV = 16.0;
-      vFwd += gravFwd * SLOPE_GRAV * dt;
-      vLat += gravLat * SLOPE_GRAV * dt;
+      // Static tire friction deadband: micro-slopes and polygon seams will not
+      // pull the board downhill when parked or coasting!
+      if (slopeMagnitude > minSlopeToRoll || (isDriving && p.speed > 0.35)) {
+        const gravFwd = downhillX * fwdX + downhillZ * fwdZ;
+        const gravLat = downhillX * rightX + downhillZ * rightZ;
+
+        const SLOPE_GRAV = 16.0;
+        vFwd += gravFwd * SLOPE_GRAV * dt;
+        vLat += gravLat * SLOPE_GRAV * dt;
+      } else if (!isDriving) {
+        // Firmly hold stationary position on flat or gentle ground (Hill-hold brake)
+        vFwd = THREE.MathUtils.lerp(vFwd, 0, dt * 6.0);
+        vLat = THREE.MathUtils.lerp(vLat, 0, dt * 6.0);
+        if (Math.abs(vFwd) < 0.22) vFwd = 0;
+        if (Math.abs(vLat) < 0.22) vLat = 0;
+      }
 
       // Lateral tire grip: resists sideways drift, but on steep slopes allows realistic sideslip!
-      // This forces the rider to actively counter-steer uphill into the slope to hold a line across steep hills!
-      const TIRE_LATERAL_GRIP = 5.2;
+      const TIRE_LATERAL_GRIP = 6.0;
       vLat = THREE.MathUtils.lerp(vLat, 0, dt * TIRE_LATERAL_GRIP);
+      if (Math.abs(vLat) < 0.08 && !isDriving) vLat = 0;
     } else {
       vLat = THREE.MathUtils.lerp(vLat, 0, dt * 4.0);
     }
@@ -3525,11 +4689,13 @@
     p.vx = vFwd * fwdX + vLat * rightX;
     p.vz = vFwd * fwdZ + vLat * rightZ;
 
-    // Downhill top speed cap allows speed up to 26.8 m/s (~60.0 MPH!)
+    // Downhill top speed cap allows speed up to 26.8 m/s (~60.0 MPH!) on park,
+    // or capped at 30.0 MPH (~13.41 m/s) on dust2
+    const maxDownhillCap = getMapDownhillSpeedCap();
     const currentSpeed = Math.hypot(p.vx, p.vz);
-    if (currentSpeed > 26.8) {
-      p.vx = (p.vx / currentSpeed) * 26.8;
-      p.vz = (p.vz / currentSpeed) * 26.8;
+    if (currentSpeed > maxDownhillCap) {
+      p.vx = (p.vx / currentSpeed) * maxDownhillCap;
+      p.vz = (p.vz / currentSpeed) * maxDownhillCap;
     }
     p.speed = Math.hypot(p.vx, p.vz);
 
@@ -3553,25 +4719,26 @@
       // In Three.js with 'YXZ' rotation order, local +Z is forward.
       // Negative rotation around local X elevates the front nose (+Y).
       // When going uphill (hForward > hBackward), pitch must be negative so nose lifts up!
-      const slopePitch = -Math.atan2(hForward - hBackward, eps * 2);
-      const slopeRoll = Math.atan2(hRight - hLeft, eps * 2);
+      const slopePitch = THREE.MathUtils.clamp(-Math.atan2(hForward - hBackward, eps * 2), -0.65, 0.65);
+      const slopeRoll = THREE.MathUtils.clamp(Math.atan2(hRight - hLeft, eps * 2), -0.45, 0.45);
 
       // Rider acceleration tilt: On a Onewheel, accelerating requires leaning forward so nose dips DOWN (+pitch).
       // Braking / pushback requires leaning back so nose lifts UP (-pitch).
       let accelPitch = 0;
+      const currentMapMax = getMapMaxSpeed();
       if (isBrakingInput || (state.input.down && vFwd > 0.4)) {
         // Braking at speed: lift nose up / dip tail down (-0.13 rad ~ -7.4 deg)
         accelPitch = -0.13 * THREE.MathUtils.clamp(inputMagnitude, 0.5, 1.0);
       } else if (inputMagnitude > 0.05 && vFwd >= -0.3) {
         // Accelerating forward: dip nose down (+0.11 rad ~ 6.3 deg)
-        const headroom = THREE.MathUtils.clamp(1.0 - (p.speed / (MAX_SPEED * 1.1)), 0.25, 1.0);
+        const headroom = THREE.MathUtils.clamp(1.0 - (p.speed / (currentMapMax * 1.1)), 0.25, 1.0);
         accelPitch = inputMagnitude * 0.11 * headroom;
       } else if (vFwd < -0.3 && inputMagnitude > 0.05) {
         // Reversing: tail dips down (nose lifts up, -pitch)
         accelPitch = -0.11 * inputMagnitude;
       }
       // Speed lean: cruising forward lean into wind resistance (+0.035 rad ~ 2.0 deg)
-      const speedLean = (vFwd > 0.5) ? (p.speed / MAX_SPEED) * 0.035 : 0;
+      const speedLean = (vFwd > 0.5) ? (p.speed / currentMapMax) * 0.035 : 0;
       const riderPitch = accelPitch + speedLean;
 
       // Sample Right Stick / Arrow Inputs on Ground (VESC Remote Tilt & Lean Roll)
@@ -3601,11 +4768,97 @@
       }
     }
 
-    // 5. Position Integration & Boundary Clamping
-    p.x += p.vx * dt;
-    p.z += p.vz * dt;
-    p.x = THREE.MathUtils.clamp(p.x, -135, 135);
-    p.z = THREE.MathUtils.clamp(p.z, -135, 135);
+    // 5. Position Integration, Wall Collision & Boundary Clamping
+    if (currentMapId === 'dust2') {
+      const COLLISION_RADIUS = 0.36;
+
+      // A. Forward velocity deflection (wall slide)
+      const hSpeed = Math.hypot(p.vx, p.vz);
+      if (hSpeed > 0.05) {
+        const testDist = COLLISION_RADIUS + hSpeed * dt;
+        const wallHit = checkDust2Wall(p.x, p.y, p.z, p.vx, p.vz, testDist);
+        if (wallHit && wallHit.distance <= testDist) {
+          const dot = p.vx * wallHit.normalX + p.vz * wallHit.normalZ;
+          if (dot < 0) {
+            // Deflect along wall surface
+            p.vx -= dot * wallHit.normalX;
+            p.vz -= dot * wallHit.normalZ;
+            p.speed = Math.hypot(p.vx, p.vz) * 0.85;
+          }
+          if (wallHit.distance < COLLISION_RADIUS) {
+            const push = COLLISION_RADIUS - wallHit.distance;
+            p.x += wallHit.normalX * push;
+            p.z += wallHit.normalZ * push;
+            p.vx *= 0.4;
+            p.vz *= 0.4;
+            vFwd = 0;
+          }
+        }
+      }
+
+      // B. Independent Axis Collision (X and Z)
+      let moveX = p.vx * dt;
+      if (Math.abs(moveX) > 0.0001) {
+        const dirX = Math.sign(moveX);
+        const wallX = checkDust2Wall(p.x, p.y, p.z, dirX, 0, COLLISION_RADIUS + Math.abs(moveX));
+        if (wallX && wallX.distance <= COLLISION_RADIUS + Math.abs(moveX)) {
+          moveX = 0;
+          p.vx = 0;
+          vFwd = 0;
+          if (wallX.distance < COLLISION_RADIUS) {
+            p.x += (wallX.normalX > 0 ? 1 : -1) * (COLLISION_RADIUS - wallX.distance);
+          }
+        }
+      }
+      p.x += moveX;
+
+      let moveZ = p.vz * dt;
+      if (Math.abs(moveZ) > 0.0001) {
+        const dirZ = Math.sign(moveZ);
+        const wallZ = checkDust2Wall(p.x, p.y, p.z, 0, dirZ, COLLISION_RADIUS + Math.abs(moveZ));
+        if (wallZ && wallZ.distance <= COLLISION_RADIUS + Math.abs(moveZ)) {
+          moveZ = 0;
+          p.vz = 0;
+          vFwd = 0;
+          if (wallZ.distance < COLLISION_RADIUS) {
+            p.z += (wallZ.normalZ > 0 ? 1 : -1) * (COLLISION_RADIUS - wallZ.distance);
+          }
+        }
+      }
+      p.z += moveZ;
+
+      // C. Stationary / turning nose probe to prevent rotating into walls
+      const noseDirX = Math.sin(p.heading);
+      const noseDirZ = Math.cos(p.heading);
+      const noseWall = checkDust2Wall(p.x, p.y, p.z, noseDirX, noseDirZ, 0.38);
+      if (noseWall && noseWall.distance < 0.38) {
+        const push = 0.38 - noseWall.distance;
+        p.x += noseWall.normalX * push * 0.5;
+        p.z += noseWall.normalZ * push * 0.5;
+      }
+
+      // D. Dust 2 Mid Doors window alcove safety seal & Perimeter Clamping
+      if ((p.z >= 7.8 && p.z <= 9.8) || (p.z >= 15.5 && p.z <= 17.5)) {
+        if (p.x < -3.30 + COLLISION_RADIUS) {
+          p.x = -3.30 + COLLISION_RADIUS;
+          if (p.vx < 0) p.vx = 0;
+        }
+      }
+
+      p.x = THREE.MathUtils.clamp(p.x, -37.5, 37.5);
+      p.z = THREE.MathUtils.clamp(p.z, -44.0, 42.0);
+
+      if (p.y > 6.0 || p.y < -3.0) {
+        console.warn('[Dust 2] Player breached map boundary (y=' + p.y.toFixed(2) + '). Respawning.');
+        respawnPlayer();
+      }
+    } else {
+      // Classic Skatepark boundaries
+      p.x += p.vx * dt;
+      p.z += p.vz * dt;
+      p.x = THREE.MathUtils.clamp(p.x, -135, 135);
+      p.z = THREE.MathUtils.clamp(p.z, -135, 135);
+    }
 
     // 6. Vertical & Jump Physics
     handleObstaclesAndGround(dt);
@@ -3785,7 +5038,9 @@
     let targetGround = getSurfaceElevation(p.x, p.z);
     p.isGrinding = false;
 
-    for (const obs of state.obstacles) {
+    // Only process skatepark obstacles when on the classic park map
+    if (currentMapId !== 'dust2') {
+      for (const obs of state.obstacles) {
       const halfW = obs.width / 2;
       const halfL = obs.length / 2;
 
@@ -4302,6 +5557,7 @@
         }
       }
     }
+    }
 
     // Clean up grind HUD if no longer grinding on any obstacle
     if (state.grind.active && !p.isGrinding) {
@@ -4328,7 +5584,15 @@
     const minCenterForNose = hNose - noseDeltaY + 0.055;
     const minCenterForTail = hTail - tailDeltaY + 0.055;
 
-    targetGround = Math.max(targetGround, minCenterForNose, minCenterForTail);
+    if (currentMapId === 'dust2') {
+      // On Dust 2, only adjust bumper height if nose and tail are on a gentle slope
+      // (reject walls, curbs, or high ledges which would cause wall climbing)
+      if (Math.abs(hNose - targetGround) <= 0.20 && Math.abs(hTail - targetGround) <= 0.20) {
+        targetGround = Math.max(targetGround, minCenterForNose, minCenterForTail);
+      }
+    } else {
+      targetGround = Math.max(targetGround, minCenterForNose, minCenterForTail);
+    }
     p.groundY = targetGround;
   }
 
@@ -4348,27 +5612,55 @@
     let newZone = 'Central Town Square';
     let newType = 'PLAZA';
 
-    if (Math.abs(p.x) < 24 && Math.abs(p.z) < 24) {
-      newZone = 'Central Town Square';
-      newType = 'PLAZA';
-    } else if (Math.abs(p.x - 55) < 14 && p.z >= -26 && p.z <= 46) {
-      newZone = 'Pine Ridge Slopestyle';
-      newType = 'RED BULL SLOPESTYLE';
-    } else if (Math.abs(p.x - (-58)) < 14 && p.z >= -26 && p.z <= 46) {
-      newZone = 'Slickrock Motocross';
-      newType = 'MOTOCROSS MX';
-    } else if (p.z < -26 && Math.abs(p.x) < Math.abs(p.z) * 1.5) {
-      newZone = 'Thunder Peak';
-      newType = 'JUMP LINE';
-    } else if (p.z > 26 && Math.abs(p.x) < Math.abs(p.z) * 1.5) {
-      newZone = 'Cactus Canyon';
-      newType = 'CHILL TRAIL';
-    } else if (p.x > 26 && Math.abs(p.z) < Math.abs(p.x) * 1.5) {
-      newZone = 'Pine Ridge';
-      newType = 'CHILL TRAIL';
-    } else if (p.x < -26 && Math.abs(p.z) < Math.abs(p.x) * 1.5) {
-      newZone = 'Slickrock Bluff';
-      newType = 'JUMP LINE';
+    if (currentMapId === 'dust2') {
+      if (p.z > 25) {
+        newZone = 'T Spawn (Terrace)';
+        newType = 'ATTACKER BASE';
+      } else if (p.z < -30 && p.x < -10) {
+        newZone = 'CT Spawn';
+        newType = 'DEFENDER BASE';
+      } else if (p.x > 20 && p.z < -10) {
+        newZone = 'A Bomb Site';
+        newType = 'OBJECTIVE A';
+      } else if (p.x < -20 && p.z < -10) {
+        newZone = 'B Bomb Site';
+        newType = 'OBJECTIVE B';
+      } else if (p.x > 15 && p.z >= -10 && p.z <= 30) {
+        newZone = 'Long A';
+        newType = 'TACTICAL LANE';
+      } else if (Math.abs(p.x) <= 10 && p.z >= 0 && p.z <= 30) {
+        newZone = 'Mid Doors';
+        newType = 'MIDDLE CROSS';
+      } else if (p.x < -10 && p.z >= -10 && p.z <= 20) {
+        newZone = 'B Tunnels';
+        newType = 'TUNNELS';
+      } else {
+        newZone = 'Dust 2 Courtyard';
+        newType = 'FREE ROAM';
+      }
+    } else {
+      if (Math.abs(p.x) < 24 && Math.abs(p.z) < 24) {
+        newZone = 'Central Town Square';
+        newType = 'PLAZA';
+      } else if (Math.abs(p.x - 55) < 14 && p.z >= -26 && p.z <= 46) {
+        newZone = 'Pine Ridge Slopestyle';
+        newType = 'RED BULL SLOPESTYLE';
+      } else if (Math.abs(p.x - (-58)) < 14 && p.z >= -26 && p.z <= 46) {
+        newZone = 'Slickrock Motocross';
+        newType = 'MOTOCROSS MX';
+      } else if (p.z < -26 && Math.abs(p.x) < Math.abs(p.z) * 1.5) {
+        newZone = 'Thunder Peak';
+        newType = 'JUMP LINE';
+      } else if (p.z > 26 && Math.abs(p.x) < Math.abs(p.z) * 1.5) {
+        newZone = 'Cactus Canyon';
+        newType = 'CHILL TRAIL';
+      } else if (p.x > 26 && Math.abs(p.z) < Math.abs(p.x) * 1.5) {
+        newZone = 'Pine Ridge';
+        newType = 'CHILL TRAIL';
+      } else if (p.x < -26 && Math.abs(p.z) < Math.abs(p.x) * 1.5) {
+        newZone = 'Slickrock Bluff';
+        newType = 'JUMP LINE';
+      }
     }
 
     if (newZone !== p.currentZone) {
@@ -4408,6 +5700,11 @@
     }
   }
 
+  // Camera Wall Occlusion Raycaster (Spring-Arm Obstacle Collision Zoom)
+  const _camOcclusionRay = new THREE.Raycaster();
+  const _camRayOrigin = new THREE.Vector3();
+  const _camRayDir = new THREE.Vector3();
+
   // ==========================================================================
   // 11. Camera Tracking & HUD Updates
   // ==========================================================================
@@ -4420,7 +5717,11 @@
     // 1. Intelligent Velocity-Vector Auto-Chase Camera
     // Follows the rider's MOVEMENT VECTOR (travel velocity vx, vz), NEVER the board's rotational heading!
     // When airborne (jumping, 180s, 360s, flips), camera yaw remains completely steady along jump momentum!
-    if (cs.manualTimer > 0) {
+    const isLocked = (document.pointerLockElement === container || (canvas && document.pointerLockElement === canvas));
+
+    if (isLocked) {
+      // In tactical pointer lock aim mode: camera direction is strictly locked to mouse!
+    } else if (cs.manualTimer > 0) {
       cs.manualTimer -= delta;
     } else if (!p.isAirborne && p.speed > 1.2) {
       const travelHeading = Math.atan2(p.vx, p.vz);
@@ -4457,13 +5758,55 @@
     const desiredCamY = targetY + effDist * Math.sin(cs.pitch);
     const desiredCamZ = targetZ + hDist * Math.cos(cs.yaw);
 
-    // Prevent camera from clipping into terrain elevation
-    const terrainH = getSurfaceElevation(desiredCamX, desiredCamZ);
-    const finalCamY = Math.max(desiredCamY, terrainH + 0.45);
+    // 5b. Smart Wall Occlusion Zoom (Spring-Arm Camera Collision)
+    // Cast ray from player target towards desired camera position.
+    // If a wall or obstacle is hit, pull the camera forward in front of it!
+    _camRayOrigin.set(targetX, targetY, targetZ);
+    _camRayDir.set(desiredCamX - targetX, desiredCamY - targetY, desiredCamZ - targetZ);
+    const fullCamDist = _camRayDir.length();
+    let actualCamDist = fullCamDist;
 
-    camera.position.x = THREE.MathUtils.lerp(camera.position.x, desiredCamX, 0.35);
-    camera.position.y = THREE.MathUtils.lerp(camera.position.y, finalCamY, 0.35);
-    camera.position.z = THREE.MathUtils.lerp(camera.position.z, desiredCamZ, 0.35);
+    if (fullCamDist > 0.1) {
+      _camRayDir.normalize();
+      _camOcclusionRay.set(_camRayOrigin, _camRayDir);
+      _camOcclusionRay.far = fullCamDist;
+
+      const colliders = (currentMapId === 'dust2' && dust2WalkMeshes && dust2WalkMeshes.length > 0)
+        ? dust2WalkMeshes
+        : (state.obstacles && state.obstacles.length > 0 ? state.obstacles : []);
+
+      if (colliders.length > 0) {
+        const hits = _camOcclusionRay.intersectObjects(colliders, false);
+        if (hits && hits.length > 0) {
+          for (let i = 0; i < hits.length; i++) {
+            // Reject any micro-hits right at the player center
+            if (hits[i].distance > 0.40) {
+              const safeClearance = 0.35; // 35cm buffer away from wall
+              actualCamDist = Math.max(0.65, hits[i].distance - safeClearance);
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // Calculate actual camera coordinates along view ray
+    const finalCamX = targetX + _camRayDir.x * actualCamDist;
+    let finalCamY = targetY + _camRayDir.y * actualCamDist;
+    const finalCamZ = targetZ + _camRayDir.z * actualCamDist;
+
+    // Prevent camera from clipping beneath terrain elevation
+    const terrainH = getSurfaceElevation(finalCamX, finalCamZ);
+    finalCamY = Math.max(finalCamY, terrainH + 0.38);
+
+    // Fast zoom-in (0.80) when blocked by wall so user never sees inside wall.
+    // Smooth zoom-out (0.35) when obstruction clears.
+    const isOccluded = (actualCamDist < fullCamDist - 0.12);
+    const lerpRate = isOccluded ? 0.80 : 0.35;
+
+    camera.position.x = THREE.MathUtils.lerp(camera.position.x, finalCamX, lerpRate);
+    camera.position.y = THREE.MathUtils.lerp(camera.position.y, finalCamY, lerpRate);
+    camera.position.z = THREE.MathUtils.lerp(camera.position.z, finalCamZ, lerpRate);
 
     camera.lookAt(targetX, targetY, targetZ);
 
@@ -4490,7 +5833,7 @@
     if (hudSpeedVal) hudSpeedVal.textContent = mph;
 
     if (hudSpeedBar) {
-      const pct = Math.min(100, (p.speed / MAX_SPEED) * 100);
+      const pct = Math.min(100, (p.speed / getMapMaxSpeed()) * 100);
       hudSpeedBar.style.width = pct + '%';
     }
 
@@ -4554,6 +5897,7 @@
     const dt = Math.min(state.clock.getDelta(), 0.05);
 
     updatePhysics(dt);
+    updateTacticalCombat(dt);
     updateParticles(dt);
     updateCamera(dt);
     updateHUD();
@@ -4573,9 +5917,95 @@
     get renderer() { return renderer; },
     get player() { return state.player; },
     get TIRE_RADIUS() { return TIRE_RADIUS; },
+    get MAX_SPEED() { return getMapMaxSpeed(); },
     CHECKPOINTS,
     teleportToCheckpoint,
     showTrickToast,
+    switchMap,
+    handleTacticalMatchStart,
+    openBuyMenu,
+    closeBuyMenu,
+    toggleBuyMenu,
+    fireCurrentWeapon,
+    onMapStateUpdate(mapState) {
+      if (currentMapId !== 'dust2') return;
+      const matchBanner = document.getElementById('matchBanner');
+      const matchModeText = document.getElementById('matchModeText');
+      const matchStatusMsg = document.getElementById('matchStatusMsg');
+      const readyCountBadge = document.getElementById('readyCountBadge');
+      const btnReadyUp = document.getElementById('btnReadyUp');
+
+      const minReq = mapState.minPlayersToStart || mapState.minRequired || (mapState.isSolo ? 1 : 2);
+      const readyNum = mapState.readyCount !== undefined ? mapState.readyCount : 0;
+      if (readyCountBadge) readyCountBadge.textContent = `${readyNum}/${minReq}`;
+      if (btnReadyUp && mapState.isReady !== undefined) {
+        btnReadyUp.classList.toggle('ready', mapState.isReady);
+      }
+
+      const btnForceStart = document.getElementById('btnForceStart');
+      const btnEndMatch = document.getElementById('btnEndMatch');
+
+      if (mapState.mode === 'match' || mapState.mode === 'tactical') {
+        if (matchBanner) matchBanner.classList.add('tactical');
+        if (matchModeText) matchModeText.textContent = 'TACTICAL MATCH';
+        if (matchStatusMsg) matchStatusMsg.textContent = 'OBJECTIVE: Plant / Defuse C4';
+        if (btnForceStart) btnForceStart.classList.add('hidden');
+        if (btnReadyUp) btnReadyUp.classList.add('hidden');
+        if (btnEndMatch) btnEndMatch.classList.remove('hidden');
+        handleTacticalMatchStart(mapState);
+      } else if (mapState.mode === 'countdown') {
+        if (matchBanner) matchBanner.classList.remove('tactical');
+        if (matchModeText) matchModeText.textContent = 'STARTING...';
+        if (matchStatusMsg) matchStatusMsg.textContent = `Match starting in ${mapState.countdown}s...`;
+        if (btnForceStart) btnForceStart.classList.remove('hidden');
+        if (btnReadyUp) btnReadyUp.classList.remove('hidden');
+        if (btnEndMatch) btnEndMatch.classList.add('hidden');
+      } else {
+        if (matchBanner) matchBanner.classList.remove('tactical');
+        if (matchModeText) matchModeText.textContent = 'FREE ROAM';
+        if (matchStatusMsg) {
+          matchStatusMsg.textContent = 'Ready up or click START MATCH to begin';
+        }
+        if (btnForceStart) btnForceStart.classList.remove('hidden');
+        if (btnReadyUp) btnReadyUp.classList.remove('hidden');
+        if (btnEndMatch) btnEndMatch.classList.add('hidden');
+      }
+    },
+    onC4Planted(data) {
+      spawnC4InWorld(data.x, data.y, data.z, data.site);
+      const bombPill = document.getElementById('bombActivePill');
+      const bombTimerLabel = document.getElementById('bombTimerLabel');
+      if (bombPill) bombPill.classList.remove('hidden');
+      if (bombTimerLabel) bombTimerLabel.textContent = `💣 C4 ARMED AT SITE ${data.site}: ${data.remaining}s`;
+      playBombBeepSound(1200);
+      showTrickToast(`⚠️ BOMB PLANTED AT SITE ${data.site}! 45s REMAINING`);
+    },
+    onC4Tick(data) {
+      const bombTimerLabel = document.getElementById('bombTimerLabel');
+      if (bombTimerLabel) bombTimerLabel.textContent = `💣 C4 ARMED AT SITE ${data.site}: ${data.remaining}s`;
+      if (c4BlinkLight) {
+        c4BlinkLight.intensity = 4.5;
+        setTimeout(() => { if (c4BlinkLight) c4BlinkLight.intensity = 0.5; }, 90);
+      }
+      playBombBeepSound(data.remaining < 10 ? 1500 : 1000);
+    },
+    onC4Exploded(data) {
+      playExplosionSound();
+      state.camera.pitch = Math.min(1.2, state.camera.pitch + 0.08);
+      emitSparkBurst(data.x || 0, (data.y || 0) + 1.0, data.z || 0);
+      emitSparkBurst(data.x || 0, (data.y || 0) + 2.0, data.z || 0);
+      if (c4Mesh) {
+        scene.remove(c4Mesh);
+        c4Mesh = null;
+        c4BlinkLight = null;
+      }
+      const bombPill = document.getElementById('bombActivePill');
+      if (bombPill) bombPill.classList.add('hidden');
+      combat.bombPlanted = false;
+      combat.cash += 1000;
+      updateBuyMenuCash();
+      showTrickToast(`💥 C4 DETONATED AT SITE ${data.site}! TERRORISTS WIN! (+1000 PTS)`);
+    },
     setPlayerRailColor(hexColor) {
       const colorNum = typeof hexColor === 'string' ? parseInt(hexColor.replace('#', '0x')) : hexColor;
       if (boardGroup) {

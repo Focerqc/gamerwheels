@@ -132,11 +132,47 @@
 
     socket.on('init_world', (data) => {
       selfId = data.selfId;
+      // Clear previous room's remote players
+      remotePlayers.forEach((rp, id) => despawnRemotePlayer(id));
+      remotePlayers.clear();
+
       if (Array.isArray(data.players)) {
         data.players.forEach((p) => {
           if (p.id !== selfId) spawnRemotePlayer(p);
         });
         updateLeaderboard(data.players);
+      }
+
+      if (data.mapState) {
+        updateMapStateHUD(data.mapState);
+        if (window.GamerWheels && window.GamerWheels.onMapStateUpdate) {
+          window.GamerWheels.onMapStateUpdate(data.mapState);
+        }
+      }
+    });
+
+    socket.on('map_state_update', (state) => {
+      updateMapStateHUD(state);
+      if (window.GamerWheels && window.GamerWheels.onMapStateUpdate) {
+        window.GamerWheels.onMapStateUpdate(state);
+      }
+    });
+
+    socket.on('c4_planted', (data) => {
+      if (window.GamerWheels && window.GamerWheels.onC4Planted) {
+        window.GamerWheels.onC4Planted(data);
+      }
+    });
+
+    socket.on('c4_tick', (data) => {
+      if (window.GamerWheels && window.GamerWheels.onC4Tick) {
+        window.GamerWheels.onC4Tick(data);
+      }
+    });
+
+    socket.on('c4_exploded', (data) => {
+      if (window.GamerWheels && window.GamerWheels.onC4Exploded) {
+        window.GamerWheels.onC4Exploded(data);
       }
     });
 
@@ -167,6 +203,14 @@
       if (onlineCountEl) {
         onlineCountEl.textContent = `${players.length} Rider${players.length === 1 ? '' : 's'}`;
       }
+
+      // Track active ids in this snapshot to prune any missed leaves
+      const activeIds = new Set(players.map(p => p.id));
+      remotePlayers.forEach((_, id) => {
+        if (!activeIds.has(id)) {
+          despawnRemotePlayer(id);
+        }
+      });
 
       players.forEach((p) => {
         if (p.id === selfId) return;
@@ -209,8 +253,57 @@
     socket.on('disconnect', () => {
       console.log('[Multiplayer] Disconnected from server.');
       remotePlayers.forEach((rp, id) => despawnRemotePlayer(id));
+      remotePlayers.clear();
       if (onlineCountEl) onlineCountEl.textContent = 'Offline';
     });
+  }
+
+  // Update HUD state for CS mode / Free Roam
+  function updateMapStateHUD(state) {
+    const matchBanner = document.getElementById('matchBanner');
+    const matchModeText = document.getElementById('matchModeText');
+    const matchStatusMsg = document.getElementById('matchStatusMsg');
+    const readyCountBadge = document.getElementById('readyCountBadge');
+
+    if (!matchBanner || !state) return;
+
+    matchBanner.className = 'exp9-match-banner ' + (state.mode || 'freeroam');
+
+    const btnForceStart = document.getElementById('btnForceStart');
+    const btnReadyUp = document.getElementById('btnReadyUp');
+    const btnEndMatch = document.getElementById('btnEndMatch');
+
+    if (state.mode === 'freeroam') {
+      if (matchModeText) matchModeText.textContent = 'FREE ROAM';
+      if (matchStatusMsg) {
+        matchStatusMsg.textContent = state.message || 'Ready up or click START MATCH to begin';
+      }
+      if (btnForceStart) btnForceStart.classList.remove('hidden');
+      if (btnReadyUp) btnReadyUp.classList.remove('hidden');
+      if (btnEndMatch) btnEndMatch.classList.add('hidden');
+    } else if (state.mode === 'countdown') {
+      if (matchModeText) matchModeText.textContent = `STARTING IN ${state.countdown || 5}s`;
+      if (matchStatusMsg) {
+        matchStatusMsg.textContent = `Get ready! Match begins in ${state.countdown}s`;
+      }
+      if (btnForceStart) btnForceStart.classList.remove('hidden');
+      if (btnReadyUp) btnReadyUp.classList.remove('hidden');
+      if (btnEndMatch) btnEndMatch.classList.add('hidden');
+    } else if (state.mode === 'tactical' || state.mode === 'match') {
+      if (matchModeText) matchModeText.textContent = 'TACTICAL MATCH';
+      if (matchStatusMsg) {
+        matchStatusMsg.textContent = state.message || 'CS Mode Active — Buy Weapons & Plant/Defuse';
+      }
+      if (btnForceStart) btnForceStart.classList.add('hidden');
+      if (btnReadyUp) btnReadyUp.classList.add('hidden');
+      if (btnEndMatch) btnEndMatch.classList.remove('hidden');
+    }
+
+    if (readyCountBadge) {
+      const readyNum = state.readyCount !== undefined ? state.readyCount : 0;
+      const minNum = state.minPlayersToStart || state.minRequired || 1;
+      readyCountBadge.textContent = `${readyNum}/${minNum}`;
+    }
   }
 
   // 3D Canvas Nametag Billboard Generator
@@ -482,12 +575,117 @@
     }
   }
 
+  let isSelfReady = false;
+
+  function changeMap(mapId) {
+    if (!socket || !socket.connected) return;
+    remotePlayers.forEach((rp, id) => despawnRemotePlayer(id));
+    remotePlayers.clear();
+    isSelfReady = false;
+    updateReadyButtonUI(false);
+    socket.emit('change_map', { mapId });
+  }
+
+  function toggleReady() {
+    if (!socket || !socket.connected) return;
+    isSelfReady = !isSelfReady;
+    updateReadyButtonUI(isSelfReady);
+    socket.emit('toggle_ready');
+  }
+
+  function updateReadyButtonUI(ready) {
+    const btnReadyUp = document.getElementById('btnReadyUp');
+    const readyBtnLabel = document.getElementById('readyBtnLabel');
+    if (!btnReadyUp) return;
+    btnReadyUp.classList.toggle('ready', ready);
+    if (readyBtnLabel) {
+      readyBtnLabel.textContent = ready ? 'READY!' : 'READY UP (F)';
+    }
+  }
+
+  function forceStartMatch() {
+    if (socket && socket.connected) {
+      socket.emit('force_start_match');
+    }
+    if (window.GamerWheels && window.GamerWheels.onMapStateUpdate) {
+      window.GamerWheels.onMapStateUpdate({
+        mode: 'tactical',
+        isSolo: true,
+        team: 'T',
+        minPlayersToStart: 1,
+        minRequired: 1,
+        readyCount: 1,
+        totalPlayers: 1,
+        message: 'TERRORIST MISSION (Terrace Spawn): Plant C4 at Site A or B!'
+      });
+    }
+  }
+
+  function endMatch() {
+    if (socket && socket.connected) {
+      socket.emit('end_match');
+    }
+    if (window.GamerWheels && window.GamerWheels.onMapStateUpdate) {
+      window.GamerWheels.onMapStateUpdate({
+        mode: 'freeroam',
+        isSolo: true,
+        minPlayersToStart: 1,
+        minRequired: 1,
+        readyCount: 0,
+        totalPlayers: 1,
+        message: 'Free Roam active — click START MATCH to begin CS test.'
+      });
+    }
+  }
+
+  // Setup ready button, force start button, and key listeners
+  window.addEventListener('DOMContentLoaded', () => {
+    const btnReadyUp = document.getElementById('btnReadyUp');
+    if (btnReadyUp) {
+      btnReadyUp.addEventListener('click', () => {
+        toggleReady();
+        forceStartMatch();
+      });
+    }
+
+    const btnForceStart = document.getElementById('btnForceStart');
+    if (btnForceStart) {
+      btnForceStart.addEventListener('click', forceStartMatch);
+    }
+
+    const btnEndMatch = document.getElementById('btnEndMatch');
+    if (btnEndMatch) {
+      btnEndMatch.addEventListener('click', endMatch);
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement && document.activeElement.tagName)) return;
+      if (e.key === 'f' || e.key === 'F') {
+        toggleReady();
+        forceStartMatch();
+      }
+      if (e.key === 'g' || e.key === 'G') {
+        forceStartMatch();
+      }
+    });
+  });
+
   // Expose to window for game.js hook
   window.GamerWheelsMultiplayer = {
     onGameTick,
     onTrickLanded,
-    sendChat
+    sendChat,
+    changeMap,
+    toggleReady,
+    forceStartMatch,
+    endMatch,
+    plantC4: (site, x, y, z) => {
+      if (socket && socket.connected) {
+        socket.emit('plant_c4', { site, x, y, z });
+      }
+    }
   };
 
   window.addEventListener('DOMContentLoaded', initMultiplayer);
 })();
+
