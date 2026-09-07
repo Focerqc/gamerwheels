@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Dust2 NavGrid Baker</title>
+  <style>
+    body { margin: 0; background: #111; color: #0f0; font-family: monospace; padding: 20px; }
+    canvas { display: block; margin: 20px auto; border: 1px solid #333; }
+    #status { padding: 10px; font-size: 14px; }
+    button { padding: 10px 20px; font-size: 16px; background: #0a0; color: #000; border: none; cursor: pointer; margin: 5px; }
+    button:hover { background: #0f0; }
+    pre { max-height: 200px; overflow: auto; background: #000; padding: 10px; border: 1px solid #333; }
+  </style>
+</head>
+<body>
+  <h1>🗺️ Dust2 NavGrid Baker</h1>
+  <p>Raycasts the actual Dust2 3D geometry to produce a navigation grid for server-side bot AI.</p>
+  <div id="status">Loading Three.js...</div>
+  <canvas id="preview" width="600" height="600"></canvas>
+  <button id="bakeBtn" disabled>Bake NavGrid</button>
+  <button id="downloadBtn" disabled>Download NavGrid JSON</button>
+  <pre id="output"></pre>
+
+  <!-- Use the same Three.js as the game -->
+  <script src="https://unpkg.com/three@0.163.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.163.0/examples/jsm/loaders/GLTFLoader.js" type="module"></script>
+
+  <script type="module">
+    import { GLTFLoader } from 'https://unpkg.com/three@0.163.0/examples/jsm/loaders/GLTFLoader.js';
+
+    const status = document.getElementById('status');
+    const output = document.getElementById('output');
+    const bakeBtn = document.getElementById('bakeBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const canvas = document.getElementById('preview');
+    const ctx = canvas.getContext('2d');
+
+    // ── NavGrid Configuration ──────────────────────────────────────────────
+    // These match the Dust2 map world-space bounds (with model offset 5.5, 0, 19.25)
+    const GRID_RESOLUTION = 0.5;   // meters per cell — 0.5m gives good detail
+    const MAP_MIN_X = -35;
+    const MAP_MAX_X = 35;
+    const MAP_MIN_Z = -45;
+    const MAP_MAX_Z = 45;
+    const RAY_START_Y = 12;        // raycast from above
+    const MAX_WALKABLE_Y = 5.5;    // reject rooftops
+    const MIN_SLOPE_Y = 0.65;      // normal.y threshold (same as game.js)
+
+    let navGridData = null;
+    let walkMeshes = [];
+
+    // ── Load Dust2 GLB ─────────────────────────────────────────────────────
+    status.textContent = 'Loading dust2.glb...';
+    const loader = new GLTFLoader();
+    loader.load('/models/dust2.glb', (gltf) => {
+      const model = gltf.scene;
+      model.scale.set(1, 1, 1);
+      model.position.set(5.5, 0, 19.25); // same offset as game.js
+      model.updateMatrixWorld(true);
+
+      model.traverse((child) => {
+        if (child.isMesh) {
+          child.material.side = THREE.DoubleSide;
+          walkMeshes.push(child);
+        }
+      });
+
+      status.textContent = `Loaded ${walkMeshes.length} meshes. Ready to bake.`;
+      bakeBtn.disabled = false;
+    }, undefined, (err) => {
+      status.textContent = `ERROR loading model: ${err}`;
+    });
+
+    // ── Bake NavGrid ───────────────────────────────────────────────────────
+    bakeBtn.addEventListener('click', () => {
+      bakeBtn.disabled = true;
+      status.textContent = 'Baking NavGrid... (this takes ~10-30 seconds)';
+
+      // Use requestAnimationFrame to avoid blocking UI
+      requestAnimationFrame(() => bakeNavGrid());
+    });
+
+    function bakeNavGrid() {
+      const cols = Math.ceil((MAP_MAX_X - MAP_MIN_X) / GRID_RESOLUTION);
+      const rows = Math.ceil((MAP_MAX_Z - MAP_MIN_Z) / GRID_RESOLUTION);
+
+      // Grid data: 0 = unwalkable, positive = ground Y height
+      // We store as a flat array [row * cols + col]
+      const grid = new Float32Array(rows * cols).fill(-999);
+
+      const rayOrigin = new THREE.Vector3();
+      const rayDir = new THREE.Vector3(0, -1, 0);
+      const raycaster = new THREE.Raycaster();
+      raycaster.far = 25;
+
+      let walkableCount = 0;
+      let totalCells = rows * cols;
+
+      for (let row = 0; row < rows; row++) {
+        const z = MAP_MIN_Z + row * GRID_RESOLUTION + GRID_RESOLUTION / 2;
+        for (let col = 0; col < cols; col++) {
+          const x = MAP_MIN_X + col * GRID_RESOLUTION + GRID_RESOLUTION / 2;
+
+          rayOrigin.set(x, RAY_START_Y, z);
+          raycaster.set(rayOrigin, rayDir);
+
+          const hits = raycaster.intersectObjects(walkMeshes, false);
+
+          if (hits && hits.length > 0) {
+            // Find the highest walkable floor surface (not a roof, not a wall)
+            let bestY = -999;
+            for (const hit of hits) {
+              if (hit.point.y > MAX_WALKABLE_Y) continue; // skip rooftops
+
+              // Check surface normal — must be floor-like (normal.y >= 0.65)
+              const face = hit.face;
+              if (face) {
+                const normal = face.normal.clone();
+                // Transform normal to world space
+                const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
+                normal.applyMatrix3(normalMatrix).normalize();
+                if (normal.y < MIN_SLOPE_Y) continue; // wall, not floor
+              }
+
+              if (hit.point.y > bestY) {
+                bestY = hit.point.y;
+              }
+            }
+
+            if (bestY > -900) {
+              grid[row * cols + col] = bestY;
+              walkableCount++;
+            }
+          }
+        }
+
+        // Progress update every 10 rows
+        if (row % 10 === 0) {
+          const pct = Math.round((row / rows) * 100);
+          status.textContent = `Baking... ${pct}% (row ${row}/${rows})`;
+        }
+      }
+
+      // Build the NavGrid JSON structure
+      navGridData = {
+        version: 1,
+        resolution: GRID_RESOLUTION,
+        minX: MAP_MIN_X,
+        maxX: MAP_MAX_X,
+        minZ: MAP_MIN_Z,
+        maxZ: MAP_MAX_Z,
+        cols: cols,
+        rows: rows,
+        walkableCount: walkableCount,
+        totalCells: totalCells,
+        // Store grid as array of rounded Y values (-999 = unwalkable)
+        grid: Array.from(grid).map(y => y > -900 ? Math.round(y * 100) / 100 : null)
+      };
+
+      status.textContent = `✅ Baked! ${walkableCount}/${totalCells} cells walkable (${Math.round(walkableCount/totalCells*100)}%). Grid: ${cols}x${rows} @ ${GRID_RESOLUTION}m`;
+      output.textContent = JSON.stringify({
+        version: navGridData.version,
+        resolution: navGridData.resolution,
+        bounds: { minX: MAP_MIN_X, maxX: MAP_MAX_X, minZ: MAP_MIN_Z, maxZ: MAP_MAX_Z },
+        grid: `${cols}x${rows}`,
+        walkable: `${walkableCount}/${totalCells}`
+      }, null, 2);
+
+      downloadBtn.disabled = false;
+      drawPreview();
+    }
+
+    // ── Visual Preview ─────────────────────────────────────────────────────
+    function drawPreview() {
+      if (!navGridData) return;
+      const { cols, rows, grid } = navGridData;
+      const scaleX = canvas.width / cols;
+      const scaleY = canvas.height / rows;
+
+      ctx.fillStyle = '#111';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Find Y range for color mapping
+      let minY = Infinity, maxY = -Infinity;
+      for (const y of grid) {
+        if (y !== null) {
+          minY = Math.min(minY, y);
+          maxY = Math.max(maxY, y);
+        }
+      }
+      const yRange = maxY - minY || 1;
+
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const y = grid[row * cols + col];
+          if (y !== null) {
+            // Color by elevation: green (low) to yellow (high)
+            const t = (y - minY) / yRange;
+            const r = Math.floor(50 + t * 200);
+            const g = Math.floor(200 - t * 100);
+            const b = Math.floor(50);
+            ctx.fillStyle = `rgb(${r},${g},${b})`;
+          } else {
+            ctx.fillStyle = '#000'; // unwalkable
+          }
+          ctx.fillRect(col * scaleX, (rows - 1 - row) * scaleY, Math.ceil(scaleX), Math.ceil(scaleY));
+        }
+      }
+
+      // Draw waypoint positions for reference
+      ctx.fillStyle = '#f00';
+      const waypoints = [
+        { x: -8.0, z: 32.0 }, { x: -2.0, z: 24.0 }, { x: 0.5, z: 11.3 },
+        { x: -2.0, z: -8.0 }, { x: -14.0, z: -15.0 }, { x: -25.0, z: -15.0 },
+        { x: -25.0, z: -25.0 }, { x: -25.0, z: -35.0 }, { x: -10.0, z: -35.0 },
+        { x: 8.0, z: -30.0 }, { x: 20.0, z: -25.0 }, { x: 20.0, z: -5.0 },
+        { x: 14.0, z: 18.0 }, { x: 5.0, z: 30.0 }
+      ];
+      for (const wp of waypoints) {
+        const px = ((wp.x - MAP_MIN_X) / (MAP_MAX_X - MAP_MIN_X)) * canvas.width;
+        const py = canvas.height - ((wp.z - MAP_MIN_Z) / (MAP_MAX_Z - MAP_MIN_Z)) * canvas.height;
+        ctx.beginPath();
+        ctx.arc(px, py, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // ── Download JSON ──────────────────────────────────────────────────────
+    downloadBtn.addEventListener('click', () => {
+      if (!navGridData) return;
+      const blob = new Blob([JSON.stringify(navGridData)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'dust2_navgrid.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  </script>
+</body>
+</html>

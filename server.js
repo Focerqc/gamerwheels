@@ -228,88 +228,201 @@ const BOT_COLORS_T    = ['#f59e0b', '#ef4444'];
 const BOT_COLORS_CT   = ['#06b6d4', '#10b981'];
 const BOT_COLORS_PARK = ['#8b5cf6', '#ec4899'];
 
-// Simplified 2D wall segments for Dust2 line-of-sight checks (x,z coordinates).
-// Each segment is [x1, z1, x2, z2] representing a solid wall edge.
-const DUST2_WALL_SEGMENTS = [
-  // ── Mid building west wall (separates Mid from B tunnels) ──
-  [-5, 25, -5, 5],
-  // ── Mid building east wall (separates Mid from Long A) ──
-  [6, 25, 6, 5],
-  // ── A site back wall ──
-  [28, -18, 28, -32],
-  // ── A site platform south edge ──
-  [10, -18, 28, -18],
-  // ── B tunnels upper wall ──
-  [-8, -5, -18, -5],
-  // ── B site enclosure north ──
-  [-18, -8, -30, -8],
-  // ── B site enclosure east ──
-  [-18, -8, -18, -22],
-  // ── CT spawn building wall (separates CT from A ramp) ──
-  [-5, -28, -5, -40],
-  // ── Long A doors wall ──
-  [10, 8, 10, 22],
-];
+// ── NavGrid & A* Pathfinding Architecture (Counter-Strike: Source Style) ──
+const fs = require('fs');
+
+let dust2NavGrid = null;
+try {
+  const navDataPath = path.join(__dirname, 'public', 'data', 'dust2_navgrid.json');
+  if (fs.existsSync(navDataPath)) {
+    dust2NavGrid = JSON.parse(fs.readFileSync(navDataPath, 'utf8'));
+    console.log(`[NavGrid] Loaded dust2_navgrid.json successfully (${dust2NavGrid.cols}x${dust2NavGrid.rows}, ${dust2NavGrid.walkableCount} walkable cells)`);
+  }
+} catch (err) {
+  console.error('[NavGrid] Failed to load dust2_navgrid.json:', err);
+}
+
+// Convert world position (x, z) to NavGrid cell index
+function posToNavNode(x, z) {
+  if (!dust2NavGrid) return null;
+  const col = Math.floor((x - dust2NavGrid.minX) / dust2NavGrid.resolution);
+  const row = Math.floor((z - dust2NavGrid.minZ) / dust2NavGrid.resolution);
+  if (col < 0 || col >= dust2NavGrid.cols || row < 0 || row >= dust2NavGrid.rows) return null;
+  const idx = row * dust2NavGrid.cols + col;
+  return dust2NavGrid.grid[idx] !== null ? idx : null;
+}
+
+// Convert NavGrid cell index to world position {x, z, y}
+function navNodeToPos(idx) {
+  if (!dust2NavGrid || idx === null || idx < 0 || idx >= dust2NavGrid.grid.length) return null;
+  const col = idx % dust2NavGrid.cols;
+  const row = Math.floor(idx / dust2NavGrid.cols);
+  const x = dust2NavGrid.minX + col * dust2NavGrid.resolution + dust2NavGrid.resolution / 2;
+  const z = dust2NavGrid.minZ + row * dust2NavGrid.resolution + dust2NavGrid.resolution / 2;
+  return { x, z, y: dust2NavGrid.grid[idx] || 0.38 };
+}
+
+// Priority Queue for A*
+class PriorityQueue {
+  constructor() { this.nodes = []; }
+  enqueue(priority, key) {
+    this.nodes.push({ key, priority });
+    this.nodes.sort((a, b) => a.priority - b.priority);
+  }
+  dequeue() { return this.nodes.shift().key; }
+  isEmpty() { return this.nodes.length === 0; }
+}
 
 /**
- * Simple 2D line-segment intersection check for bot line-of-sight.
- * Returns true if the line from (ax,az) to (bx,bz) does NOT cross any wall.
+ * A* Pathfinding on 2D NavGrid.
+ * Returns array of {x, z, y} path nodes.
+ */
+function findNavPath(startX, startZ, targetX, targetZ) {
+  if (!dust2NavGrid) return [];
+  let startNode = posToNavNode(startX, startZ);
+  let targetNode = posToNavNode(targetX, targetZ);
+
+  // If start or target is inside a wall cell, find nearest walkable cell
+  if (startNode === null) startNode = findNearestWalkableNode(startX, startZ);
+  if (targetNode === null) targetNode = findNearestWalkableNode(targetX, targetZ);
+  if (startNode === null || targetNode === null) return [];
+
+  const openSet = new PriorityQueue();
+  const cameFrom = new Map();
+  const gScore = new Map();
+  const fScore = new Map();
+
+  const h = (idx) => {
+    const p1 = navNodeToPos(idx);
+    const p2 = navNodeToPos(targetNode);
+    return Math.hypot(p1.x - p2.x, p1.z - p2.z);
+  };
+
+  gScore.set(startNode, 0);
+  fScore.set(startNode, h(startNode));
+  openSet.enqueue(fScore.get(startNode), startNode);
+
+  const cols = dust2NavGrid.cols;
+  const neighborsOffset = [
+    -1, 1, -cols, cols,           // cardinal
+    -cols - 1, -cols + 1, cols - 1, cols + 1 // diagonal
+  ];
+
+  while (!openSet.isEmpty()) {
+    const current = openSet.dequeue();
+    if (current === targetNode) {
+      const path = [navNodeToPos(current)];
+      let curr = current;
+      while (cameFrom.has(curr)) {
+        curr = cameFrom.get(curr);
+        path.unshift(navNodeToPos(curr));
+      }
+      return simplifyPath(path);
+    }
+
+    for (const offset of neighborsOffset) {
+      const neighbor = current + offset;
+      if (neighbor < 0 || neighbor >= dust2NavGrid.grid.length) continue;
+      if (dust2NavGrid.grid[neighbor] === null) continue; // wall/obstacle
+
+      const currentPos = navNodeToPos(current);
+      const neighborPos = navNodeToPos(neighbor);
+      const dist = Math.hypot(currentPos.x - neighborPos.x, currentPos.z - neighborPos.z);
+      const tentativeG = gScore.get(current) + dist;
+
+      if (!gScore.has(neighbor) || tentativeG < gScore.get(neighbor)) {
+        cameFrom.set(neighbor, current);
+        gScore.set(neighbor, tentativeG);
+        fScore.set(neighbor, tentativeG + h(neighbor));
+        openSet.enqueue(fScore.get(neighbor), neighbor);
+      }
+    }
+  }
+  return [];
+}
+
+function findNearestWalkableNode(x, z) {
+  if (!dust2NavGrid) return null;
+  const col = Math.floor((x - dust2NavGrid.minX) / dust2NavGrid.resolution);
+  const row = Math.floor((z - dust2NavGrid.minZ) / dust2NavGrid.resolution);
+  
+  let bestIdx = null, bestDist = Infinity;
+  for (let r = Math.max(0, row - 5); r <= Math.min(dust2NavGrid.rows - 1, row + 5); r++) {
+    for (let c = Math.max(0, col - 5); c <= Math.min(dust2NavGrid.cols - 1, col + 5); c++) {
+      const idx = r * dust2NavGrid.cols + c;
+      if (dust2NavGrid.grid[idx] !== null) {
+        const p = navNodeToPos(idx);
+        const d = Math.hypot(p.x - x, p.z - z);
+        if (d < bestDist) {
+          bestDist = d;
+          bestIdx = idx;
+        }
+      }
+    }
+  }
+  return bestIdx;
+}
+
+/**
+ * Line of sight check across NavGrid.
+ * Returns true if straight ray from (ax, az) to (bx, bz) does not hit null (unwalkable/wall) grid cells.
  */
 function hasLineOfSight(ax, az, bx, bz) {
-  for (const seg of DUST2_WALL_SEGMENTS) {
-    if (segmentsIntersect(ax, az, bx, bz, seg[0], seg[1], seg[2], seg[3])) {
-      return false;
-    }
+  if (!dust2NavGrid) return true;
+  const steps = Math.ceil(Math.hypot(bx - ax, bz - az) / (dust2NavGrid.resolution * 0.5));
+  for (let i = 0; i <= steps; i++) {
+    const t = steps > 0 ? i / steps : 0;
+    const x = ax + (bx - ax) * t;
+    const z = az + (bz - az) * t;
+    const node = posToNavNode(x, z);
+    if (node === null) return false; // passes through a wall/obstacle
   }
   return true;
 }
 
-/** Returns true if line segment (p1→p2) intersects (p3→p4). */
-function segmentsIntersect(p1x, p1z, p2x, p2z, p3x, p3z, p4x, p4z) {
-  const d1x = p2x - p1x, d1z = p2z - p1z;
-  const d2x = p4x - p3x, d2z = p4z - p3z;
-  const cross = d1x * d2z - d1z * d2x;
-  if (Math.abs(cross) < 0.0001) return false; // parallel
-  const t = ((p3x - p1x) * d2z - (p3z - p1z) * d2x) / cross;
-  const u = ((p3x - p1x) * d1z - (p3z - p1z) * d1x) / cross;
-  return t > 0 && t < 1 && u > 0 && u < 1;
+/** Simplify path by skipping collinear nodes where direct line of sight exists */
+function simplifyPath(path) {
+  if (path.length <= 2) return path;
+  const simplified = [path[0]];
+  let curr = 0;
+  while (curr < path.length - 1) {
+    let next = path.length - 1;
+    while (next > curr + 1) {
+      if (hasLineOfSight(path[curr].x, path[curr].z, path[next].x, path[next].z)) {
+        break;
+      }
+      next--;
+    }
+    simplified.push(path[next]);
+    curr = next;
+  }
+  return simplified;
 }
 
-// Dust2 patrol waypoints {x, z, y} — along actual corridors & open pathways
-const BOT_DUST2_WAYPOINTS = [
-  { x:  -8.0, z:  32.0, y: 2.58 },   // 0: T Spawn Terrace
-  { x:  -2.0, z:  24.0, y: 1.40 },   // 1: Top of Mid / Suicide
-  { x:   0.5, z:  11.3, y: 0.38 },   // 2: Mid Doors
-  { x:  -2.0, z:  -8.0, y: 0.38 },   // 3: Lower Mid / Under Short
-  { x: -14.0, z: -15.0, y: 0.38 },   // 4: B Lower / B Doors entry
-  { x: -25.0, z: -15.0, y: 0.38 },   // 5: B Bomb Site
-  { x: -25.0, z: -25.0, y: 0.38 },   // 6: CT to B Ramp
-  { x: -25.0, z: -35.0, y: 0.38 },   // 7: CT Spawn (under cat, ground floor)
-  { x: -10.0, z: -35.0, y: 0.38 },   // 8: CT Spawn to A Ramp
-  { x:   8.0, z: -30.0, y: 1.20 },   // 9: Short A / CT Cross
-  { x:  20.0, z: -25.0, y: 2.03 },   // 10: A Bomb Site
-  { x:  20.0, z:  -5.0, y: 0.38 },   // 11: Long A Corner
-  { x:  14.0, z:  18.0, y: 0.38 },   // 12: Long Doors
-  { x:   5.0, z:  30.0, y: 1.80 },   // 13: Outside Long / T Yard
+// Major Dust2 Strategic Waypoints (for global macro-tactical goals)
+const DUST2_TACTICAL_GOALS = [
+  { name: 'T Spawn', x: -8.0, z: 32.0 },
+  { name: 'Mid Doors', x: 0.5, z: 11.3 },
+  { name: 'B Lower Tunnels', x: -14.0, z: -15.0 },
+  { name: 'B Site Platform', x: -25.0, z: -15.0 },
+  { name: 'CT Spawn', x: -25.0, z: -35.0 },
+  { name: 'Short A / Catwalk', x: 8.0, z: -30.0 },
+  { name: 'A Site Platform', x: 20.0, z: -25.0 },
+  { name: 'Long A Doors', x: 14.0, z: 18.0 }
 ];
 
-// Park patrol waypoints — skip Mega Drop (7m tower, bots can't jump there)
+// Park patrol waypoints
 const BOT_PARK_WAYPOINTS = [
-  { x:   0.0, z:   0.0, y: 0.38 },   // 0: Plaza Center
-  { x:  55.0, z:  42.0, y: 3.62 },   // 1: Pine Ridge Slopestyle
-  { x: -58.0, z:  42.0, y: 3.42 },   // 2: Slickrock MX
-  { x:   0.0, z:  56.0, y: 0.42 },   // 3: Desert Berms
+  { x: 0.0, z: 0.0, y: 0.38 },
+  { x: 55.0, z: 42.0, y: 3.62 },
+  { x: -58.0, z: 42.0, y: 3.42 },
+  { x: 0.0, z: 56.0, y: 0.42 },
 ];
 
-// Bot AI state map: botId -> bot object (also inserted into `players` Map)
+// Bot AI state map: botId -> bot object
 const bots = new Map();
 let botIdCounter = 0;
 
-/**
- * Create a bot for the given team and map.
- * @param {'T'|'CT'|'PARK'} team
- * @param {'dust2'|'park'} mapId
- */
 function createBot(team, mapId = 'dust2') {
   const id = `bot-${++botIdCounter}`;
   const isPark = mapId === 'park';
@@ -317,28 +430,24 @@ function createBot(team, mapId = 'dust2') {
 
   const namePool  = isPark ? BOT_NAMES_PARK  : (isT ? BOT_NAMES_T  : BOT_NAMES_CT);
   const colorPool = isPark ? BOT_COLORS_PARK : (isT ? BOT_COLORS_T : BOT_COLORS_CT);
-  const waypoints = isPark ? BOT_PARK_WAYPOINTS : BOT_DUST2_WAYPOINTS;
 
-  // T bots start from T-spawn (idx 0), CT from CT-spawn (idx 7), park bots spread out
-  const startWpIdx = isPark
-    ? (botIdCounter % waypoints.length)
-    : (isT ? 0 : 7);
-  const wp = waypoints[startWpIdx];
+  const startGoalIdx = isPark ? 0 : (isT ? 0 : 4); // T spawn vs CT spawn
+  const startPos = isPark ? BOT_PARK_WAYPOINTS[0] : DUST2_TACTICAL_GOALS[startGoalIdx];
 
   const bot = {
     id,
     name:  namePool[botIdCounter % namePool.length],
     color: colorPool[botIdCounter % colorPool.length],
     mapId,
-    team: isPark ? 'T' : team, // park bots have no real team; use T as neutral
+    team: isPark ? 'T' : team,
     isBot: true,
     isReady: false,
     hp: 100, maxHp: 100, armor: 100,
     isAlive: true,
     kills: 0, deaths: 0, score: 0,
-    x: wp.x + (Math.random() - 0.5) * 2,
-    y: wp.y,
-    z: wp.z + (Math.random() - 0.5) * 2,
+    x: startPos.x + (Math.random() - 0.5) * 2,
+    y: 0.38,
+    z: startPos.z + (Math.random() - 0.5) * 2,
     vx: 0, vy: 0, vz: 0,
     heading: Math.random() * Math.PI * 2,
     pitch: 0, roll: 0, speed: 0,
@@ -346,11 +455,13 @@ function createBot(team, mapId = 'dust2') {
     trick: '',
     currentZone: isPark ? 'Central Town Square' : 'Dust 2',
     lastUpdate: Date.now(),
-    // AI steering state
-    waypointIdx: startWpIdx,
+    // NavGrid A* Pathfinding State
+    path: [],
+    pathIdx: 0,
+    goalIdx: startGoalIdx,
     fsm: 'patrol',         // 'patrol' | 'attack'
-    lastFireTime: 0,       // ms timestamp of last shot
-    respawnWpIdx: startWpIdx, // waypoint to respawn at
+    lastFireTime: 0,
+    lastPathCalc: 0
   };
 
   bots.set(id, bot);
@@ -366,10 +477,6 @@ function removeBot(botId) {
   io.to(mapId).emit('player_left', { id: botId });
 }
 
-/**
- * Keep each team/map topped up to TARGET_PER_TEAM members (real + bots).
- * @param {'dust2'|'park'|null} changedMap  Pass map to scope update; null = all maps.
- */
 function rebalanceBots(changedMap = null) {
   const MAPS_TO_CHECK = changedMap ? [changedMap] : SUPPORTED_MAPS;
 
@@ -394,7 +501,7 @@ function rebalanceBots(changedMap = null) {
       console.log(`[Bots|dust2] T: ${tWant} bots (${tReal} real) | CT: ${ctWant} bots (${ctReal} real)`);
 
     } else if (mapId === 'park') {
-      const TARGET   = 2; // 2 neutral roaming bots on park
+      const TARGET   = 2;
       const realPark = [...players.values()].filter(p => p.mapId === 'park' && !p.isBot).length;
       const want     = Math.max(0, TARGET - Math.min(realPark, TARGET));
       const parkBots = [...bots.values()].filter(b => b.mapId === 'park');
@@ -410,21 +517,21 @@ function rebalanceBots(changedMap = null) {
   }
 }
 
-/** Respawn a dead bot back to its home waypoint after a delay (ms). */
 function scheduleBotRespawn(bot, delayMs = 4000) {
   setTimeout(() => {
-    if (!bots.has(bot.id)) return; // bot was removed during the delay
-    const waypoints = bot.mapId === 'park' ? BOT_PARK_WAYPOINTS : BOT_DUST2_WAYPOINTS;
-    const wp = waypoints[bot.respawnWpIdx];
+    if (!bots.has(bot.id)) return;
+    const startGoalIdx = bot.team === 'T' ? 0 : 4;
+    const startPos = DUST2_TACTICAL_GOALS[startGoalIdx];
     bot.hp = 100;
     bot.armor = 100;
     bot.isAlive = true;
     bot.fsm = 'patrol';
-    bot.x = wp.x + (Math.random() - 0.5) * 2;
-    bot.y = wp.y;
-    bot.z = wp.z + (Math.random() - 0.5) * 2;
+    bot.x = startPos.x + (Math.random() - 0.5) * 2;
+    bot.y = 0.38;
+    bot.z = startPos.z + (Math.random() - 0.5) * 2;
     bot.speed = 0;
-    bot.waypointIdx = bot.respawnWpIdx;
+    bot.path = [];
+    bot.pathIdx = 0;
     bot.lastUpdate = Date.now();
     io.to(bot.mapId).emit('player_respawned', {
       id: bot.id, hp: 100, armor: 100,
@@ -434,18 +541,16 @@ function scheduleBotRespawn(bot, delayMs = 4000) {
 }
 
 /**
- * Advance all bot positions each server tick.
- * Handles patrol (both maps) and attack FSM (dust2 tactical only).
- * @param {number} dt - Delta time in seconds
+ * Counter-Strike Source style Bot Movement & Tactical Navigation.
+ * Uses NavGrid + A* pathing, obstacle avoidance, elevation snapping & line-of-sight raycasting.
  */
 function tickBots(dt) {
-  const BOT_SPEED      = 6.705; // m/s patrol cruise ≈ 15.0 MPH
-  const ARRIVE_DIST    = 1.5;   // m — waypoint switch threshold
-  const TURN_RATE      = 4.0;   // rad/s heading lerp
-  const ATTACK_RANGE   = 28;    // m — detection radius for shooting
+  const BOT_SPEED      = 6.705; // 15 MPH
+  const ARRIVE_DIST    = 1.0;   // meters to advance path node
+  const TURN_RATE      = 5.0;   // heading lerp rad/s
+  const ATTACK_RANGE   = 28;    // shooting detection radius
   const FIRE_COOLDOWN  = 2000;  // ms between shots
-  const BOT_DAMAGE     = 22;    // HP per shot (Glock-level)
-  const ARMOR_LOSS     = 8;     // armor lost per shot
+  const BOT_DAMAGE     = 22;
 
   const now = Date.now();
   const dust2Tactical = mapStates.dust2.mode === 'tactical';
@@ -453,9 +558,7 @@ function tickBots(dt) {
   for (const bot of bots.values()) {
     if (!bot.isAlive) continue;
 
-    const waypoints = bot.mapId === 'park' ? BOT_PARK_WAYPOINTS : BOT_DUST2_WAYPOINTS;
-
-    // ── Attack FSM (dust2 tactical mode only) ──────────────────────────────
+    // ── Attack & Target Line of Sight Check ────────────────────────────────
     let attackTarget = null;
     if (bot.mapId === 'dust2' && dust2Tactical) {
       let nearestDist = Infinity;
@@ -465,17 +568,15 @@ function tickBots(dt) {
         if (d < nearestDist) { nearestDist = d; attackTarget = p; }
       }
 
-      // Only attack if within range AND bot has line-of-sight to target
+      // Check LOS through NavGrid raycasting
       const canSee = attackTarget && hasLineOfSight(bot.x, bot.z, attackTarget.x, attackTarget.z);
 
       if (attackTarget && nearestDist < ATTACK_RANGE && canSee) {
         bot.fsm = 'attack';
 
-        // Fire if cooldown elapsed
         if (now - bot.lastFireTime > FIRE_COOLDOWN) {
           bot.lastFireTime = now;
 
-          // Bullet tracer (visual on all clients)
           io.to('dust2').emit('player_fired', {
             id: bot.id,
             origin: { x: bot.x, y: bot.y + 0.9, z: bot.z },
@@ -484,48 +585,35 @@ function tickBots(dt) {
             soundType: 'pistol'
           });
 
-          // Apply damage directly server-side
           if (attackTarget.isAlive) {
             let dmg = BOT_DAMAGE;
             if (attackTarget.armor > 0) {
-              dmg = Math.round(dmg * 0.65); // armor absorbs 35%
-              attackTarget.armor = Math.max(0, attackTarget.armor - ARMOR_LOSS);
+              dmg = Math.round(dmg * 0.65);
+              attackTarget.armor = Math.max(0, attackTarget.armor - 8);
             }
             attackTarget.hp = Math.max(0, attackTarget.hp - dmg);
 
-            // Pain feedback to victim
             io.to(attackTarget.id).emit('damage_taken', {
-              attackerId:   bot.id,
-              attackerName: bot.name,
-              damage:       dmg,
-              isHeadshot:   false,
-              hp:           attackTarget.hp,
-              armor:        attackTarget.armor,
+              attackerId: bot.id, attackerName: bot.name,
+              damage: dmg, isHeadshot: false,
+              hp: attackTarget.hp, armor: attackTarget.armor,
             });
 
-            // Health update to whole room
             io.to('dust2').emit('player_health_update', {
-              id:      attackTarget.id,
-              hp:      attackTarget.hp,
-              armor:   attackTarget.armor,
+              id: attackTarget.id, hp: attackTarget.hp, armor: attackTarget.armor,
               isAlive: attackTarget.hp > 0,
             });
 
-            // Kill
             if (attackTarget.hp <= 0) {
               attackTarget.isAlive = false;
-              attackTarget.deaths  = (attackTarget.deaths || 0) + 1;
-              bot.kills  = (bot.kills  || 0) + 1;
-              bot.score  = (bot.score  || 0) + 300;
+              attackTarget.deaths = (attackTarget.deaths || 0) + 1;
+              bot.kills = (bot.kills || 0) + 1;
+              bot.score = (bot.score || 0) + 300;
               io.to('dust2').emit('player_killed', {
-                killerId:   bot.id,
-                killerName: bot.name,
-                victimId:   attackTarget.id,
-                victimName: attackTarget.name,
-                weaponId:   'glock',
-                isHeadshot: false,
+                killerId: bot.id, killerName: bot.name,
+                victimId: attackTarget.id, victimName: attackTarget.name,
+                weaponId: 'glock', isHeadshot: false,
               });
-              // Respawn victim after 3s (mirrors real player_hit respawn)
               setTimeout(() => {
                 if (!players.has(attackTarget.id)) return;
                 attackTarget.hp = 100; attackTarget.armor = 100;
@@ -539,83 +627,85 @@ function tickBots(dt) {
           }
         }
       } else {
-        // No target, out of range, or no LOS — go back to patrolling
         bot.fsm = 'patrol';
-        attackTarget = null; // don't chase into walls
+        attackTarget = null;
       }
     }
 
-    // ── Steering ───────────────────────────────────────────────────────────
-    let targetX, targetZ;
-    if (bot.fsm === 'attack' && attackTarget) {
-      // Chase: steer toward player (only when LOS confirmed above)
-      targetX = attackTarget.x;
-      targetZ = attackTarget.z;
-    } else {
-      // Patrol: steer toward next waypoint
-      const wp = waypoints[bot.waypointIdx];
-      targetX = wp.x;
-      targetZ = wp.z;
-    }
+    // ── NavGrid A* Pathfinding Navigation ────────────────────────────────
+    if (bot.mapId === 'dust2') {
+      // Calculate / recalculate A* path if empty or goal reached
+      if (bot.path.length === 0 || bot.pathIdx >= bot.path.length || (now - bot.lastPathCalc > 5000)) {
+        bot.lastPathCalc = now;
+        
+        let targetPos = null;
+        if (bot.fsm === 'attack' && attackTarget) {
+          targetPos = { x: attackTarget.x, z: attackTarget.z };
+        } else {
+          // Choose next strategic macro goal
+          bot.goalIdx = (bot.goalIdx + 1) % DUST2_TACTICAL_GOALS.length;
+          targetPos = DUST2_TACTICAL_GOALS[bot.goalIdx];
+        }
 
-    const dx   = targetX - bot.x;
-    const dz   = targetZ - bot.z;
-    const dist = Math.hypot(dx, dz);
-
-    // Advance patrol waypoint when close enough
-    if (bot.fsm === 'patrol' && dist < ARRIVE_DIST) {
-      bot.waypointIdx = (bot.waypointIdx + 1) % waypoints.length;
-    }
-
-    const desiredHeading = Math.atan2(dx, dz);
-    let dh = desiredHeading - bot.heading;
-    while (dh < -Math.PI) dh += Math.PI * 2;
-    while (dh >  Math.PI) dh -= Math.PI * 2;
-    bot.heading += dh * Math.min(1.0, TURN_RATE * dt);
-
-    // Arrive speed scaling (only during patrol; full speed when chasing)
-    const arriveScale = bot.fsm === 'attack'
-      ? 1.0
-      : Math.min(1.0, dist / (ARRIVE_DIST * 4));
-    bot.speed = BOT_SPEED * arriveScale;
-
-    bot.roll = dh * -0.12; // gentle carving roll
-
-    // Move — wall collision only during chase (patrol waypoints follow corridors)
-    const moveX = Math.sin(bot.heading) * bot.speed * dt;
-    const moveZ = Math.cos(bot.heading) * bot.speed * dt;
-
-    if (bot.fsm === 'attack' && bot.mapId === 'dust2') {
-      // During chase, check walls before moving — don't drive through buildings
-      let blocked = false;
-      for (const seg of DUST2_WALL_SEGMENTS) {
-        if (segmentsIntersect(bot.x, bot.z, bot.x + moveX, bot.z + moveZ, seg[0], seg[1], seg[2], seg[3])) {
-          blocked = true;
-          break;
+        const calculatedPath = findNavPath(bot.x, bot.z, targetPos.x, targetPos.z);
+        if (calculatedPath.length > 0) {
+          bot.path = calculatedPath;
+          bot.pathIdx = 0;
         }
       }
-      if (blocked) {
-        // Can't reach target — drop back to patrol instead of ramming the wall
-        bot.fsm = 'patrol';
-      } else {
-        bot.x += moveX;
-        bot.z += moveZ;
+
+      // Steer toward current path node
+      if (bot.path.length > 0 && bot.pathIdx < bot.path.length) {
+        const node = bot.path[bot.pathIdx];
+        const dx = node.x - bot.x;
+        const dz = node.z - bot.z;
+        const dist = Math.hypot(dx, dz);
+
+        if (dist < ARRIVE_DIST) {
+          bot.pathIdx++;
+        } else {
+          const desiredHeading = Math.atan2(dx, dz);
+          let dh = desiredHeading - bot.heading;
+          while (dh < -Math.PI) dh += Math.PI * 2;
+          while (dh >  Math.PI) dh -= Math.PI * 2;
+          bot.heading += dh * Math.min(1.0, TURN_RATE * dt);
+
+          const moveX = Math.sin(bot.heading) * BOT_SPEED * dt;
+          const moveZ = Math.cos(bot.heading) * BOT_SPEED * dt;
+
+          // Check if proposed move stays inside walkable NavGrid
+          const nextNode = posToNavNode(bot.x + moveX, bot.z + moveZ);
+          if (nextNode !== null) {
+            bot.x += moveX;
+            bot.z += moveZ;
+            bot.y = node.y !== undefined ? node.y : 0.38; // snap to terrain elevation
+          } else {
+            // Re-path immediately if blocked by wall
+            bot.path = [];
+          }
+        }
       }
     } else {
-      // Patrol: trust waypoint corridors, no wall check needed
-      bot.x += moveX;
-      bot.z += moveZ;
-    }
-
-    // Lerp Y toward current waypoint target (client will snap to actual ground)
-    if (bot.fsm === 'patrol') {
-      const wp = waypoints[bot.waypointIdx];
-      bot.y += (wp.y - bot.y) * Math.min(1.0, 3.0 * dt); // smooth lerp
+      // Non-dust2 (Park) fallback
+      const wp = BOT_PARK_WAYPOINTS[bot.goalIdx % BOT_PARK_WAYPOINTS.length];
+      const dx = wp.x - bot.x;
+      const dz = wp.z - bot.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist < ARRIVE_DIST) bot.goalIdx = (bot.goalIdx + 1) % BOT_PARK_WAYPOINTS.length;
+      const desiredHeading = Math.atan2(dx, dz);
+      let dh = desiredHeading - bot.heading;
+      while (dh < -Math.PI) dh += Math.PI * 2;
+      while (dh >  Math.PI) dh -= Math.PI * 2;
+      bot.heading += dh * Math.min(1.0, TURN_RATE * dt);
+      bot.x += Math.sin(bot.heading) * BOT_SPEED * dt;
+      bot.z += Math.cos(bot.heading) * BOT_SPEED * dt;
+      bot.y = wp.y;
     }
 
     bot.lastUpdate = now;
   }
 }
+
 
 io.on('connection', (socket) => {
   console.log(`[+] Rider connected: ${socket.id}`);
