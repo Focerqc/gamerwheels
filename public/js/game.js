@@ -123,6 +123,8 @@
       comboCount: 0,
       lastRailId: null,
       railObstacle: null,
+      jumpCooldown: 0.0,
+      straightUpJump: false,
     },
     aerial: {
       airYaw: 0,
@@ -3447,6 +3449,8 @@
     state.player.airtime = 0;
     state.player.isGrinding = false;
     state.grind.active = false;
+    state.grind.jumpCooldown = 0;
+    state.grind.straightUpJump = false;
     if (balanceHud) balanceHud.classList.remove('active');
     state.player.inTabletop = false;
     state.player.inGap = false;
@@ -3690,6 +3694,10 @@
   function updatePhysics(dt) {
     const p = state.player;
 
+    if (state.grind.jumpCooldown > 0) {
+      state.grind.jumpCooldown -= dt;
+    }
+
     let isBraking = false;
     let targetSpeed = 0;
 
@@ -3799,8 +3807,8 @@
           const turnRate = 3.8 - speedFactor * 0.9;
           p.heading += steerInput * turnRate * dt;
 
-          // Realistic carving bank roll into the turn (left roll when steering left, right roll when steering right)
-          const rollLean = steerInput * (0.15 + speedFactor * 0.12);
+          // Realistic carving bank roll into the turn (leans into turn)
+          const rollLean = -steerInput * (0.15 + speedFactor * 0.12);
           p.roll = THREE.MathUtils.lerp(p.roll, rollLean, dt * 10);
         } else {
           // Self-centering roll recovery when going straight
@@ -4007,24 +4015,24 @@
         let butterType = '';
 
         if (state.input.butter1) {
-          // Key 1: Nose UP (-pitch), rolled LEFT (+roll) -> Tail drags on ground
+          // Key 1: Nose UP (-pitch), rolled LEFT (-roll) -> Tail drags, leans into turn
           butterPitch = -0.28;
-          butterRoll = 0.24;
+          butterRoll = -0.24;
           butterType = 'TAIL BUTTER SLIDE';
         } else if (state.input.butter3) {
-          // Key 3: Nose UP (-pitch), rolled RIGHT (-roll) -> Tail drags on ground
+          // Key 3: Nose UP (-pitch), rolled RIGHT (+roll) -> Tail drags, leans into turn
           butterPitch = -0.28;
-          butterRoll = -0.24;
+          butterRoll = 0.24;
           butterType = 'BLUNT BUTTER SLIDE';
         } else if (state.input.butter7) {
-          // Key 7: Nose DOWN (+pitch), rolled LEFT (+roll) -> Nose drags on ground
-          butterPitch = 0.28;
-          butterRoll = 0.24;
-          butterType = 'NOSE BUTTER PRESS';
-        } else if (state.input.butter9) {
-          // Key 9: Nose DOWN (+pitch), rolled RIGHT (-roll) -> Nose drags on ground
+          // Key 7: Nose DOWN (+pitch), rolled LEFT (-roll) -> Nose drags, leans into turn
           butterPitch = 0.28;
           butterRoll = -0.24;
+          butterType = 'NOSE BUTTER PRESS';
+        } else if (state.input.butter9) {
+          // Key 9: Nose DOWN (+pitch), rolled RIGHT (+roll) -> Nose drags, leans into turn
+          butterPitch = 0.28;
+          butterRoll = 0.24;
           butterType = 'OVER-NOSE BUTTER';
         }
 
@@ -4035,8 +4043,8 @@
         p.pitch = THREE.MathUtils.lerp(p.pitch, slopePitch + butterPitch, dt * 18);
         p.roll = THREE.MathUtils.lerp(p.roll, slopeRoll + butterRoll, dt * 16);
 
-        // Smooth yaw carving in the butter roll direction
-        if (butterRoll > 0) {
+        // Smooth yaw carving in the butter turn direction (1 & 7 carve left, 3 & 9 carve right)
+        if (state.input.butter1 || state.input.butter7) {
           p.heading += 2.2 * dt;
         } else {
           p.heading -= 2.2 * dt;
@@ -4165,9 +4173,24 @@
           }
 
           if (state.input.butter1 || state.input.butter7) {
-            p.roll = THREE.MathUtils.lerp(p.roll, 0.35, dt * 12);
-          } else if (state.input.butter3 || state.input.butter9) {
             p.roll = THREE.MathUtils.lerp(p.roll, -0.35, dt * 12);
+          } else if (state.input.butter3 || state.input.butter9) {
+            p.roll = THREE.MathUtils.lerp(p.roll, 0.35, dt * 12);
+          }
+
+          // If in a straight-up rail hop and user presses throttle movement keys, allow flying out:
+          if (state.grind.straightUpJump) {
+            if (state.input.arrowUp || state.input.up || state.input.numpad8) {
+              p.vx = Math.sin(p.heading) * 6.5;
+              p.vz = Math.cos(p.heading) * 6.5;
+              p.speed = 6.5;
+              state.grind.straightUpJump = false;
+            } else if (state.input.arrowDown || state.input.down || state.input.numpad2) {
+              p.vx = -Math.sin(p.heading) * 6.5;
+              p.vz = -Math.cos(p.heading) * 6.5;
+              p.speed = 6.5;
+              state.grind.straightUpJump = false;
+            }
           }
 
           if (Math.abs(twistX) > 0.08) {
@@ -4198,7 +4221,7 @@
       }
 
       // Landing check
-      if (p.y <= p.groundY) {
+      if (p.y <= p.groundY && p.vy <= 0) {
         p.y = p.groundY;
         p.vy = 0;
         p.isAirborne = false;
@@ -4333,8 +4356,9 @@
         const isCloseX = Math.abs(localX) <= 0.65;
         const isCloseZ = localZ >= -halfL - 0.45 && localZ <= halfL + 0.45;
         const isCloseY = p.y >= obs.height - 0.35 && p.y <= obs.height + 0.75;
+        const canAttachRail = p.vy <= 0.15 && (!state.grind.jumpCooldown || state.grind.jumpCooldown <= 0);
 
-        if (isCloseX && isCloseZ && isCloseY) {
+        if (isCloseX && isCloseZ && (state.grind.active || (isCloseY && canAttachRail))) {
           targetGround = Math.max(targetGround, obs.height);
 
           // Lock into rail if not currently grinding on this specific rail
@@ -4373,8 +4397,12 @@
             if (balanceHud) balanceHud.classList.add('active');
             if (balanceLabel) balanceLabel.textContent = grindType.toUpperCase();
 
-            // Rail Transfer Combo: Hop from one rail directly to another!
-            if (state.grind.comboActive && prevRailId && prevRailId !== obs.id) {
+            // Check if landed with 180 spin or rail transfer combo
+            if (state.aerial.spin180Done) {
+              state.aerial.spin180Done = false;
+              state.grind.comboCount = (state.grind.comboCount || 1) + 1;
+              showTrickToast(`180 TO ${grindType.toUpperCase()}! 🔥🛹 +500`);
+            } else if (state.grind.comboActive && prevRailId && prevRailId !== obs.id) {
               state.grind.comboCount = (state.grind.comboCount || 1) + 1;
               showTrickToast(`RAIL TRANSFER COMBO x${state.grind.comboCount}! +${state.grind.comboCount * 400} 🔥🛹`);
             } else {
@@ -4396,16 +4424,35 @@
             p.x = obs.x + (snappedLocalX * Math.cos(rot) - localZ * Math.sin(rot));
             p.z = obs.z + (snappedLocalX * Math.sin(rot) + localZ * Math.cos(rot));
 
-            // Forward glide along rail length (never stall out)
-            const vZ_local = -p.vx * Math.sin(rot) + p.vz * Math.cos(rot);
-            const glideSign = Math.sign(vZ_local) || (p.vz >= 0 ? 1 : -1);
-            const minGlide = 6.2;
-            let newVZ_local = vZ_local;
-            if (Math.abs(newVZ_local) < minGlide) {
-              newVZ_local = glideSign * minGlide;
+            // Glide along rail length
+            const fwdDotRail = -Math.sin(p.heading) * Math.sin(rot) + Math.cos(p.heading) * Math.cos(rot);
+            const facingSign = fwdDotRail >= 0 ? 1 : -1;
+            let vZ_local = -p.vx * Math.sin(rot) + p.vz * Math.cos(rot);
+
+            // Throttle & stall control on rail:
+            const isPushingFwd = state.input.arrowUp || state.input.up || state.input.numpad8;
+            const isBraking = state.input.arrowDown || state.input.down || state.input.numpad2;
+
+            if (state.grind.straightUpJump && Math.abs(vZ_local) < 0.5) {
+              // Landed from straight-up jump: balance stall on rail until movement key is pressed!
+              if (isPushingFwd) {
+                vZ_local = facingSign * 6.2;
+                state.grind.straightUpJump = false;
+              } else if (isBraking) {
+                vZ_local = -facingSign * 6.2;
+                state.grind.straightUpJump = false;
+              } else {
+                vZ_local = 0;
+              }
+            } else {
+              const glideSign = Math.sign(vZ_local) || facingSign;
+              const minGlide = 6.2;
+              if (Math.abs(vZ_local) < minGlide) {
+                vZ_local = glideSign * minGlide;
+              }
             }
-            p.vx = -newVZ_local * Math.sin(rot);
-            p.vz = newVZ_local * Math.cos(rot);
+            p.vx = -vZ_local * Math.sin(rot);
+            p.vz = vZ_local * Math.cos(rot);
             p.speed = Math.hypot(p.vx, p.vz);
 
             // Trick-specific bumper sparks & tilt pitch
@@ -4463,14 +4510,50 @@
             // 2. Spacebar Pop-Off (Sets comboActive = true so chaining to next rail triggers transfer combo!)
             if (state.input.jumpPressed) {
               state.input.jumpPressed = false;
+              const hasFwd = state.input.arrowUp || state.input.up || state.input.numpad8 || (state.input.joystickActive && state.input.joystickVector.y > 0.2);
+              const hasBack = state.input.arrowDown || state.input.down || state.input.numpad2 || (state.input.joystickActive && state.input.joystickVector.y < -0.2);
+              const hasLeft = state.input.arrowLeft || state.input.left || state.input.numpad4 || (state.input.joystickActive && state.input.joystickVector.x < -0.2);
+              const hasRight = state.input.arrowRight || state.input.right || state.input.numpad6 || (state.input.joystickActive && state.input.joystickVector.x > 0.2);
+
               p.vy = JUMP_VELOCITY * 1.25;
               p.isAirborne = true;
+              p.airtime = 0;
               state.grind.active = false;
               state.grind.comboActive = true;
               p.isGrinding = false;
+              state.grind.jumpCooldown = 0.28;
+              state.aerial.airYaw = 0;
+              state.aerial.airPitch = 0;
+              state.aerial.spin180Done = false;
+              state.aerial.spin360Done = false;
+              state.aerial.flipDone = false;
               if (balanceHud) balanceHud.classList.remove('active');
-              const pts = Math.round(state.grind.timer * 160 + 300);
-              showTrickToast(`${state.grind.type.toUpperCase()} POP-OFF! +${pts} 🛹`);
+
+              if (hasFwd || hasBack || (hasLeft && (hasFwd || hasBack)) || (hasRight && (hasFwd || hasBack))) {
+                state.grind.straightUpJump = false;
+                const popSpeed = 7.0;
+                let moveDir = hasFwd ? 1 : -1;
+                p.vx = Math.sin(p.heading) * (popSpeed * moveDir);
+                p.vz = Math.cos(p.heading) * (popSpeed * moveDir);
+                if (hasLeft) {
+                  p.vx += Math.cos(p.heading) * -2.5;
+                  p.vz += -Math.sin(p.heading) * -2.5;
+                } else if (hasRight) {
+                  p.vx += Math.cos(p.heading) * 2.5;
+                  p.vz += -Math.sin(p.heading) * 2.5;
+                }
+                p.speed = Math.hypot(p.vx, p.vz);
+                const pts = Math.round(state.grind.timer * 160 + 350);
+                showTrickToast(`${state.grind.type.toUpperCase()} DISMOUNT! +${pts} 🛹`);
+              } else {
+                // JUMP STRAIGHT UP: zero horizontal velocity so player can 180 and land back on rail
+                state.grind.straightUpJump = true;
+                p.vx = 0;
+                p.vz = 0;
+                p.speed = 0;
+                const pts = Math.round(state.grind.timer * 160 + 300);
+                showTrickToast(`${state.grind.type.toUpperCase()} VERT HOP! +${pts} 🛹`);
+              }
             }
 
             // 3. Dismount at end of rail
