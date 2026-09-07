@@ -3733,6 +3733,8 @@
 
     let isBraking = false;
     let targetSpeed = 0;
+    let throttleInput = 0;
+    let inputMagnitude = 0;
 
     // Determine directional drive orientation (+1 = normal nose-forward, -1 = switch/reverse riding tail-first)
     const driveSign = p.isReverse ? -1 : 1;
