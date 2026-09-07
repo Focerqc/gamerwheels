@@ -6813,6 +6813,7 @@
     get TIRE_RADIUS() { return TIRE_RADIUS; },
     get MAX_SPEED() { return getMapMaxSpeed(); },
     getSurfaceElevation,
+    checkDust2Wall,
     CHECKPOINTS,
     teleportToCheckpoint,
     showTrickToast,

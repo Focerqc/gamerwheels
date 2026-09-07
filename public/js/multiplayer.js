@@ -647,10 +647,47 @@
       const cur = rp.current;
       const tgt = rp.target;
 
-      // Position Lerp
-      cur.x += (tgt.x - cur.x) * lerpAlpha;
+      // Position Lerp with wall collision resolution for bots/remote riders
+      const nextX = cur.x + (tgt.x - cur.x) * lerpAlpha;
+      const nextZ = cur.z + (tgt.z - cur.z) * lerpAlpha;
       cur.y += (tgt.y - cur.y) * lerpAlpha;
-      cur.z += (tgt.z - cur.z) * lerpAlpha;
+
+      if (window.GamerWheels && typeof window.GamerWheels.checkDust2Wall === 'function') {
+        const moveX = nextX - cur.x;
+        const moveZ = nextZ - cur.z;
+        const BOT_RADIUS = 0.35;
+
+        // Test X movement against walls
+        if (Math.abs(moveX) > 0.0001) {
+          const dirX = Math.sign(moveX);
+          const wallX = window.GamerWheels.checkDust2Wall(cur.x, cur.y, cur.z, dirX, 0, BOT_RADIUS + Math.abs(moveX));
+          if (wallX && wallX.distance <= (BOT_RADIUS + Math.abs(moveX))) {
+            const allowedX = Math.max(0, wallX.distance - BOT_RADIUS);
+            cur.x += dirX * allowedX;
+          } else {
+            cur.x = nextX;
+          }
+        } else {
+          cur.x = nextX;
+        }
+
+        // Test Z movement against walls
+        if (Math.abs(moveZ) > 0.0001) {
+          const dirZ = Math.sign(moveZ);
+          const wallZ = window.GamerWheels.checkDust2Wall(cur.x, cur.y, cur.z, 0, dirZ, BOT_RADIUS + Math.abs(moveZ));
+          if (wallZ && wallZ.distance <= (BOT_RADIUS + Math.abs(moveZ))) {
+            const allowedZ = Math.max(0, wallZ.distance - BOT_RADIUS);
+            cur.z += dirZ * allowedZ;
+          } else {
+            cur.z = nextZ;
+          }
+        } else {
+          cur.z = nextZ;
+        }
+      } else {
+        cur.x = nextX;
+        cur.z = nextZ;
+      }
 
       // Heading angular lerp
       let dHeading = tgt.heading - cur.heading;

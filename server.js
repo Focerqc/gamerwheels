@@ -228,13 +228,22 @@ const BOT_COLORS_T    = ['#f59e0b', '#ef4444'];
 const BOT_COLORS_CT   = ['#06b6d4', '#10b981'];
 const BOT_COLORS_PARK = ['#8b5cf6', '#ec4899'];
 
-// Dust2 patrol waypoints {x, z, y} — checkpoint elevations + 0.2m standing height
+// Dust2 patrol waypoints {x, z, y} — along actual corridors & open pathways
 const BOT_DUST2_WAYPOINTS = [
   { x:  -8.0, z:  32.0, y: 2.58 },   // 0: T Spawn Terrace
-  { x:   0.5, z:  11.3, y: 0.38 },   // 1: Mid Doors
-  { x:  20.0, z: -25.0, y: 2.03 },   // 2: A Bomb Site
-  { x: -25.0, z: -15.0, y: 0.38 },   // 3: B Bomb Site
-  { x: -25.0, z: -35.0, y: 0.38 },   // 4: CT Spawn (under cat, ground floor)
+  { x:  -2.0, z:  24.0, y: 1.40 },   // 1: Top of Mid / Suicide
+  { x:   0.5, z:  11.3, y: 0.38 },   // 2: Mid Doors
+  { x:  -2.0, z:  -8.0, y: 0.38 },   // 3: Lower Mid / Under Short
+  { x: -14.0, z: -15.0, y: 0.38 },   // 4: B Lower / B Doors entry
+  { x: -25.0, z: -15.0, y: 0.38 },   // 5: B Bomb Site
+  { x: -25.0, z: -25.0, y: 0.38 },   // 6: CT to B Ramp
+  { x: -25.0, z: -35.0, y: 0.38 },   // 7: CT Spawn (under cat, ground floor)
+  { x: -10.0, z: -35.0, y: 0.38 },   // 8: CT Spawn to A Ramp
+  { x:   8.0, z: -30.0, y: 1.20 },   // 9: Short A / CT Cross
+  { x:  20.0, z: -25.0, y: 2.03 },   // 10: A Bomb Site
+  { x:  20.0, z:  -5.0, y: 0.38 },   // 11: Long A Corner
+  { x:  14.0, z:  18.0, y: 0.38 },   // 12: Long Doors
+  { x:   5.0, z:  30.0, y: 1.80 },   // 13: Outside Long / T Yard
 ];
 
 // Park patrol waypoints — skip Mega Drop (7m tower, bots can't jump there)
@@ -263,10 +272,10 @@ function createBot(team, mapId = 'dust2') {
   const colorPool = isPark ? BOT_COLORS_PARK : (isT ? BOT_COLORS_T : BOT_COLORS_CT);
   const waypoints = isPark ? BOT_PARK_WAYPOINTS : BOT_DUST2_WAYPOINTS;
 
-  // T bots start from T-spawn (idx 0), CT from CT-spawn (idx 4), park bots spread out
+  // T bots start from T-spawn (idx 0), CT from CT-spawn (idx 7), park bots spread out
   const startWpIdx = isPark
     ? (botIdCounter % waypoints.length)
-    : (isT ? 0 : 4);
+    : (isT ? 0 : 7);
   const wp = waypoints[startWpIdx];
 
   const bot = {
