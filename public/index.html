@@ -81,6 +81,16 @@
             </div>
           </div>
 
+          <!-- Team Selection (T vs CT) -->
+          <div class="exp9-team-selector" id="teamSelector">
+            <button type="button" class="exp9-team-btn t-btn active" id="btnJoinT" title="Switch to Terrorists (Key: M)">
+              <span class="exp9-team-dot t"></span> TERRORIST
+            </button>
+            <button type="button" class="exp9-team-btn ct-btn" id="btnJoinCT" title="Switch to Counter-Terrorists (Key: M)">
+              <span class="exp9-team-dot ct"></span> COUNTER-TERRORIST
+            </button>
+          </div>
+
           <div class="exp9-speedo-card">
             <div class="exp9-speedo-num" id="hudSpeedVal">0.0</div>
             <div class="exp9-speedo-unit">MPH</div>
@@ -242,17 +252,27 @@
         <span class="exp9-trick-text" id="trickText"></span>
       </div>
 
-      <!-- Tactical Shooter Crosshair (Mouse Aiming & Recoil) -->
+      <!-- Tactical Shooter Crosshair (Mouse Aiming, Recoil & Hitmarkers) -->
       <div class="exp9-crosshair" id="tacticalCrosshair" title="Click screen to lock mouse & aim">
         <div class="exp9-crosshair-dot"></div>
         <div class="exp9-crosshair-bar top"></div>
         <div class="exp9-crosshair-bar bottom"></div>
         <div class="exp9-crosshair-bar left"></div>
         <div class="exp9-crosshair-bar right"></div>
+        <div class="exp9-hitmarker hm-tl"></div>
+        <div class="exp9-hitmarker hm-tr"></div>
+        <div class="exp9-hitmarker hm-bl"></div>
+        <div class="exp9-hitmarker hm-br"></div>
       </div>
 
       <!-- Scoped Optical Sight Overlay (AWP, Scout, AUG, SG 553) -->
       <div class="exp9-scope-overlay hidden" id="scopeOverlay"></div>
+
+      <!-- Full-Screen Red Damage Vignette Flash -->
+      <div class="exp9-damage-vignette" id="damageVignette"></div>
+
+      <!-- Tactical PvP Kill Feed -->
+      <div class="exp9-killfeed" id="killfeed"></div>
 
       <!-- Interactive Rail Grind Balance HUD -->
       <div class="exp9-balance-hud" id="balanceHud">
@@ -318,6 +338,24 @@
           <span id="bombTimerLabel">💣 C4 TICKING: 45s</span>
         </div>
 
+        <!-- Player Vitality (Health & Armor) -->
+        <div class="exp9-vitals-card" id="vitalsCard">
+          <div class="exp9-vital-row">
+            <span class="exp9-vital-icon">❤️</span>
+            <span class="exp9-vital-val" id="hudHpVal">100</span>
+            <div class="exp9-vital-bar-track">
+              <div class="exp9-vital-bar-fill hp" id="hudHpBar" style="width: 100%;"></div>
+            </div>
+          </div>
+          <div class="exp9-vital-row">
+            <span class="exp9-vital-icon">🛡️</span>
+            <span class="exp9-vital-val" id="hudArmorVal">100</span>
+            <div class="exp9-vital-bar-track">
+              <div class="exp9-vital-bar-fill armor" id="hudArmorBar" style="width: 100%;"></div>
+            </div>
+          </div>
+        </div>
+
         <!-- Equipped Weapon Card -->
         <div class="exp9-weapon-card" id="weaponCard">
           <div class="exp9-weapon-info">
@@ -335,6 +373,7 @@
         <span><kbd>▲</kbd><kbd>◄</kbd><kbd>▼</kbd><kbd>►</kbd> Twist, Flip & Balance</span>
         <span><kbd>Space</kbd> Hop</span>
         <span><kbd>B</kbd> Buy</span>
+        <span><kbd>M</kbd> Team</span>
         <span><kbd>E</kbd> Plant C4</span>
         <span><kbd>Left Click</kbd> Fire</span>
         <span><kbd>Right Click</kbd> Scope</span>
@@ -414,6 +453,15 @@
       <button type="button" class="exp9-btn-ride" id="btnRide">
         DROP IN & RIDE 🤙
       </button>
+    </div>
+  </div>
+
+  <!-- Player Elimination / Respawn Overlay -->
+  <div class="exp9-death-overlay hidden" id="deathOverlay">
+    <div class="exp9-death-modal">
+      <div class="exp9-death-icon">💀</div>
+      <h2 id="deathTitle">ELIMINATED</h2>
+      <p id="deathSubtitle">Respawning in <span id="deathTimer">3</span>s...</p>
     </div>
   </div>
 

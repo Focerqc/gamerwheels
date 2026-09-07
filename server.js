@@ -104,16 +104,41 @@ function updateMapReadyState(mapId) {
             bombTimerInterval: null
           };
 
-          // Assign teams: solo player is always Terrorist (T) on the Terrace side
+          // Assign teams: auto-balance or preserve chosen teams
           if (isSolo) {
             mapPlayers[0].team = 'T';
             mapPlayers[0].hasBomb = true;
           } else {
-            mapPlayers.forEach((player, idx) => {
-              player.team = (idx % 2 === 0) ? 'T' : 'CT';
-              player.hasBomb = (idx === 0);
+            let tCount = 0;
+            let ctCount = 0;
+            mapPlayers.forEach(p => {
+              if (p.team === 'CT') ctCount++;
+              else if (p.team === 'T') tCount++;
+            });
+            mapPlayers.forEach((player) => {
+              if (!player.team) {
+                player.team = (tCount <= ctCount) ? 'T' : 'CT';
+                if (player.team === 'T') tCount++; else ctCount++;
+              }
+            });
+            let bombGiven = false;
+            mapPlayers.forEach((player) => {
+              if (player.team === 'T' && !bombGiven) {
+                player.hasBomb = true;
+                bombGiven = true;
+              } else {
+                player.hasBomb = false;
+              }
             });
           }
+
+          // Emit individual team assignments
+          mapPlayers.forEach((player) => {
+            io.to(player.id).emit('team_assigned', {
+              team: player.team,
+              hasBomb: !!player.hasBomb
+            });
+          });
 
           io.to('dust2').emit('map_state_update', {
             mode: state.mode,
@@ -198,13 +223,25 @@ io.on('connection', (socket) => {
   const defaultColor = DEFAULT_COLORS[Math.floor(Math.random() * DEFAULT_COLORS.length)];
   const defaultName = 'Rider_' + Math.floor(100 + Math.random() * 900);
   const defaultMap = 'dust2';
+  const dustPlayers = getPlayersInMap('dust2');
+  let tCount = 0, ctCount = 0;
+  dustPlayers.forEach(p => { if (p.team === 'CT') ctCount++; else tCount++; });
+  const autoTeam = (tCount > ctCount) ? 'CT' : 'T';
 
   const initialPlayer = {
     id: socket.id,
     name: defaultName,
     color: defaultColor,
     mapId: defaultMap,
+    team: autoTeam,
+    hasBomb: (autoTeam === 'T' && tCount === 0),
     isReady: false,
+    hp: 100,
+    maxHp: 100,
+    armor: 100,
+    isAlive: true,
+    kills: 0,
+    deaths: 0,
     x: (Math.random() - 0.5) * 6,
     y: 0.2,
     z: (Math.random() - 0.5) * 6,
@@ -233,6 +270,7 @@ io.on('connection', (socket) => {
     players: getPlayersInMap(defaultMap),
     mapState: mapStates[defaultMap]
   });
+  socket.emit('team_assigned', { team: autoTeam, hasBomb: initialPlayer.hasBomb });
 
   // Notify other clients in the same map room
   socket.to(defaultMap).emit('player_joined', initialPlayer);
@@ -267,6 +305,7 @@ io.on('connection', (socket) => {
       players: getPlayersInMap(newMap),
       mapState: mapStates[newMap]
     });
+    socket.emit('team_assigned', { team: p.team || 'T', hasBomb: !!p.hasBomb });
     updateMapReadyState(newMap);
   });
 
@@ -292,14 +331,37 @@ io.on('connection', (socket) => {
     };
 
     if (isSolo && mapPlayers.length > 0) {
-      mapPlayers[0].team = 'T';
-      mapPlayers[0].hasBomb = true;
+      if (!mapPlayers[0].team) mapPlayers[0].team = 'T';
+      mapPlayers[0].hasBomb = (mapPlayers[0].team === 'T');
     } else {
-      mapPlayers.forEach((player, idx) => {
-        player.team = (idx % 2 === 0) ? 'T' : 'CT';
-        player.hasBomb = (idx === 0);
+      let tCount = 0, ctCount = 0;
+      mapPlayers.forEach(p => {
+        if (p.team === 'CT') ctCount++;
+        else if (p.team === 'T') tCount++;
+      });
+      mapPlayers.forEach((player) => {
+        if (!player.team) {
+          player.team = (tCount <= ctCount) ? 'T' : 'CT';
+          if (player.team === 'T') tCount++; else ctCount++;
+        }
+      });
+      let bombGiven = false;
+      mapPlayers.forEach((player) => {
+        if (player.team === 'T' && !bombGiven) {
+          player.hasBomb = true;
+          bombGiven = true;
+        } else {
+          player.hasBomb = false;
+        }
       });
     }
+
+    mapPlayers.forEach((player) => {
+      io.to(player.id).emit('team_assigned', {
+        team: player.team,
+        hasBomb: !!player.hasBomb
+      });
+    });
 
     io.to('dust2').emit('map_state_update', {
       mode: 'tactical',
@@ -332,6 +394,20 @@ io.on('connection', (socket) => {
     } else {
       updateMapReadyState(p.mapId);
     }
+  });
+
+  // Client switches team between Terrorists (T) and Counter-Terrorists (CT)
+  socket.on('switch_team', (data) => {
+    const p = players.get(socket.id);
+    if (!p) return;
+    const requestedTeam = (data && data.team === 'CT') ? 'CT' : 'T';
+    p.team = requestedTeam;
+    if (p.team === 'CT') {
+      p.hasBomb = false;
+    }
+    p.lastUpdate = Date.now();
+    socket.emit('team_assigned', { team: p.team, hasBomb: !!p.hasBomb });
+    io.to(p.mapId).emit('player_updated', p);
   });
 
   socket.on('force_start_match', () => {
@@ -500,6 +576,130 @@ io.on('connection', (socket) => {
         }, 6000);
       }
     }, 1000);
+  });
+
+  // Combat: Player fires weapon (relay sound & tracer origin/target to other riders in map room)
+  socket.on('player_shoot', (data) => {
+    const p = players.get(socket.id);
+    if (!p || !data) return;
+    socket.to(p.mapId).emit('player_fired', {
+      id: socket.id,
+      origin: data.origin,
+      target: data.target,
+      weaponId: data.weaponId || 'glock',
+      soundType: data.soundType || 'pistol'
+    });
+  });
+
+  // Combat: Player registers hit on another rider
+  socket.on('player_hit', (data) => {
+    const attacker = players.get(socket.id);
+    if (!attacker || !data || !data.targetId) return;
+    const victim = players.get(data.targetId);
+    if (!victim || !victim.isAlive) return;
+    if (attacker.mapId !== victim.mapId) return;
+
+    // Base damage calculation with CS-style armor absorption
+    let rawDamage = Math.max(1, Math.min(250, Number(data.damage) || 25));
+    const isHeadshot = !!data.isHeadshot;
+
+    let damageToHp = rawDamage;
+    let armorLost = 0;
+    if (victim.armor > 0) {
+      const armorAbsorbRatio = 0.35; // Armor absorbs 35% damage
+      damageToHp = Math.round(rawDamage * (1 - armorAbsorbRatio));
+      armorLost = Math.round(rawDamage * 0.25);
+      victim.armor = Math.max(0, victim.armor - armorLost);
+    }
+
+    victim.hp = Math.max(0, victim.hp - damageToHp);
+
+    // Notify attacker (hitmarker confirm)
+    socket.emit('damage_dealt', {
+      targetId: victim.id,
+      targetName: victim.name,
+      damage: damageToHp,
+      isHeadshot,
+      targetHp: victim.hp,
+      hitPoint: data.hitPoint
+    });
+
+    // Notify victim (pain sound, red screen vignette, health deduct)
+    io.to(victim.id).emit('damage_taken', {
+      attackerId: attacker.id,
+      attackerName: attacker.name,
+      damage: damageToHp,
+      isHeadshot,
+      hp: victim.hp,
+      armor: victim.armor,
+      hitPoint: data.hitPoint
+    });
+
+    // Broadcast updated health/armor to room
+    io.to(victim.mapId).emit('player_health_update', {
+      id: victim.id,
+      hp: victim.hp,
+      armor: victim.armor,
+      isAlive: victim.hp > 0
+    });
+
+    // Check for elimination
+    if (victim.hp <= 0) {
+      victim.isAlive = false;
+      victim.deaths = (victim.deaths || 0) + 1;
+      attacker.kills = (attacker.kills || 0) + 1;
+      attacker.score = (attacker.score || 0) + 300;
+
+      io.to(victim.mapId).emit('player_killed', {
+        killerId: attacker.id,
+        killerName: attacker.name,
+        victimId: victim.id,
+        victimName: victim.name,
+        weaponId: data.weaponId || 'glock',
+        isHeadshot
+      });
+
+      // Automatic respawn after 3 seconds
+      setTimeout(() => {
+        if (players.has(victim.id)) {
+          victim.hp = 100;
+          victim.armor = 100;
+          victim.isAlive = true;
+          victim.x = (Math.random() - 0.5) * 8;
+          victim.y = 0.25;
+          victim.z = (Math.random() - 0.5) * 8;
+          victim.speed = 0;
+          victim.vx = 0;
+          victim.vy = 0;
+          victim.vz = 0;
+          io.to(victim.mapId).emit('player_respawned', {
+            id: victim.id,
+            hp: victim.hp,
+            armor: victim.armor,
+            x: victim.x,
+            y: victim.y,
+            z: victim.z
+          });
+        }
+      }, 3000);
+    }
+  });
+
+  // Client manual respawn request (Key R or Reset button)
+  socket.on('respawn_player', () => {
+    const p = players.get(socket.id);
+    if (!p) return;
+    p.hp = 100;
+    p.armor = 100;
+    p.isAlive = true;
+    io.to(p.mapId).emit('player_respawned', {
+      id: p.id,
+      hp: p.hp,
+      armor: p.armor,
+      x: p.x,
+      y: p.y,
+      z: p.z
+    });
   });
 
   // Rider Disconnection

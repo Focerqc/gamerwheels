@@ -176,6 +176,85 @@
       }
     });
 
+    socket.on('player_fired', (data) => {
+      if (window.GamerWheels && window.GamerWheels.onRemotePlayerFired) {
+        window.GamerWheels.onRemotePlayerFired(data);
+      }
+    });
+
+    socket.on('damage_dealt', (data) => {
+      if (window.GamerWheels && window.GamerWheels.onDamageDealt) {
+        window.GamerWheels.onDamageDealt(data);
+      }
+    });
+
+    socket.on('damage_taken', (data) => {
+      if (window.GamerWheels && window.GamerWheels.onDamageTaken) {
+        window.GamerWheels.onDamageTaken(data);
+      }
+    });
+
+    socket.on('player_health_update', (data) => {
+      const rp = remotePlayers.get(data.id);
+      if (rp) {
+        rp.hp = data.hp;
+        rp.armor = data.armor;
+        rp.isAlive = data.isAlive;
+        updateNametag(rp);
+        if (!data.isAlive) {
+          rp.group.visible = false;
+          rp.shadow.visible = false;
+        } else {
+          rp.group.visible = true;
+          rp.shadow.visible = true;
+        }
+      }
+      if (window.GamerWheels && window.GamerWheels.onPlayerHealthUpdate) {
+        window.GamerWheels.onPlayerHealthUpdate(data);
+      }
+    });
+
+    socket.on('player_killed', (data) => {
+      const rp = remotePlayers.get(data.victimId);
+      if (rp) {
+        rp.isAlive = false;
+        rp.hp = 0;
+        updateNametag(rp);
+        rp.group.visible = false;
+        rp.shadow.visible = false;
+      }
+      if (window.GamerWheels && window.GamerWheels.onPlayerKilled) {
+        window.GamerWheels.onPlayerKilled(data);
+      }
+    });
+
+    socket.on('player_respawned', (data) => {
+      const rp = remotePlayers.get(data.id);
+      if (rp) {
+        rp.isAlive = true;
+        rp.hp = data.hp !== undefined ? data.hp : 100;
+        rp.armor = data.armor !== undefined ? data.armor : 100;
+        updateNametag(rp);
+        rp.group.visible = true;
+        rp.shadow.visible = true;
+        if (data.x !== undefined) {
+          rp.current.x = data.x;
+          rp.current.y = data.y;
+          rp.current.z = data.z;
+          rp.group.position.set(data.x, data.y, data.z);
+        }
+      }
+      if (window.GamerWheels && window.GamerWheels.onPlayerRespawned) {
+        window.GamerWheels.onPlayerRespawned(data);
+      }
+    });
+
+    socket.on('team_assigned', (data) => {
+      if (window.GamerWheels && window.GamerWheels.onTeamAssigned) {
+        window.GamerWheels.onTeamAssigned(data);
+      }
+    });
+
     socket.on('player_joined', (p) => {
       if (p.id !== selfId) {
         spawnRemotePlayer(p);
@@ -313,55 +392,79 @@
     canvas.height = 72;
     const ctx = canvas.getContext('2d');
 
-    drawNametagCanvas(ctx, canvas.width, canvas.height, name, colorHex, '');
+    drawNametagCanvas(ctx, canvas.width, canvas.height, name, colorHex, '', 100);
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.minFilter = THREE.LinearFilter;
     const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true });
     const sprite = new THREE.Sprite(spriteMat);
     sprite.scale.set(1.4, 0.4, 1);
-    sprite.position.set(0, 0.75, 0); // Above the board
+    sprite.position.set(0, 1.85, 0); // Above the rider
+    sprite.raycast = () => {}; // Never intercept weapon rays!
 
     return { sprite, canvas, ctx, texture };
   }
 
-  function drawNametagCanvas(ctx, w, h, name, colorHex, trickText) {
+  function drawNametagCanvas(ctx, w, h, name, colorHex, trickText, hp = 100) {
     ctx.clearRect(0, 0, w, h);
 
     // Pill background
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.90)';
     ctx.strokeStyle = colorHex || '#6366f1';
     ctx.lineWidth = 3;
 
     ctx.beginPath();
-    ctx.roundRect(8, 8, w - 16, h - 16, 20);
+    ctx.roundRect(6, 6, w - 12, h - 12, 18);
     ctx.fill();
     ctx.stroke();
 
     // Color indicator dot
     ctx.fillStyle = colorHex || '#6366f1';
     ctx.beginPath();
-    ctx.arc(28, h / 2, 7, 0, Math.PI * 2);
+    ctx.arc(26, 24, 7, 0, Math.PI * 2);
     ctx.fill();
 
     // Rider name
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 22px sans-serif';
+    ctx.font = 'bold 20px sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(name, 44, trickText ? h / 2 - 8 : h / 2);
+    ctx.fillText(name.slice(0, 14), 42, 24);
 
-    // Trick label if active
-    if (trickText) {
-      ctx.fillStyle = '#38bdf8';
-      ctx.font = 'bold 14px monospace';
-      ctx.fillText(trickText.slice(0, 20), 44, h / 2 + 13);
+    // Overhead Health Bar
+    const barX = 42;
+    const barY = 42;
+    const barW = w - 60;
+    const barH = 12;
+
+    // Track
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.20)';
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, barW, barH, 4);
+    ctx.fill();
+
+    // HP Fill
+    const pct = Math.max(0, Math.min(1.0, (hp !== undefined ? hp : 100) / 100));
+    const fillW = Math.max(0, barW * pct);
+    if (fillW > 0) {
+      ctx.fillStyle = pct > 0.5 ? '#22c55e' : (pct > 0.25 ? '#eab308' : '#ef4444');
+      ctx.beginPath();
+      ctx.roundRect(barX, barY, fillW, barH, 4);
+      ctx.fill();
     }
   }
 
   function updateNametag(rp, trickText = '') {
     if (!rp || !rp.nametag) return;
-    drawNametagCanvas(rp.nametag.ctx, rp.nametag.canvas.width, rp.nametag.canvas.height, rp.name, rp.color, trickText);
+    drawNametagCanvas(
+      rp.nametag.ctx,
+      rp.nametag.canvas.width,
+      rp.nametag.canvas.height,
+      rp.name,
+      rp.color,
+      trickText,
+      rp.hp !== undefined ? rp.hp : 100
+    );
     rp.nametag.texture.needsUpdate = true;
   }
 
@@ -371,6 +474,17 @@
     const board = window.GamerWheels.createBoardMesh(p.color || '#ef233c');
     const nametag = createNametagSprite(p.name || 'Rider', p.color || '#ef233c');
     board.group.add(nametag.sprite);
+
+    // Hitbox cylinder for weapon bullet hits & damage registration
+    const hitboxGeo = new THREE.CylinderGeometry(0.50, 0.50, 1.80, 12);
+    const hitboxMat = new THREE.MeshBasicMaterial({ visible: false });
+    const hitboxMesh = new THREE.Mesh(hitboxGeo, hitboxMat);
+    hitboxMesh.position.set(0, 0.90, 0); // 0 to 1.80m standing height
+    hitboxMesh.userData = {
+      isPlayerHitbox: true,
+      playerId: p.id
+    };
+    board.group.add(hitboxMesh);
 
     // Position initial
     board.group.position.set(p.x, p.y, p.z);
@@ -384,9 +498,13 @@
       id: p.id,
       name: p.name || 'Rider',
       color: p.color || '#ef233c',
+      hp: p.hp !== undefined ? p.hp : 100,
+      armor: p.armor !== undefined ? p.armor : 100,
+      isAlive: p.isAlive !== undefined ? p.isAlive : true,
       group: board.group,
       wheel: board.wheel,
       shadow: board.shadow,
+      hitbox: hitboxMesh,
       nametag: nametag,
       score: p.score || 0,
       current: {
@@ -607,34 +725,11 @@
     if (socket && socket.connected) {
       socket.emit('force_start_match');
     }
-    if (window.GamerWheels && window.GamerWheels.onMapStateUpdate) {
-      window.GamerWheels.onMapStateUpdate({
-        mode: 'tactical',
-        isSolo: true,
-        team: 'T',
-        minPlayersToStart: 1,
-        minRequired: 1,
-        readyCount: 1,
-        totalPlayers: 1,
-        message: 'TERRORIST MISSION (Terrace Spawn): Plant C4 at Site A or B!'
-      });
-    }
   }
 
   function endMatch() {
     if (socket && socket.connected) {
       socket.emit('end_match');
-    }
-    if (window.GamerWheels && window.GamerWheels.onMapStateUpdate) {
-      window.GamerWheels.onMapStateUpdate({
-        mode: 'freeroam',
-        isSolo: true,
-        minPlayersToStart: 1,
-        minRequired: 1,
-        readyCount: 0,
-        totalPlayers: 1,
-        message: 'Free Roam active — click START MATCH to begin CS test.'
-      });
     }
   }
 
@@ -667,8 +762,26 @@
       if (e.key === 'g' || e.key === 'G') {
         forceStartMatch();
       }
+      if (e.key === 'm' || e.key === 'M') {
+        // Toggle team switch shortcut
+        const currentTeam = (window.GamerWheels && window.GamerWheels.getPlayerTeam) ? window.GamerWheels.getPlayerTeam() : 'T';
+        const newTeam = currentTeam === 'T' ? 'CT' : 'T';
+        if (socket && socket.connected) {
+          socket.emit('switch_team', { team: newTeam });
+        }
+      }
     });
   });
+
+  function getPlayerHitboxes() {
+    const boxes = [];
+    remotePlayers.forEach((rp) => {
+      if (rp.hitbox && rp.isAlive !== false) {
+        boxes.push(rp.hitbox);
+      }
+    });
+    return boxes;
+  }
 
   // Expose to window for game.js hook
   window.GamerWheelsMultiplayer = {
@@ -679,11 +792,34 @@
     toggleReady,
     forceStartMatch,
     endMatch,
+    switchTeam: (team) => {
+      if (socket && socket.connected) {
+        socket.emit('switch_team', { team });
+      }
+    },
     plantC4: (site, x, y, z) => {
       if (socket && socket.connected) {
         socket.emit('plant_c4', { site, x, y, z });
       }
-    }
+    },
+    sendHit: (targetId, damage, isHeadshot, weaponId, hitPoint) => {
+      if (socket && socket.connected) {
+        socket.emit('player_hit', { targetId, damage, isHeadshot, weaponId, hitPoint });
+      }
+    },
+    sendShoot: (origin, target, weaponId, soundType) => {
+      if (socket && socket.connected) {
+        socket.emit('player_shoot', { origin, target, weaponId, soundType });
+      }
+    },
+    sendRespawn: () => {
+      if (socket && socket.connected) {
+        socket.emit('respawn_player');
+      }
+    },
+    getPlayerHitboxes,
+    getRemotePlayers: () => remotePlayers,
+    getSelfId: () => selfId
   };
 
   window.addEventListener('DOMContentLoaded', initMultiplayer);

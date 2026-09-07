@@ -260,6 +260,10 @@
 
   const combat = {
     cash: 16000, // Starts at $16,000 for instant free-roam testing!
+    team: 'T',   // 'T' (Terrorist) or 'CT' (Counter-Terrorist)
+    hp: 100,
+    maxHp: 100,
+    isAlive: true,
     currentCategory: 'pistols',
     equippedPrimary: null,
     equippedSecondary: { ...WEAPON_ARSENAL.pistols[0], ammoInMag: 20, ammoInReserve: 120 },
@@ -277,6 +281,8 @@
     scopedTargetFov: 65,  // Target FOV when zoomed
     weaponRecoil: 0       // Recoil displacement lerp for floating 3D weapon
   };
+
+  let lastTacticalMatchMode = 'freeroam';
 
   // --- DOM Elements ---
   let container, canvas;
@@ -388,6 +394,27 @@
         quickSwitchWeapon();
       });
     }
+
+    // Team Switcher Buttons
+    const btnJoinT = document.getElementById('btnJoinT');
+    const btnJoinCT = document.getElementById('btnJoinCT');
+    if (btnJoinT) {
+      btnJoinT.addEventListener('click', () => {
+        if (window.GamerWheelsMultiplayer && window.GamerWheelsMultiplayer.switchTeam) {
+          window.GamerWheelsMultiplayer.switchTeam('T');
+        }
+      });
+    }
+    if (btnJoinCT) {
+      btnJoinCT.addEventListener('click', () => {
+        if (window.GamerWheelsMultiplayer && window.GamerWheelsMultiplayer.switchTeam) {
+          window.GamerWheelsMultiplayer.switchTeam('CT');
+        }
+      });
+    }
+
+    updateVitalsHUD();
+    updateTeamHUD();
 
     // Touch scope button for mobile/tablet riders
     const btnTouchScope = document.getElementById('btnTouchScope');
@@ -4616,11 +4643,55 @@
 
     let targetPoint = null;
     const meshes = currentMapId === 'dust2' ? dust2WalkMeshes : state.obstacles;
-    if (meshes && meshes.length > 0) {
-      const hits = _shootRay.intersectObjects(meshes, false);
+    const playerHitboxes = (window.GamerWheelsMultiplayer && window.GamerWheelsMultiplayer.getPlayerHitboxes)
+      ? window.GamerWheelsMultiplayer.getPlayerHitboxes()
+      : [];
+
+    const allTargets = [...(meshes || []), ...playerHitboxes];
+
+    if (allTargets.length > 0) {
+      const hits = _shootRay.intersectObjects(allTargets, true);
       if (hits && hits.length > 0) {
-        targetPoint = hits[0].point;
-        emitSparkBurst(targetPoint.x, targetPoint.y, targetPoint.z);
+        const firstHit = hits[0];
+        targetPoint = firstHit.point;
+
+        // Check if hit object is a player hitbox
+        let hitObj = firstHit.object;
+        let isPlayerHit = false;
+        let hitPlayerId = null;
+
+        while (hitObj) {
+          if (hitObj.userData && hitObj.userData.isPlayerHitbox) {
+            isPlayerHit = true;
+            hitPlayerId = hitObj.userData.playerId;
+            break;
+          }
+          hitObj = hitObj.parent;
+        }
+
+        if (isPlayerHit && hitPlayerId) {
+          const hitY = firstHit.point.y;
+          const remoteRiders = window.GamerWheelsMultiplayer ? window.GamerWheelsMultiplayer.getRemotePlayers() : null;
+          const rp = remoteRiders ? remoteRiders.get(hitPlayerId) : null;
+          const baseY = rp ? rp.current.y : (hitY - 0.9);
+          const isHeadshot = (hitY - baseY) > 1.25;
+
+          const baseDamage = wep.damage || 30;
+          const finalDamage = isHeadshot ? Math.round(baseDamage * 3.5) : baseDamage;
+
+          // Send damage to server
+          if (window.GamerWheelsMultiplayer && window.GamerWheelsMultiplayer.sendHit) {
+            window.GamerWheelsMultiplayer.sendHit(hitPlayerId, finalDamage, isHeadshot, wep.id, firstHit.point);
+          }
+
+          // Immediate local hit feedback
+          flashCrosshairHitmarker(isHeadshot);
+          playHitSound(isHeadshot);
+          spawnFloatingDamageText(firstHit.point, finalDamage, isHeadshot);
+          emitSparkBurst(firstHit.point.x, firstHit.point.y, firstHit.point.z);
+        } else {
+          emitSparkBurst(targetPoint.x, targetPoint.y, targetPoint.z);
+        }
       }
     }
 
@@ -4638,6 +4709,112 @@
       _shootOrigin.set(state.player.x, state.player.y + 0.45, state.player.z);
     }
     createBulletTracer(_shootOrigin, targetPoint);
+
+    if (window.GamerWheelsMultiplayer && window.GamerWheelsMultiplayer.sendShoot) {
+      window.GamerWheelsMultiplayer.sendShoot(_shootOrigin, targetPoint, wep.id, wep.soundType);
+    }
+  }
+
+  function flashCrosshairHitmarker(isHeadshot) {
+    const crosshair = document.getElementById('tacticalCrosshair');
+    if (!crosshair) return;
+    crosshair.classList.remove('hit', 'headshot');
+    void crosshair.offsetWidth;
+    crosshair.classList.add('hit');
+    if (isHeadshot) crosshair.classList.add('headshot');
+    setTimeout(() => {
+      crosshair.classList.remove('hit', 'headshot');
+    }, 140);
+  }
+
+  function playHitSound(isHeadshot) {
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      const t = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = isHeadshot ? 'triangle' : 'sine';
+      osc.frequency.setValueAtTime(isHeadshot ? 1200 : 880, t);
+      osc.frequency.exponentialRampToValueAtTime(isHeadshot ? 1800 : 660, t + 0.08);
+      gain.gain.setValueAtTime(0.35, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.12);
+    } catch (e) {}
+  }
+
+  function playPainSound() {
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      const t = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(140, t);
+      osc.frequency.exponentialRampToValueAtTime(60, t + 0.15);
+      gain.gain.setValueAtTime(0.3, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.16);
+    } catch (e) {}
+  }
+
+  const floatingTexts = [];
+  function spawnFloatingDamageText(pos, dmg, isHeadshot) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    ctx.font = `bold 30px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = isHeadshot ? '#f59e0b' : '#ef4444';
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 4;
+    const txt = isHeadshot ? `💥 -${dmg} HEADSHOT` : `-${dmg}`;
+    ctx.strokeText(txt, 128, 32);
+    ctx.fillText(txt, 128, 32);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(1.6, 0.4, 1);
+    sprite.position.copy(pos);
+    sprite.position.y += 0.35;
+    scene.add(sprite);
+    floatingTexts.push({ sprite, tex, life: 0.85, maxLife: 0.85 });
+  }
+
+  function updateVitalsHUD() {
+    const hpVal = document.getElementById('hudHpVal');
+    const hpBar = document.getElementById('hudHpBar');
+    const armorVal = document.getElementById('hudArmorVal');
+    const armorBar = document.getElementById('hudArmorBar');
+
+    if (hpVal) hpVal.textContent = Math.max(0, Math.round(combat.hp));
+    if (hpBar) {
+      const pct = Math.max(0, Math.min(100, combat.hp));
+      hpBar.style.width = `${pct}%`;
+      hpBar.style.backgroundColor = pct > 50 ? '#22c55e' : (pct > 25 ? '#eab308' : '#ef4444');
+    }
+    if (armorVal) armorVal.textContent = Math.max(0, Math.round(combat.gear.armor));
+    if (armorBar) {
+      const pct = Math.max(0, Math.min(100, combat.gear.armor));
+      armorBar.style.width = `${pct}%`;
+    }
+  }
+
+  function updateTeamHUD() {
+    const btnJoinT = document.getElementById('btnJoinT');
+    const btnJoinCT = document.getElementById('btnJoinCT');
+    if (btnJoinT) btnJoinT.classList.toggle('active', combat.team === 'T');
+    if (btnJoinCT) btnJoinCT.classList.toggle('active', combat.team === 'CT');
   }
 
   function reloadCurrentWeapon() {
@@ -5488,7 +5665,7 @@
       p.x = THREE.MathUtils.clamp(p.x, -37.5, 37.5);
       p.z = THREE.MathUtils.clamp(p.z, -44.0, 42.0);
 
-      if (p.y > 6.0 || p.y < -3.0) {
+      if (p.y < -15.0 || p.y > 60.0) {
         console.warn('[Dust 2] Player breached map boundary (y=' + p.y.toFixed(2) + '). Respawning.');
         respawnPlayer();
       }
@@ -6409,20 +6586,34 @@
       camera.updateProjectionMatrix();
     }
 
-    // 5. Spherical Orbit Placement around Player Target
+    // 5. Tactical Third-Person Shooter Camera with Down-Range Aiming
     const targetX = p.x;
-    const targetY = p.y + 0.85;
+    const targetY = p.y + 0.90;
     const targetZ = p.z;
 
-    const effDist = cs.distance + speedRatio * 1.5;
-    const hDist = effDist * Math.cos(cs.pitch);
-    const desiredCamX = targetX + hDist * Math.sin(cs.yaw);
-    const desiredCamY = targetY + effDist * Math.sin(cs.pitch);
-    const desiredCamZ = targetZ + hDist * Math.cos(cs.yaw);
+    const isScoped = combat && combat.scopeLevel > 0;
+
+    // Unit aim direction from camera yaw and pitch
+    const cosPitch = Math.cos(cs.pitch);
+    const fwdX = -Math.sin(cs.yaw) * cosPitch;
+    const fwdY = -Math.sin(cs.pitch);
+    const fwdZ = -Math.cos(cs.yaw) * cosPitch;
+
+    // Horizontal right vector perpendicular to yaw
+    const rightX = Math.cos(cs.yaw);
+    const rightZ = -Math.sin(cs.yaw);
+
+    // Over-the-shoulder offset: 0.44m to right, 0.22m above eye level (tighter when scoped)
+    const shoulderRight = isScoped ? 0.08 : 0.44;
+    const shoulderUp = isScoped ? 0.06 : 0.22;
+    const effDist = isScoped ? 1.3 : (cs.distance + speedRatio * 0.9);
+
+    // Camera desired position behind rider
+    const desiredCamX = targetX - fwdX * effDist + rightX * shoulderRight;
+    const desiredCamY = targetY - fwdY * effDist + shoulderUp;
+    const desiredCamZ = targetZ - fwdZ * effDist + rightZ * shoulderRight;
 
     // 5b. Smart Wall Occlusion Zoom (Spring-Arm Camera Collision)
-    // Cast ray from player target towards desired camera position.
-    // If a wall or obstacle is hit, pull the camera forward in front of it!
     _camRayOrigin.set(targetX, targetY, targetZ);
     _camRayDir.set(desiredCamX - targetX, desiredCamY - targetY, desiredCamZ - targetZ);
     const fullCamDist = _camRayDir.length();
@@ -6441,10 +6632,9 @@
         const hits = _camOcclusionRay.intersectObjects(colliders, false);
         if (hits && hits.length > 0) {
           for (let i = 0; i < hits.length; i++) {
-            // Reject any micro-hits right at the player center
-            if (hits[i].distance > 0.40) {
-              const safeClearance = 0.35; // 35cm buffer away from wall
-              actualCamDist = Math.max(0.65, hits[i].distance - safeClearance);
+            if (hits[i].distance > 0.35) {
+              const safeClearance = 0.30;
+              actualCamDist = Math.max(0.55, hits[i].distance - safeClearance);
               break;
             }
           }
@@ -6459,18 +6649,21 @@
 
     // Prevent camera from clipping beneath terrain elevation
     const terrainH = getSurfaceElevation(finalCamX, finalCamZ);
-    finalCamY = Math.max(finalCamY, terrainH + 0.38);
+    finalCamY = Math.max(finalCamY, terrainH + 0.35);
 
-    // Fast zoom-in (0.80) when blocked by wall so user never sees inside wall.
-    // Smooth zoom-out (0.35) when obstruction clears.
     const isOccluded = (actualCamDist < fullCamDist - 0.12);
-    const lerpRate = isOccluded ? 0.80 : 0.35;
+    const lerpRate = isOccluded ? 0.80 : 0.38;
 
     camera.position.x = THREE.MathUtils.lerp(camera.position.x, finalCamX, lerpRate);
     camera.position.y = THREE.MathUtils.lerp(camera.position.y, finalCamY, lerpRate);
     camera.position.z = THREE.MathUtils.lerp(camera.position.z, finalCamZ, lerpRate);
 
-    camera.lookAt(targetX, targetY, targetZ);
+    // Aim down-range along forward vector! (Crosshair at screen center aims 60m ahead down range, rider in lower-left)
+    const aimDist = 60.0;
+    const lookTargetX = targetX + fwdX * aimDist;
+    const lookTargetY = targetY + fwdY * aimDist;
+    const lookTargetZ = targetZ + fwdZ * aimDist;
+    camera.lookAt(lookTargetX, lookTargetY, lookTargetZ);
 
     // 6. Follow Sun Light Target
     if (sunLight) {
@@ -6568,6 +6761,21 @@
       window.GamerWheelsMultiplayer.onGameTick(dt, state.player);
     }
 
+    // Update Floating Damage Text Popups
+    for (let i = floatingTexts.length - 1; i >= 0; i--) {
+      const ft = floatingTexts[i];
+      ft.life -= dt;
+      ft.sprite.position.y += dt * 0.8;
+      const alpha = Math.max(0, ft.life / ft.maxLife);
+      ft.sprite.material.opacity = alpha;
+      if (ft.life <= 0) {
+        scene.remove(ft.sprite);
+        ft.tex.dispose();
+        ft.sprite.material.dispose();
+        floatingTexts.splice(i, 1);
+      }
+    }
+
     renderer.render(scene, camera);
   }
 
@@ -6589,6 +6797,132 @@
     closeBuyMenu,
     toggleBuyMenu,
     fireCurrentWeapon,
+    getPlayerTeam: () => combat.team,
+    onTeamAssigned(data) {
+      if (!data) return;
+      combat.team = data.team || 'T';
+      combat.hasBomb = !!data.hasBomb;
+      updateTeamHUD();
+
+      if (combat.team === 'CT') {
+        combat.equippedSecondary = { ...WEAPON_ARSENAL.pistols[1], ammoInMag: 12, ammoInReserve: 24 };
+        showTrickToast('TEAM ASSIGNED: COUNTER-TERRORISTS (CT) 🛡️');
+      } else {
+        combat.equippedSecondary = { ...WEAPON_ARSENAL.pistols[0], ammoInMag: 20, ammoInReserve: 120 };
+        showTrickToast('TEAM ASSIGNED: TERRORISTS (T) 💣');
+      }
+      updateWeaponHUD();
+      updateEquippedWeaponModel();
+    },
+    onDamageTaken(data) {
+      combat.hp = Math.max(0, Number(data.hp) || 0);
+      if (data.armor !== undefined) combat.gear.armor = Math.max(0, Number(data.armor));
+      updateVitalsHUD();
+
+      const vignette = document.getElementById('damageVignette');
+      if (vignette) {
+        vignette.classList.add('flash');
+        setTimeout(() => vignette.classList.remove('flash'), 180);
+      }
+
+      state.camera.pitch = Math.min(1.25, state.camera.pitch + (Math.random() - 0.5) * 0.04);
+      state.camera.yaw += (Math.random() - 0.5) * 0.04;
+      playPainSound();
+    },
+    onDamageDealt(data) {
+      flashCrosshairHitmarker(data.isHeadshot);
+      playHitSound(data.isHeadshot);
+      if (data.hitPoint) {
+        spawnFloatingDamageText(data.hitPoint, data.damage, data.isHeadshot);
+      }
+    },
+    onPlayerHealthUpdate(data) {
+      const selfId = (window.GamerWheelsMultiplayer && window.GamerWheelsMultiplayer.getSelfId)
+        ? window.GamerWheelsMultiplayer.getSelfId()
+        : null;
+      if (selfId && data.id === selfId) {
+        combat.hp = data.hp;
+        combat.gear.armor = data.armor;
+        updateVitalsHUD();
+      }
+    },
+    onPlayerKilled(data) {
+      const killfeed = document.getElementById('killfeed');
+      if (killfeed) {
+        const entry = document.createElement('div');
+        entry.className = 'exp9-kill-entry';
+        entry.innerHTML = `
+          <span class="exp9-kill-killer">${data.killerName || 'Killer'}</span>
+          <span class="exp9-kill-weapon">🔫 ${String(data.weaponId || '').toUpperCase()}</span>
+          ${data.isHeadshot ? '<span class="exp9-kill-hs">🎯 HEADSHOT</span>' : ''}
+          <span class="exp9-kill-victim">${data.victimName || 'Victim'}</span>
+        `;
+        killfeed.appendChild(entry);
+        setTimeout(() => entry.remove(), 4500);
+      }
+
+      const selfId = (window.GamerWheelsMultiplayer && window.GamerWheelsMultiplayer.getSelfId)
+        ? window.GamerWheelsMultiplayer.getSelfId()
+        : null;
+
+      if (selfId && data.victimId === selfId) {
+        combat.isAlive = false;
+        combat.hp = 0;
+        updateVitalsHUD();
+
+        const deathOverlay = document.getElementById('deathOverlay');
+        const deathTitle = document.getElementById('deathTitle');
+        const deathTimer = document.getElementById('deathTimer');
+
+        if (deathTitle) deathTitle.textContent = `ELIMINATED BY ${data.killerName ? data.killerName.toUpperCase() : 'ENEMY'}`;
+        if (deathOverlay) deathOverlay.classList.remove('hidden');
+
+        let remaining = 3;
+        if (deathTimer) deathTimer.textContent = remaining;
+        const cd = setInterval(() => {
+          remaining--;
+          if (deathTimer) deathTimer.textContent = Math.max(0, remaining);
+          if (remaining <= 0) clearInterval(cd);
+        }, 1000);
+      } else if (selfId && data.killerId === selfId) {
+        combat.cash += 300;
+        updateBuyMenuCash();
+        updateWeaponHUD();
+        showTrickToast(`🏆 ELIMINATED ${data.victimName.toUpperCase()}! (+$300)`);
+        playCashSound();
+      }
+    },
+    onPlayerRespawned(data) {
+      const selfId = (window.GamerWheelsMultiplayer && window.GamerWheelsMultiplayer.getSelfId)
+        ? window.GamerWheelsMultiplayer.getSelfId()
+        : null;
+
+      if (selfId && data.id === selfId) {
+        combat.isAlive = true;
+        combat.hp = 100;
+        combat.gear.armor = 100;
+        updateVitalsHUD();
+
+        const deathOverlay = document.getElementById('deathOverlay');
+        if (deathOverlay) deathOverlay.classList.add('hidden');
+
+        if (combat.team === 'CT') {
+          teleportToCheckpoint(1);
+        } else {
+          teleportToCheckpoint(0);
+        }
+        showTrickToast('RESPAWNED! READY FOR ACTION ⚡');
+      }
+    },
+    onRemotePlayerFired(data) {
+      if (data.origin && data.target) {
+        createBulletTracer(
+          new THREE.Vector3(data.origin.x, data.origin.y, data.origin.z),
+          new THREE.Vector3(data.target.x, data.target.y, data.target.z)
+        );
+        playGunshotSound(data.soundType || 'rifle');
+      }
+    },
     onMapStateUpdate(mapState) {
       if (currentMapId !== 'dust2') return;
       const matchBanner = document.getElementById('matchBanner');
@@ -6607,14 +6941,19 @@
       const btnForceStart = document.getElementById('btnForceStart');
       const btnEndMatch = document.getElementById('btnEndMatch');
 
-      if (mapState.mode === 'match' || mapState.mode === 'tactical') {
+      const wasInMatch = (lastTacticalMatchMode === 'match' || lastTacticalMatchMode === 'tactical');
+      const isNowInMatch = (mapState.mode === 'match' || mapState.mode === 'tactical');
+
+      if (isNowInMatch) {
         if (matchBanner) matchBanner.classList.add('tactical');
         if (matchModeText) matchModeText.textContent = 'TACTICAL MATCH';
         if (matchStatusMsg) matchStatusMsg.textContent = 'OBJECTIVE: Plant / Defuse C4';
         if (btnForceStart) btnForceStart.classList.add('hidden');
         if (btnReadyUp) btnReadyUp.classList.add('hidden');
         if (btnEndMatch) btnEndMatch.classList.remove('hidden');
-        handleTacticalMatchStart(mapState);
+        if (!wasInMatch) {
+          handleTacticalMatchStart(mapState);
+        }
       } else if (mapState.mode === 'countdown') {
         if (matchBanner) matchBanner.classList.remove('tactical');
         if (matchModeText) matchModeText.textContent = 'STARTING...';
@@ -6632,6 +6971,7 @@
         if (btnReadyUp) btnReadyUp.classList.remove('hidden');
         if (btnEndMatch) btnEndMatch.classList.add('hidden');
       }
+      lastTacticalMatchMode = mapState.mode;
     },
     onC4Planted(data) {
       spawnC4InWorld(data.x, data.y, data.z, data.site);
