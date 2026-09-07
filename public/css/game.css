@@ -2794,9 +2794,12 @@ body.exp9-standalone-page .exp9-hud-layer {
   background: rgba(15, 23, 42, 0.75);
   backdrop-filter: blur(8px);
   z-index: 100;
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
+}
+.exp9-death-overlay.active {
+  display: flex !important;
 }
 .exp9-death-overlay.hidden {
   display: none !important;
