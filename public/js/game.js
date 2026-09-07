@@ -48,8 +48,8 @@
         x: -25.0,
         z: -35.0,
         heading: Math.PI,
-        spawnYOffset: 4.58,
-        desc: 'Counter-Terrorist base ramp below Short A and B slope'
+        spawnYOffset: 0.18,  // ground floor under cat catwalk
+        desc: 'Counter-Terrorist base below cat catwalk'
       },
       {
         id: 2,
@@ -3526,7 +3526,10 @@
 
     let spawnY = 0.2;
     if (currentMapId === 'dust2') {
-      const groundH = getDust2SurfaceElevation(cp.x, cp.z, 20.0);
+      // CP1 = CT Spawn (under cat): cast from 2.5m so ray starts below the catwalk
+      // roof (~4.5m) and finds the ground floor at ~0.18m instead.
+      const rayY = (index === 1) ? 2.5 : 20.0;
+      const groundH = getDust2SurfaceElevation(cp.x, cp.z, rayY);
       spawnY = (groundH !== null && groundH !== undefined && !isNaN(groundH) && groundH > -10)
         ? groundH + 0.18
         : (cp.spawnYOffset || 0.2);
@@ -6809,6 +6812,7 @@
     get player() { return state.player; },
     get TIRE_RADIUS() { return TIRE_RADIUS; },
     get MAX_SPEED() { return getMapMaxSpeed(); },
+    getSurfaceElevation,
     CHECKPOINTS,
     teleportToCheckpoint,
     showTrickToast,

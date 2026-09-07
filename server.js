@@ -234,7 +234,7 @@ const BOT_DUST2_WAYPOINTS = [
   { x:   0.5, z:  11.3, y: 0.38 },   // 1: Mid Doors
   { x:  20.0, z: -25.0, y: 2.03 },   // 2: A Bomb Site
   { x: -25.0, z: -15.0, y: 0.38 },   // 3: B Bomb Site
-  { x: -25.0, z: -35.0, y: 4.78 },   // 4: CT Spawn
+  { x: -25.0, z: -35.0, y: 0.38 },   // 4: CT Spawn (under cat, ground floor)
 ];
 
 // Park patrol waypoints — skip Mega Drop (7m tower, bots can't jump there)
@@ -383,7 +383,7 @@ function scheduleBotRespawn(bot, delayMs = 4000) {
  * @param {number} dt - Delta time in seconds
  */
 function tickBots(dt) {
-  const BOT_SPEED      = 6.0;   // m/s patrol cruise
+  const BOT_SPEED      = 6.705; // m/s patrol cruise ≈ 15.0 MPH
   const ARRIVE_DIST    = 1.5;   // m — waypoint switch threshold
   const TURN_RATE      = 4.0;   // rad/s heading lerp
   const ATTACK_RANGE   = 28;    // m — detection radius for shooting
@@ -524,7 +524,7 @@ function tickBots(dt) {
 
     bot.x += Math.sin(bot.heading) * bot.speed * dt;
     bot.z += Math.cos(bot.heading) * bot.speed * dt;
-    if (bot.fsm === 'patrol') bot.y = targetY;
+    if (bot.fsm === 'patrol') bot.y = Math.max(0.0, targetY); // clamp above world floor
 
     bot.lastUpdate = now;
   }

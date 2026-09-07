@@ -663,8 +663,16 @@
       cur.roll += (tgt.roll - cur.roll) * lerpAlpha;
       cur.speed += (tgt.speed - cur.speed) * lerpAlpha;
 
-      // Apply to 3D meshes
-      rp.group.position.set(cur.x, cur.y, cur.z);
+      // Apply to 3D meshes (prevent bots/riders from clipping into or sinking under floor)
+      let meshY = cur.y;
+      if (window.GamerWheels && typeof window.GamerWheels.getSurfaceElevation === 'function') {
+        const groundElevation = window.GamerWheels.getSurfaceElevation(cur.x, cur.z);
+        if (groundElevation !== null && groundElevation !== undefined && !isNaN(groundElevation) && groundElevation > -10) {
+          meshY = Math.max(meshY, groundElevation);
+        }
+      }
+
+      rp.group.position.set(cur.x, meshY, cur.z);
       rp.group.rotation.y = cur.heading;
       rp.group.rotation.x = cur.pitch;
       rp.group.rotation.z = cur.roll;
@@ -675,9 +683,9 @@
       }
 
       // Shadow
-      rp.shadow.position.set(cur.x, cur.y - 0.1, cur.z);
+      rp.shadow.position.set(cur.x, meshY + 0.015, cur.z);
       rp.shadow.rotation.y = cur.heading;
-      const jumpHeight = Math.max(0, cur.y - 0.2);
+      const jumpHeight = Math.max(0, meshY - (window.GamerWheels && window.GamerWheels.getSurfaceElevation ? window.GamerWheels.getSurfaceElevation(cur.x, cur.z) : cur.y));
       const shadowScale = Math.max(0.45, 1 - jumpHeight * 0.35);
       rp.shadow.scale.set(shadowScale, shadowScale, shadowScale);
     });
