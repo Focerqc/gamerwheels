@@ -218,6 +218,66 @@
     clock: new THREE.Clock(),
   };
 
+  // ==========================================================================
+  // CS Tactical Combat, Weapon Arsenal & Buy Menu System
+  // ==========================================================================
+  const WEAPON_ARSENAL = {
+    pistols: [
+      { id: 'glock', name: 'Glock-18', category: 'Sidearm (T)', price: 200, damage: 28, rpm: 400, magSize: 20, maxAmmo: 120, slot: 2, soundType: 'pistol', desc: 'Default T sidearm with high capacity and rapid tap fire.' },
+      { id: 'usps', name: 'USP-S', category: 'Sidearm (CT)', price: 200, damage: 35, rpm: 352, magSize: 12, maxAmmo: 24, slot: 2, soundType: 'silenced', desc: 'Silenced tactical pistol with laser-like pinpoint accuracy.' },
+      { id: 'p250', name: 'P250', category: 'Sidearm', price: 300, damage: 38, rpm: 400, magSize: 13, maxAmmo: 26, slot: 2, soundType: 'pistol', desc: 'High armor-penetration sidearm for close-quarters carving.' },
+      { id: 'berettas', name: 'Dual Berettas', category: 'Sidearms', price: 400, damage: 38, rpm: 500, magSize: 30, maxAmmo: 120, slot: 2, soundType: 'pistol', desc: 'Akimbo rapid spam pistols with 30-round mag for drive-bys.' },
+      { id: 'deagle', name: 'Desert Eagle', category: 'Hand Cannon', price: 700, damage: 63, rpm: 267, magSize: 7, maxAmmo: 35, slot: 2, soundType: 'heavy_pistol', desc: 'Heavy hand cannon with lethal 1-tap headshot stopping power.' }
+    ],
+    smgs: [
+      { id: 'mac10', name: 'MAC-10', category: 'SMG (T)', price: 1050, damage: 29, rpm: 800, magSize: 30, maxAmmo: 100, slot: 1, soundType: 'smg', desc: 'High-mobility blazing 800 RPM spray machine for fast carving.' },
+      { id: 'mp9', name: 'MP9', category: 'SMG (CT)', price: 1250, damage: 26, rpm: 857, magSize: 30, maxAmmo: 120, slot: 1, soundType: 'smg', desc: 'Laser-accurate high-RPM SMG for aggressive cornering.' },
+      { id: 'p90', name: 'P90', category: 'SMG', price: 2350, damage: 26, rpm: 857, magSize: 50, maxAmmo: 100, slot: 1, soundType: 'smg', desc: '50-round high-capacity bullet hose with low moving recoil.' }
+    ],
+    rifles: [
+      { id: 'galil', name: 'Galil AR', category: 'Rifle (T)', price: 1800, damage: 30, rpm: 666, magSize: 35, maxAmmo: 90, slot: 1, soundType: 'rifle', desc: '35-round budget Terrorist assault rifle.' },
+      { id: 'famas', name: 'FAMAS', category: 'Rifle (CT)', price: 2050, damage: 30, rpm: 666, magSize: 25, maxAmmo: 90, slot: 1, soundType: 'rifle', desc: 'Compact CT assault rifle with tight burst fire.' },
+      { id: 'ak47', name: 'AK-47', category: 'Rifle (T)', price: 2700, damage: 36, rpm: 600, magSize: 30, maxAmmo: 90, slot: 1, soundType: 'rifle', desc: 'The gold standard. 1-tap lethal headshot through helmets.' },
+      { id: 'm4a4', name: 'M4A4', category: 'Rifle (CT)', price: 3100, damage: 33, rpm: 666, magSize: 30, maxAmmo: 90, slot: 1, soundType: 'rifle', desc: 'High-capacity CT primary rifle with reliable spray pattern.' },
+      { id: 'aug', name: 'AUG', category: 'Scoped Rifle (CT)', price: 3300, damage: 32, rpm: 666, magSize: 30, maxAmmo: 90, slot: 1, soundType: 'rifle', hasScope: true, opticType: 'aug', desc: 'Bullpup assault rifle equipped with high-accuracy ACOG optic.' },
+      { id: 'sg553', name: 'SG 553', category: 'Scoped Rifle (T)', price: 3000, damage: 35, rpm: 666, magSize: 30, maxAmmo: 90, slot: 1, soundType: 'rifle', hasScope: true, opticType: 'sg553', desc: '100% armor-penetration assault rifle with holographic combat scope.' },
+      { id: 'scout', name: 'SSG 08', category: 'Sniper', price: 1700, damage: 88, rpm: 48, magSize: 10, maxAmmo: 90, slot: 1, soundType: 'sniper', hasScope: true, opticType: 'scout', desc: 'Lightweight sniper rifle; maintains accuracy while bunny hopping!' },
+      { id: 'awp', name: 'AWP', category: 'Sniper', price: 4750, damage: 115, rpm: 41, magSize: 10, maxAmmo: 30, slot: 1, soundType: 'sniper', hasScope: true, opticType: 'awp', desc: 'The legendary 1-shot, 1-kill magnum sniper rifle with 2-stage zoom.' }
+    ],
+    heavy: [
+      { id: 'nova', name: 'Nova', category: 'Shotgun', price: 1050, damage: 120, rpm: 68, magSize: 8, maxAmmo: 32, slot: 1, soundType: 'shotgun', desc: 'Tight-spread pump-action shotgun for corridor defense.' },
+      { id: 'xm1014', name: 'XM1014', category: 'Auto Shotgun', price: 2000, damage: 100, rpm: 240, magSize: 7, maxAmmo: 32, slot: 1, soundType: 'shotgun', desc: 'Full-auto combat shotgun for high-speed drive-by sweeps.' },
+      { id: 'negev', name: 'Negev', category: 'LMG', price: 1700, damage: 35, rpm: 800, magSize: 150, maxAmmo: 300, slot: 1, soundType: 'rifle', desc: '150-round suppressive fire laser beam.' }
+    ],
+    gear: [
+      { id: 'kevlar', name: 'Kevlar + Helmet', category: 'Armor', price: 1000, desc: 'Maximum armor and headshot flinch protection.' },
+      { id: 'hegrenade', name: 'HE Grenade', category: 'Explosive', price: 300, desc: 'High explosive fragmentation grenade.' },
+      { id: 'flashbang', name: 'Flashbang', category: 'Utility', price: 200, desc: 'Blinds opposing riders with brilliant screen flash.' },
+      { id: 'smoke', name: 'Smoke Grenade', category: 'Utility', price: 300, desc: 'Deploys a thick dust cloud for sightline denial.' },
+      { id: 'defuser', name: 'Defuse Kit', category: 'Equipment (CT)', price: 400, desc: 'Cuts bomb defusal time from 10s down to 5s.' }
+    ]
+  };
+
+  const combat = {
+    cash: 16000, // Starts at $16,000 for instant free-roam testing!
+    currentCategory: 'pistols',
+    equippedPrimary: null,
+    equippedSecondary: { ...WEAPON_ARSENAL.pistols[0], ammoInMag: 20, ammoInReserve: 120 },
+    activeSlot: 2, // 1 = primary, 2 = secondary
+    gear: { armor: 100, helmet: true, defuser: false },
+    hasBomb: false,
+    bombPlanted: false,
+    bombSite: null,
+    bombTimer: null,
+    isPlanting: false,
+    plantProgress: 0,
+    lastFireTime: 0,
+    isReloading: false,
+    scopeLevel: 0,        // 0 = unzoomed, 1 = zoom 1, 2 = zoom 2
+    scopedTargetFov: 65,  // Target FOV when zoomed
+    weaponRecoil: 0       // Recoil displacement lerp for floating 3D weapon
+  };
+
   // --- DOM Elements ---
   let container, canvas;
   let hudSpeedVal, hudSpeedBar, hudTerrainVal;
@@ -233,8 +293,9 @@
   // --- Three.js Globals ---
   let scene, camera, renderer;
   let boardGroup, wheelMesh, chassisMesh, shadowMesh;
+  let boardWeaponGroup = null;
   let headlightSpot, taillightSpot, taillightLens;
-  let sunLight;
+  let sunLight, ambientLight, hemiLight;
   let particleGroup;
 
   // --- Init on DOM Load ---
@@ -317,6 +378,24 @@
 
     updateWeaponHUD();
     updateBuyMenuCash();
+
+    // Weapon slot quickswitch by clicking HUD weapon card
+    const weaponCard = document.getElementById('weaponCard');
+    if (weaponCard) {
+      weaponCard.style.cursor = 'pointer';
+      weaponCard.title = 'Click or Press Q to switch weapon';
+      weaponCard.addEventListener('click', () => {
+        quickSwitchWeapon();
+      });
+    }
+
+    // Touch scope button for mobile/tablet riders
+    const btnTouchScope = document.getElementById('btnTouchScope');
+    if (btnTouchScope) {
+      btnTouchScope.addEventListener('click', () => {
+        toggleWeaponScope();
+      });
+    }
 
     // Checkpoint navigation buttons
     cpButtons = Array.from(document.querySelectorAll('.exp9-cp-btn'));
@@ -496,14 +575,17 @@
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    if (typeof THREE.ACESFilmicToneMapping !== 'undefined') {
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.16;
+    }
 
-    // --- Lighting (Balanced for High-Contrast Hill & Slope Visibility) ---
-    // Ambient fill (reduced to prevent washing out slopes)
-    const ambientLight = new THREE.AmbientLight(0xdbeafe, 0.35);
+    // --- Lighting (Global Radiosity & Ambient Fill for Tunnels, Interiors & Slopes) ---
+    ambientLight = new THREE.AmbientLight(0xfff7ed, 0.85);
     scene.add(ambientLight);
 
-    // Hemisphere light (sky vs ground bounce)
-    const hemiLight = new THREE.HemisphereLight(0xecfeff, 0x1e293b, 0.3);
+    // Hemisphere light (sky vs warm ground bounce)
+    hemiLight = new THREE.HemisphereLight(0xffedd5, 0x78350f, 0.65);
     hemiLight.position.set(0, 60, 0);
     scene.add(hemiLight);
 
@@ -2745,6 +2827,16 @@
     );
     taillightLens.position.set(0, TIRE_RADIUS + 0.015, -0.345);
     boardGroup.add(taillightLens);
+
+    // 3. Tactical Rider Ambient Lantern (Illuminates dark tunnels, underpasses & corridors around player)
+    const riderFill = new THREE.PointLight(0xffedd5, 1.4, 20, 1.5);
+    riderFill.position.set(0, 0.45, 0);
+    boardGroup.add(riderFill);
+
+    // Mount floating 3D weapon above tire
+    if (typeof setupBoardWeapon === 'function') {
+      setupBoardWeapon();
+    }
   }
 
   // ==========================================================================
@@ -2833,7 +2925,10 @@
 
     document.addEventListener('gesturestart', (e) => e.preventDefault());
     document.addEventListener('gesturechange', (e) => e.preventDefault());
-    document.addEventListener('gestureend', (e) => e.preventDefault());
+    // Prevent browser context menu on right click for tactical weapon scoping
+    window.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+    });
 
     // Keyboard Handler
     window.addEventListener('keydown', (e) => {
@@ -2846,6 +2941,12 @@
       if (e.code === 'KeyB') {
         if (!['INPUT', 'TEXTAREA'].includes(document.activeElement && document.activeElement.tagName)) {
           toggleBuyMenu();
+          return;
+        }
+      }
+      if (e.code === 'KeyQ') {
+        if (!['INPUT', 'TEXTAREA'].includes(document.activeElement && document.activeElement.tagName)) {
+          quickSwitchWeapon();
           return;
         }
       }
@@ -3035,7 +3136,7 @@
 
       // Request Pointer Lock on clicking inside game canvas (outside interactive UI)
       window.addEventListener('mousedown', (e) => {
-        if (e.button !== 0) return; // Only left click
+        if (e.button !== 0 && e.button !== 2) return; // Left or Right click
 
         const isInsideUI = e.target.closest && (
           e.target.closest('.exp9-buymenu-overlay') ||
@@ -3054,6 +3155,14 @@
 
         updatePointerLockState();
 
+        // Right Click: Tactical Optic Zoom / Scope
+        if (e.button === 2) {
+          e.preventDefault();
+          toggleWeaponScope();
+          return;
+        }
+
+        // Left Click: Fire weapon
         if (isPointerLocked) {
           combat.isFiring = true;
           fireCurrentWeapon();
@@ -3075,11 +3184,13 @@
         }
       });
 
-      // Mouse Aiming / Camera Rotation with Pointer Lock
+      // Mouse Aiming / Camera Rotation with Pointer Lock (Sensitivity scales dynamically with optic FOV)
       window.addEventListener('mousemove', (e) => {
         updatePointerLockState();
         if (isPointerLocked) {
-          const mouseSens = 0.0024;
+          const baseSens = 0.0024;
+          const sensScale = (combat && combat.scopeLevel > 0 && camera && camera.fov) ? (camera.fov / 65) : 1.0;
+          const mouseSens = baseSens * sensScale;
           state.camera.yaw -= (e.movementX || 0) * mouseSens;
           state.camera.pitch = THREE.MathUtils.clamp(
             state.camera.pitch + (e.movementY || 0) * mouseSens,
@@ -3409,6 +3520,7 @@
     state.player.inTabletop = false;
     state.player.inGap = false;
     state.player.inMegaDrop = false;
+    if (typeof setScopeLevel === 'function') setScopeLevel(0);
 
     // Instant camera target snap behind rider
     state.camera.yaw = cp.heading + Math.PI;
@@ -3607,15 +3719,24 @@
   function setEnvironmentLighting(mapId) {
     if (!renderer || !scene) return;
     if (mapId === 'dust2') {
-      // Warm Moroccan / Desert Sun
+      // Warm Moroccan / Desert Sun with strong global ambient fill for tunnels
       scene.background.setHex(0xdfcfb2);
       if (scene.fog) {
         scene.fog.color.setHex(0xdfcfb2);
-        scene.fog.density = 0.0025;
+        scene.fog.density = 0.0020;
+      }
+      if (ambientLight) {
+        ambientLight.color.setHex(0xfff7ed);
+        ambientLight.intensity = 1.05; // Bright global ambient so tunnels, alcoves & interiors stay clearly illuminated
+      }
+      if (hemiLight) {
+        hemiLight.color.setHex(0xffedd5);
+        hemiLight.groundColor.setHex(0xb45309); // Warm desert terracotta floor bounce
+        hemiLight.intensity = 0.75;
       }
       if (sunLight) {
         sunLight.color.setHex(0xfffae6);
-        sunLight.intensity = 1.45;
+        sunLight.intensity = 1.30;
         sunLight.position.set(45, 80, 45);
       }
     } else {
@@ -3625,6 +3746,15 @@
         scene.fog.color.setHex(0x0a0f1d);
         scene.fog.density = 0.0075;
       }
+      if (ambientLight) {
+        ambientLight.color.setHex(0xdbeafe);
+        ambientLight.intensity = 0.65;
+      }
+      if (hemiLight) {
+        hemiLight.color.setHex(0xecfeff);
+        hemiLight.groundColor.setHex(0x1e293b);
+        hemiLight.intensity = 0.55;
+      }
       if (sunLight) {
         sunLight.color.setHex(0xfffbeb);
         sunLight.intensity = 1.35;
@@ -3632,61 +3762,6 @@
       }
     }
   }
-
-  // ==========================================================================
-  // CS Tactical Combat, Weapon Arsenal & Buy Menu System
-  // ==========================================================================
-  const WEAPON_ARSENAL = {
-    pistols: [
-      { id: 'glock', name: 'Glock-18', category: 'Sidearm (T)', price: 200, damage: 28, rpm: 400, magSize: 20, maxAmmo: 120, slot: 2, soundType: 'pistol', desc: 'Default T sidearm with high capacity and rapid tap fire.' },
-      { id: 'usps', name: 'USP-S', category: 'Sidearm (CT)', price: 200, damage: 35, rpm: 352, magSize: 12, maxAmmo: 24, slot: 2, soundType: 'silenced', desc: 'Silenced tactical pistol with laser-like pinpoint accuracy.' },
-      { id: 'p250', name: 'P250', category: 'Sidearm', price: 300, damage: 38, rpm: 400, magSize: 13, maxAmmo: 26, slot: 2, soundType: 'pistol', desc: 'High armor-penetration sidearm for close-quarters carving.' },
-      { id: 'berettas', name: 'Dual Berettas', category: 'Sidearms', price: 400, damage: 38, rpm: 500, magSize: 30, maxAmmo: 120, slot: 2, soundType: 'pistol', desc: 'Akimbo rapid spam pistols with 30-round mag for drive-bys.' },
-      { id: 'deagle', name: 'Desert Eagle', category: 'Hand Cannon', price: 700, damage: 63, rpm: 267, magSize: 7, maxAmmo: 35, slot: 2, soundType: 'heavy_pistol', desc: 'Heavy hand cannon with lethal 1-tap headshot stopping power.' }
-    ],
-    smgs: [
-      { id: 'mac10', name: 'MAC-10', category: 'SMG (T)', price: 1050, damage: 29, rpm: 800, magSize: 30, maxAmmo: 100, slot: 1, soundType: 'smg', desc: 'High-mobility blazing 800 RPM spray machine for fast carving.' },
-      { id: 'mp9', name: 'MP9', category: 'SMG (CT)', price: 1250, damage: 26, rpm: 857, magSize: 30, maxAmmo: 120, slot: 1, soundType: 'smg', desc: 'Laser-accurate high-RPM SMG for aggressive cornering.' },
-      { id: 'p90', name: 'P90', category: 'SMG', price: 2350, damage: 26, rpm: 857, magSize: 50, maxAmmo: 100, slot: 1, soundType: 'smg', desc: '50-round high-capacity bullet hose with low moving recoil.' }
-    ],
-    rifles: [
-      { id: 'galil', name: 'Galil AR', category: 'Rifle (T)', price: 1800, damage: 30, rpm: 666, magSize: 35, maxAmmo: 90, slot: 1, soundType: 'rifle', desc: '35-round budget Terrorist assault rifle.' },
-      { id: 'famas', name: 'FAMAS', category: 'Rifle (CT)', price: 2050, damage: 30, rpm: 666, magSize: 25, maxAmmo: 90, slot: 1, soundType: 'rifle', desc: 'Compact CT assault rifle with tight burst fire.' },
-      { id: 'ak47', name: 'AK-47', category: 'Rifle (T)', price: 2700, damage: 36, rpm: 600, magSize: 30, maxAmmo: 90, slot: 1, soundType: 'rifle', desc: 'The gold standard. 1-tap lethal headshot through helmets.' },
-      { id: 'm4a4', name: 'M4A4', category: 'Rifle (CT)', price: 3100, damage: 33, rpm: 666, magSize: 30, maxAmmo: 90, slot: 1, soundType: 'rifle', desc: 'High-capacity CT primary rifle with reliable spray pattern.' },
-      { id: 'scout', name: 'SSG 08', category: 'Sniper', price: 1700, damage: 88, rpm: 48, magSize: 10, maxAmmo: 90, slot: 1, soundType: 'sniper', desc: 'Lightweight sniper rifle; maintains accuracy while bunny hopping!' },
-      { id: 'awp', name: 'AWP', category: 'Sniper', price: 4750, damage: 115, rpm: 41, magSize: 10, maxAmmo: 30, slot: 1, soundType: 'sniper', desc: 'The legendary 1-shot, 1-kill magnum sniper rifle.' }
-    ],
-    heavy: [
-      { id: 'nova', name: 'Nova', category: 'Shotgun', price: 1050, damage: 120, rpm: 68, magSize: 8, maxAmmo: 32, slot: 1, soundType: 'shotgun', desc: 'Tight-spread pump-action shotgun for corridor defense.' },
-      { id: 'xm1014', name: 'XM1014', category: 'Auto Shotgun', price: 2000, damage: 100, rpm: 240, magSize: 7, maxAmmo: 32, slot: 1, soundType: 'shotgun', desc: 'Full-auto combat shotgun for high-speed drive-by sweeps.' },
-      { id: 'negev', name: 'Negev', category: 'LMG', price: 1700, damage: 35, rpm: 800, magSize: 150, maxAmmo: 300, slot: 1, soundType: 'rifle', desc: '150-round suppressive fire laser beam.' }
-    ],
-    gear: [
-      { id: 'kevlar', name: 'Kevlar + Helmet', category: 'Armor', price: 1000, desc: 'Maximum armor and headshot flinch protection.' },
-      { id: 'hegrenade', name: 'HE Grenade', category: 'Explosive', price: 300, desc: 'High explosive fragmentation grenade.' },
-      { id: 'flashbang', name: 'Flashbang', category: 'Utility', price: 200, desc: 'Blinds opposing riders with brilliant screen flash.' },
-      { id: 'smoke', name: 'Smoke Grenade', category: 'Utility', price: 300, desc: 'Deploys a thick dust cloud for sightline denial.' },
-      { id: 'defuser', name: 'Defuse Kit', category: 'Equipment (CT)', price: 400, desc: 'Cuts bomb defusal time from 10s down to 5s.' }
-    ]
-  };
-
-  const combat = {
-    cash: 16000, // Starts at $16,000 for instant free-roam testing!
-    currentCategory: 'pistols',
-    equippedPrimary: null,
-    equippedSecondary: { ...WEAPON_ARSENAL.pistols[0], ammoInMag: 20, ammoInReserve: 120 },
-    activeSlot: 2, // 1 = primary, 2 = secondary
-    gear: { armor: 100, helmet: true, defuser: false },
-    hasBomb: false,
-    bombPlanted: false,
-    bombSite: null,
-    bombTimer: null,
-    isPlanting: false,
-    plantProgress: 0,
-    lastFireTime: 0,
-    isReloading: false
-  };
 
   const BOMB_SITES = {
     A: { name: 'A Bomb Site', x: 20.0, z: -25.0, y: 1.83, radius: 5.5 },
@@ -3822,6 +3897,558 @@
     } catch (err) {}
   }
 
+  // ==========================================================================
+  // 3D Floating Weapon Models & Procedural Geometry
+  // ==========================================================================
+  function createPistolModel() {
+    const group = new THREE.Group();
+    group.name = 'gun_pistol';
+
+    // Slide (gunmetal)
+    const slideGeo = new THREE.BoxGeometry(0.04, 0.045, 0.20);
+    const slideMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.35, metalness: 0.8 });
+    const slide = new THREE.Mesh(slideGeo, slideMat);
+    slide.position.set(0, 0.02, 0.02);
+    slide.castShadow = true;
+    group.add(slide);
+
+    // Barrel tip
+    const barrelGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.05, 12);
+    barrelGeo.rotateX(Math.PI / 2);
+    const barrelMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.9, roughness: 0.2 });
+    const barrel = new THREE.Mesh(barrelGeo, barrelMat);
+    barrel.position.set(0, 0.02, 0.13);
+    barrel.castShadow = true;
+    group.add(barrel);
+
+    // Grip (angled back)
+    const gripGeo = new THREE.BoxGeometry(0.035, 0.10, 0.05);
+    const gripMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.9 });
+    const grip = new THREE.Mesh(gripGeo, gripMat);
+    grip.rotation.x = -0.28;
+    grip.position.set(0, -0.04, -0.04);
+    grip.castShadow = true;
+    group.add(grip);
+
+    // Trigger guard
+    const tgGeo = new THREE.BoxGeometry(0.02, 0.03, 0.04);
+    const tg = new THREE.Mesh(tgGeo, gripMat);
+    tg.position.set(0, -0.015, 0.01);
+    group.add(tg);
+
+    return group;
+  }
+
+  function createSMGModel() {
+    const group = new THREE.Group();
+    group.name = 'gun_smg';
+
+    // Body / receiver
+    const bodyGeo = new THREE.BoxGeometry(0.048, 0.07, 0.32);
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.5, metalness: 0.6 });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.position.set(0, 0.02, 0);
+    body.castShadow = true;
+    group.add(body);
+
+    // Short tactical barrel & muzzle
+    const barrelGeo = new THREE.CylinderGeometry(0.014, 0.014, 0.09, 12);
+    barrelGeo.rotateX(Math.PI / 2);
+    const barrelMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.85, roughness: 0.3 });
+    const barrel = new THREE.Mesh(barrelGeo, barrelMat);
+    barrel.position.set(0, 0.02, 0.18);
+    barrel.castShadow = true;
+    group.add(barrel);
+
+    // Grip
+    const gripGeo = new THREE.BoxGeometry(0.038, 0.11, 0.05);
+    const gripMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.9 });
+    const grip = new THREE.Mesh(gripGeo, gripMat);
+    grip.rotation.x = -0.25;
+    grip.position.set(0, -0.05, -0.06);
+    grip.castShadow = true;
+    group.add(grip);
+
+    // Curved extended magazine
+    const magGeo = new THREE.BoxGeometry(0.032, 0.16, 0.045);
+    const magMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.7, roughness: 0.4 });
+    const mag = new THREE.Mesh(magGeo, magMat);
+    mag.rotation.x = 0.22;
+    mag.position.set(0, -0.07, 0.05);
+    mag.castShadow = true;
+    group.add(mag);
+
+    // Front vertical foregrip
+    const fgGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.07, 10);
+    const fg = new THREE.Mesh(fgGeo, gripMat);
+    fg.position.set(0, -0.03, 0.11);
+    group.add(fg);
+
+    // Top rail / compact sight
+    const railGeo = new THREE.BoxGeometry(0.028, 0.025, 0.07);
+    const railMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.8, roughness: 0.2 });
+    const rail = new THREE.Mesh(railGeo, railMat);
+    rail.position.set(0, 0.068, 0.01);
+    group.add(rail);
+
+    return group;
+  }
+
+  function createRifleModel(isScoped = false) {
+    const group = new THREE.Group();
+    group.name = 'gun_rifle';
+
+    // Receiver
+    const recGeo = new THREE.BoxGeometry(0.046, 0.075, 0.35);
+    const recMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.75, roughness: 0.35 });
+    const rec = new THREE.Mesh(recGeo, recMat);
+    rec.position.set(0, 0.02, -0.02);
+    rec.castShadow = true;
+    group.add(rec);
+
+    // Handguard (Tactical polymer or wood)
+    const hgGeo = new THREE.BoxGeometry(0.042, 0.055, 0.18);
+    const hgMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.7 });
+    const hg = new THREE.Mesh(hgGeo, hgMat);
+    hg.position.set(0, 0.02, 0.18);
+    hg.castShadow = true;
+    group.add(hg);
+
+    // Long barrel
+    const barrelGeo = new THREE.CylinderGeometry(0.013, 0.013, 0.24, 12);
+    barrelGeo.rotateX(Math.PI / 2);
+    const barrelMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.9, roughness: 0.2 });
+    const barrel = new THREE.Mesh(barrelGeo, barrelMat);
+    barrel.position.set(0, 0.02, 0.36);
+    barrel.castShadow = true;
+    group.add(barrel);
+
+    // Muzzle brake
+    const mbGeo = new THREE.CylinderGeometry(0.017, 0.017, 0.04, 10);
+    mbGeo.rotateX(Math.PI / 2);
+    const mb = new THREE.Mesh(mbGeo, barrelMat);
+    mb.position.set(0, 0.02, 0.48);
+    group.add(mb);
+
+    // Curved banana magazine
+    const magGeo = new THREE.BoxGeometry(0.034, 0.18, 0.06);
+    const magMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.8, roughness: 0.3 });
+    const mag = new THREE.Mesh(magGeo, magMat);
+    mag.rotation.x = 0.26;
+    mag.position.set(0, -0.08, 0.04);
+    mag.castShadow = true;
+    group.add(mag);
+
+    // Grip
+    const gripGeo = new THREE.BoxGeometry(0.036, 0.11, 0.05);
+    const gripMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.8 });
+    const grip = new THREE.Mesh(gripGeo, gripMat);
+    grip.rotation.x = -0.28;
+    grip.position.set(0, -0.05, -0.11);
+    grip.castShadow = true;
+    group.add(grip);
+
+    // Stock
+    const stockGeo = new THREE.BoxGeometry(0.038, 0.09, 0.22);
+    const stock = new THREE.Mesh(stockGeo, gripMat);
+    stock.position.set(0, 0.005, -0.28);
+    stock.castShadow = true;
+    group.add(stock);
+
+    if (isScoped) {
+      // Tactical ACOG / Reflex optic on top
+      const scopeTube = new THREE.CylinderGeometry(0.02, 0.023, 0.11, 12);
+      scopeTube.rotateX(Math.PI / 2);
+      const scopeMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.85, roughness: 0.2 });
+      const optic = new THREE.Mesh(scopeTube, scopeMat);
+      optic.position.set(0, 0.08, 0.02);
+      optic.castShadow = true;
+      group.add(optic);
+    } else {
+      // Front sight post
+      const sightGeo = new THREE.BoxGeometry(0.012, 0.035, 0.02);
+      const sight = new THREE.Mesh(sightGeo, barrelMat);
+      sight.position.set(0, 0.05, 0.44);
+      group.add(sight);
+    }
+
+    return group;
+  }
+
+  function createAWPModel() {
+    const group = new THREE.Group();
+    group.name = 'gun_awp';
+
+    // Iconic Arctic Warfare green chassis
+    const chassisGeo = new THREE.BoxGeometry(0.052, 0.085, 0.48);
+    const chassisMat = new THREE.MeshStandardMaterial({ color: 0x3f5135, roughness: 0.65, metalness: 0.2 });
+    const chassis = new THREE.Mesh(chassisGeo, chassisMat);
+    chassis.position.set(0, 0.02, 0.02);
+    chassis.castShadow = true;
+    group.add(chassis);
+
+    // Thumbhole sniper stock with black cheek riser & recoil pad
+    const stockGeo = new THREE.BoxGeometry(0.045, 0.11, 0.28);
+    const stock = new THREE.Mesh(stockGeo, chassisMat);
+    stock.position.set(0, 0.005, -0.32);
+    stock.castShadow = true;
+    group.add(stock);
+
+    // Black recoil pad at butt
+    const padGeo = new THREE.BoxGeometry(0.048, 0.12, 0.035);
+    const padMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.95 });
+    const pad = new THREE.Mesh(padGeo, padMat);
+    pad.position.set(0, 0.005, -0.46);
+    group.add(pad);
+
+    // Long fluted sniper bull barrel
+    const barrelGeo = new THREE.CylinderGeometry(0.016, 0.016, 0.45, 14);
+    barrelGeo.rotateX(Math.PI / 2);
+    const barrelMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.9, roughness: 0.2 });
+    const barrel = new THREE.Mesh(barrelGeo, barrelMat);
+    barrel.position.set(0, 0.03, 0.46);
+    barrel.castShadow = true;
+    group.add(barrel);
+
+    // Magnum rectangular muzzle brake
+    const brakeGeo = new THREE.BoxGeometry(0.036, 0.034, 0.07);
+    const brake = new THREE.Mesh(brakeGeo, barrelMat);
+    brake.position.set(0, 0.03, 0.70);
+    group.add(brake);
+
+    // High-Power Sniper Scope
+    const scopeGroup = new THREE.Group();
+    const tubeGeo = new THREE.CylinderGeometry(0.018, 0.018, 0.24, 14);
+    tubeGeo.rotateX(Math.PI / 2);
+    const scopeMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.85, roughness: 0.25 });
+    const tube = new THREE.Mesh(tubeGeo, scopeMat);
+    tube.castShadow = true;
+    scopeGroup.add(tube);
+
+    const objGeo = new THREE.CylinderGeometry(0.028, 0.020, 0.06, 14);
+    objGeo.rotateX(Math.PI / 2);
+    const objBell = new THREE.Mesh(objGeo, scopeMat);
+    objBell.position.set(0, 0, 0.12);
+    scopeGroup.add(objBell);
+
+    const ocuGeo = new THREE.CylinderGeometry(0.020, 0.024, 0.05, 14);
+    ocuGeo.rotateX(Math.PI / 2);
+    const ocuBell = new THREE.Mesh(ocuGeo, scopeMat);
+    ocuBell.position.set(0, 0, -0.12);
+    scopeGroup.add(ocuBell);
+
+    const turretGeo = new THREE.CylinderGeometry(0.01, 0.01, 0.015, 10);
+    const turretTop = new THREE.Mesh(turretGeo, barrelMat);
+    turretTop.position.set(0, 0.022, 0);
+    scopeGroup.add(turretTop);
+
+    const ringGeo = new THREE.BoxGeometry(0.04, 0.03, 0.025);
+    const ringF = new THREE.Mesh(ringGeo, barrelMat);
+    ringF.position.set(0, -0.018, 0.06);
+    scopeGroup.add(ringF);
+    const ringR = new THREE.Mesh(ringGeo, barrelMat);
+    ringR.position.set(0, -0.018, -0.06);
+    scopeGroup.add(ringR);
+
+    scopeGroup.position.set(0, 0.095, 0.02);
+    group.add(scopeGroup);
+
+    // Folded bipod under forend
+    const bipodGeo = new THREE.CylinderGeometry(0.008, 0.008, 0.16, 8);
+    bipodGeo.rotateX(Math.PI / 2);
+    const bipodL = new THREE.Mesh(bipodGeo, barrelMat);
+    bipodL.position.set(-0.025, -0.025, 0.26);
+    group.add(bipodL);
+    const bipodR = new THREE.Mesh(bipodGeo, barrelMat);
+    bipodR.position.set(0, 0.025, -0.025, 0.26);
+    group.add(bipodR);
+
+    // Box magazine
+    const magGeo = new THREE.BoxGeometry(0.038, 0.09, 0.08);
+    const mag = new THREE.Mesh(magGeo, padMat);
+    mag.position.set(0, -0.04, 0.04);
+    mag.castShadow = true;
+    group.add(mag);
+
+    return group;
+  }
+
+  function setupBoardWeapon() {
+    if (!boardGroup) return;
+    if (boardWeaponGroup && boardGroup.children.includes(boardWeaponGroup)) {
+      boardGroup.remove(boardWeaponGroup);
+    }
+    boardWeaponGroup = new THREE.Group();
+    boardWeaponGroup.name = 'boardWeaponMount';
+    boardWeaponGroup.position.set(0, 0.38, 0);
+    boardGroup.add(boardWeaponGroup);
+    updateEquippedWeaponModel();
+  }
+
+  function updateEquippedWeaponModel() {
+    if (!boardWeaponGroup) return;
+    while (boardWeaponGroup.children.length > 0) {
+      boardWeaponGroup.remove(boardWeaponGroup.children[0]);
+    }
+    const wep = combat.activeSlot === 1 ? combat.equippedPrimary : combat.equippedSecondary;
+    if (!wep) return;
+
+    const cat = (wep.category || '').toLowerCase();
+    const id = (wep.id || '').toLowerCase();
+
+    let model = null;
+    if (id === 'awp' || id === 'scout') {
+      model = createAWPModel();
+    } else if (cat.includes('rifle') || id === 'aug' || id === 'sg553' || id === 'negev') {
+      const isScoped = !!wep.hasScope || id === 'aug' || id === 'sg553';
+      model = createRifleModel(isScoped);
+    } else if (cat.includes('smg') || cat.includes('shotgun') || cat.includes('heavy')) {
+      model = createSMGModel();
+    } else {
+      model = createPistolModel();
+    }
+
+    if (model) {
+      boardWeaponGroup.add(model);
+    }
+  }
+
+  // ==========================================================================
+  // Tactical Optic Reticles & Scope Zoom Controls
+  // ==========================================================================
+  function playScopeSound(isZoomIn = true) {
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      const t = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(isZoomIn ? 640 : 420, t);
+      osc.frequency.exponentialRampToValueAtTime(isZoomIn ? 980 : 260, t + 0.05);
+      gain.gain.setValueAtTime(0.2, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.065);
+    } catch (err) {}
+  }
+
+  function getOpticSVG(opticType, scopeLevel) {
+    const isAWP = opticType === 'awp';
+    const isScout = opticType === 'scout';
+    const isAUG = opticType === 'aug';
+    const isSG553 = opticType === 'sg553';
+
+    if (isAWP) {
+      const magText = scopeLevel === 2 ? '8.0X HIGH' : '2.5X WIDE';
+      return `
+        <svg class="exp9-scope-svg" viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <mask id="awpScopeMask">
+              <rect width="1000" height="1000" fill="white" />
+              <circle cx="500" cy="500" r="390" fill="black" />
+            </mask>
+            <filter id="redGlow">
+              <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#ef4444" />
+            </filter>
+          </defs>
+          <rect width="1000" height="1000" fill="#000" mask="url(#awpScopeMask)" />
+          <circle cx="500" cy="500" r="390" fill="rgba(15, 23, 42, 0.12)" stroke="#090d16" stroke-width="12" />
+          <circle cx="500" cy="500" r="382" fill="none" stroke="rgba(255, 255, 255, 0.15)" stroke-width="2" />
+          <line x1="110" y1="500" x2="890" y2="500" stroke="#000" stroke-width="1.8" />
+          <line x1="500" y1="110" x2="500" y2="890" stroke="#000" stroke-width="1.8" />
+          ${[-240, -180, -120, -60, 60, 120, 180, 240].map(d => `
+            <circle cx="${500 + d}" cy="500" r="2" fill="#000" />
+            <circle cx="500" cy="${500 + d}" r="2" fill="#000" />
+            <line x1="${500 + d}" y1="494" x2="${500 + d}" y2="506" stroke="#000" stroke-width="1" />
+            <line x1="494" y1="${500 + d}" x2="506" y2="${500 + d}" stroke="#000" stroke-width="1" />
+          `).join('')}
+          <circle cx="500" cy="500" r="3.5" fill="#ef4444" filter="url(#redGlow)" />
+        </svg>
+        <div class="exp9-scope-badge">
+          <span class="exp9-scope-optic">AWP MAGNUM</span>
+          <span class="exp9-scope-mag">${magText} ZOOM</span>
+        </div>
+      `;
+    }
+
+    if (isScout) {
+      return `
+        <svg class="exp9-scope-svg" viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <mask id="scoutScopeMask">
+              <rect width="1000" height="1000" fill="white" />
+              <circle cx="500" cy="500" r="420" fill="black" />
+            </mask>
+          </defs>
+          <rect width="1000" height="1000" fill="#000" mask="url(#scoutScopeMask)" />
+          <circle cx="500" cy="500" r="420" fill="rgba(15, 23, 42, 0.08)" stroke="#090d16" stroke-width="10" />
+          <line x1="80" y1="500" x2="360" y2="500" stroke="#000" stroke-width="6" />
+          <line x1="640" y1="500" x2="920" y2="500" stroke="#000" stroke-width="6" />
+          <line x1="500" y1="640" x2="500" y2="920" stroke="#000" stroke-width="6" />
+          <line x1="360" y1="500" x2="640" y2="500" stroke="#000" stroke-width="1.5" />
+          <line x1="500" y1="120" x2="500" y2="640" stroke="#000" stroke-width="1.5" />
+          <path d="M 485 530 L 500 520 L 515 530" fill="none" stroke="#000" stroke-width="1.5" />
+          <path d="M 490 560 L 500 550 L 510 560" fill="none" stroke="#000" stroke-width="1.5" />
+          <path d="M 493 590 L 500 582 L 507 590" fill="none" stroke="#000" stroke-width="1.5" />
+          <circle cx="500" cy="500" r="2.5" fill="#38bdf8" />
+        </svg>
+        <div class="exp9-scope-badge">
+          <span class="exp9-scope-optic">SSG 08 RECON</span>
+          <span class="exp9-scope-mag">3.0X OPTIC</span>
+        </div>
+      `;
+    }
+
+    if (isAUG) {
+      return `
+        <svg class="exp9-scope-svg" viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="greenGlow">
+              <feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#22c55e" />
+            </filter>
+          </defs>
+          <circle cx="500" cy="500" r="370" fill="rgba(6, 78, 59, 0.08)" stroke="#0f172a" stroke-width="32" />
+          <circle cx="500" cy="500" r="352" fill="none" stroke="rgba(34, 197, 94, 0.3)" stroke-width="3" />
+          <circle cx="500" cy="500" r="38" fill="none" stroke="#22c55e" stroke-width="3.5" filter="url(#greenGlow)" />
+          <circle cx="500" cy="500" r="5" fill="#4ade80" filter="url(#greenGlow)" />
+          <line x1="380" y1="500" x2="450" y2="500" stroke="#22c55e" stroke-width="2.5" filter="url(#greenGlow)" />
+          <line x1="550" y1="500" x2="620" y2="500" stroke="#22c55e" stroke-width="2.5" filter="url(#greenGlow)" />
+          <line x1="500" y1="545" x2="500" y2="640" stroke="#22c55e" stroke-width="2" filter="url(#greenGlow)" />
+          <line x1="490" y1="575" x2="510" y2="575" stroke="#22c55e" stroke-width="2" filter="url(#greenGlow)" />
+          <line x1="493" y1="605" x2="507" y2="605" stroke="#22c55e" stroke-width="2" filter="url(#greenGlow)" />
+        </svg>
+        <div class="exp9-scope-badge">
+          <span class="exp9-scope-optic" style="color: #4ade80;">AUG ACOG</span>
+          <span class="exp9-scope-mag">1.6X REFLEX</span>
+        </div>
+      `;
+    }
+
+    if (isSG553) {
+      return `
+        <svg class="exp9-scope-svg" viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="crimsonGlow">
+              <feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#ef4444" />
+            </filter>
+          </defs>
+          <rect x="160" y="160" width="680" height="680" rx="90" fill="rgba(239, 68, 68, 0.05)" stroke="#0f172a" stroke-width="36" />
+          <rect x="180" y="180" width="640" height="640" rx="72" fill="none" stroke="rgba(239, 68, 68, 0.35)" stroke-width="3" />
+          <circle cx="500" cy="500" r="46" fill="none" stroke="#ef4444" stroke-width="3" stroke-dasharray="16 8" filter="url(#crimsonGlow)" />
+          <circle cx="500" cy="500" r="4.5" fill="#fca5a5" filter="url(#crimsonGlow)" />
+          <line x1="500" y1="420" x2="500" y2="450" stroke="#ef4444" stroke-width="3" filter="url(#crimsonGlow)" />
+          <line x1="500" y1="550" x2="500" y2="580" stroke="#ef4444" stroke-width="3" filter="url(#crimsonGlow)" />
+          <line x1="420" y1="500" x2="450" y2="500" stroke="#ef4444" stroke-width="3" filter="url(#crimsonGlow)" />
+          <line x1="550" y1="500" x2="580" y2="500" stroke="#ef4444" stroke-width="3" filter="url(#crimsonGlow)" />
+        </svg>
+        <div class="exp9-scope-badge">
+          <span class="exp9-scope-optic" style="color: #f87171;">SG 553 KRIEG</span>
+          <span class="exp9-scope-mag">1.6X HOLOGRAPHIC</span>
+        </div>
+      `;
+    }
+
+    return '';
+  }
+
+  function setScopeLevel(level) {
+    const wep = combat.activeSlot === 1 ? combat.equippedPrimary : combat.equippedSecondary;
+    const scopeOverlay = document.getElementById('scopeOverlay');
+    const tacticalCrosshair = document.getElementById('tacticalCrosshair');
+    const btnTouchScope = document.getElementById('btnTouchScope');
+
+    if (level === 0 || !wep || !wep.hasScope) {
+      combat.scopeLevel = 0;
+      combat.scopedTargetFov = 65;
+      if (scopeOverlay) {
+        scopeOverlay.classList.add('hidden');
+        scopeOverlay.innerHTML = '';
+      }
+      if (tacticalCrosshair) {
+        tacticalCrosshair.style.display = '';
+      }
+      if (btnTouchScope) {
+        btnTouchScope.classList.remove('active');
+      }
+      return;
+    }
+
+    combat.scopeLevel = level;
+    if (btnTouchScope) {
+      btnTouchScope.classList.add('active');
+    }
+
+    // Determine target FOV based on weapon optic
+    if (wep.opticType === 'awp') {
+      combat.scopedTargetFov = (level === 2) ? 12 : 28;
+      if (tacticalCrosshair) tacticalCrosshair.style.display = 'none';
+    } else if (wep.opticType === 'scout') {
+      combat.scopedTargetFov = 24;
+      if (tacticalCrosshair) tacticalCrosshair.style.display = 'none';
+    } else if (wep.opticType === 'aug' || wep.opticType === 'sg553') {
+      combat.scopedTargetFov = 38;
+      if (tacticalCrosshair) tacticalCrosshair.style.display = 'none';
+    } else {
+      combat.scopedTargetFov = 40;
+    }
+
+    playScopeSound(true);
+
+    if (scopeOverlay) {
+      scopeOverlay.innerHTML = getOpticSVG(wep.opticType, combat.scopeLevel);
+      scopeOverlay.classList.remove('hidden');
+    }
+  }
+
+  function toggleWeaponScope() {
+    const wep = combat.activeSlot === 1 ? combat.equippedPrimary : combat.equippedSecondary;
+    if (!wep || !wep.hasScope) {
+      return;
+    }
+    if (combat.isReloading) return;
+
+    if (wep.opticType === 'awp') {
+      const nextLevel = (combat.scopeLevel + 1) % 3;
+      setScopeLevel(nextLevel);
+      if (nextLevel === 0) playScopeSound(false);
+    } else {
+      const nextLevel = combat.scopeLevel === 0 ? 1 : 0;
+      setScopeLevel(nextLevel);
+      if (nextLevel === 0) playScopeSound(false);
+    }
+  }
+
+  function switchWeaponSlot(slot) {
+    if (slot === combat.activeSlot) return;
+    if (slot === 1 && !combat.equippedPrimary) {
+      showTrickToast('NO PRIMARY WEAPON EQUIPPED! (BUY IN [B])');
+      return;
+    }
+    if (slot === 2 && !combat.equippedSecondary) {
+      showTrickToast('NO SECONDARY WEAPON EQUIPPED!');
+      return;
+    }
+    setScopeLevel(0);
+    combat.activeSlot = slot;
+    const wep = combat.activeSlot === 1 ? combat.equippedPrimary : combat.equippedSecondary;
+    updateWeaponHUD();
+    updateEquippedWeaponModel();
+    if (wep) {
+      showTrickToast(`SWAPPED: ${wep.name.toUpperCase()}`);
+    }
+  }
+
+  function quickSwitchWeapon() {
+    if (combat.activeSlot === 1) {
+      if (combat.equippedSecondary) switchWeaponSlot(2);
+    } else {
+      if (combat.equippedPrimary) switchWeaponSlot(1);
+    }
+  }
+
   function isBuyMenuOpen() {
     const modal = document.getElementById('buyMenuModal');
     return modal && !modal.classList.contains('hidden');
@@ -3914,6 +4541,7 @@
     if (combat.cash < item.price) return;
     combat.cash -= item.price;
     playCashSound();
+    setScopeLevel(0);
 
     if (item.category === 'Armor') {
       combat.gear.armor = 100;
@@ -3923,10 +4551,12 @@
       combat.equippedPrimary = { ...item, ammoInMag: item.magSize, ammoInReserve: item.maxAmmo };
       combat.activeSlot = 1;
       showTrickToast(`EQUIPPED: ${item.name.toUpperCase()}! 🎯`);
+      updateEquippedWeaponModel();
     } else if (item.slot === 2) {
       combat.equippedSecondary = { ...item, ammoInMag: item.magSize, ammoInReserve: item.maxAmmo };
       combat.activeSlot = 2;
       showTrickToast(`EQUIPPED: ${item.name.toUpperCase()}! 🔫`);
+      updateEquippedWeaponModel();
     } else {
       showTrickToast(`PURCHASED: ${item.name.toUpperCase()}! ✨`);
     }
@@ -3966,6 +4596,9 @@
     updateWeaponHUD();
     playGunshotSound(wep.soundType || 'rifle');
 
+    // Trigger physical weapon recoil impulse on floating 3D gun model
+    combat.weaponRecoil = 0.065; // ~6.5cm recoil kick
+
     // Crosshair recoil kick
     const crosshair = document.getElementById('tacticalCrosshair');
     if (crosshair) {
@@ -3996,8 +4629,14 @@
       _shootRay.ray.at(80.0, targetPoint);
     }
 
-    // Tracer originates near player's board / hand
-    _shootOrigin.set(state.player.x, state.player.y + 0.45, state.player.z);
+    // Tracer originates at floating gun muzzle in world space
+    if (boardWeaponGroup) {
+      boardWeaponGroup.getWorldPosition(_shootOrigin);
+      const forwardOffset = new THREE.Vector3(0, 0.02, 0.35).applyEuler(boardGroup.rotation);
+      _shootOrigin.add(forwardOffset);
+    } else {
+      _shootOrigin.set(state.player.x, state.player.y + 0.45, state.player.z);
+    }
     createBulletTracer(_shootOrigin, targetPoint);
   }
 
@@ -4006,6 +4645,7 @@
     if (!wep || combat.isReloading) return;
     if (wep.ammoInMag >= wep.magSize || wep.ammoInReserve <= 0) return;
 
+    setScopeLevel(0); // Unzoom on reload
     combat.isReloading = true;
     showTrickToast(`RELOADING ${wep.name.toUpperCase()}...`);
     const hudWeaponAmmo = document.getElementById('hudWeaponAmmo');
@@ -5012,6 +5652,22 @@
       wheelMesh.rotateX((p.speed / TIRE_RADIUS) * dt);
     }
 
+    // Update floating weapon model (idle hover bob + recoil recovery)
+    if (boardWeaponGroup) {
+      const now = performance.now() * 0.001;
+      const hoverY = 0.38 + Math.sin(now * 3.5) * 0.012;
+      boardWeaponGroup.position.y = hoverY;
+      boardWeaponGroup.rotation.y = Math.sin(now * 2.0) * 0.035;
+
+      if (combat.weaponRecoil > 0.001) {
+        boardWeaponGroup.position.z = -combat.weaponRecoil;
+        combat.weaponRecoil = THREE.MathUtils.lerp(combat.weaponRecoil, 0, dt * 18);
+      } else {
+        boardWeaponGroup.position.z = 0;
+        combat.weaponRecoil = 0;
+      }
+    }
+
     // 8. Update Drop Shadow Decal
     shadowMesh.position.set(p.x, p.groundY + 0.018, p.z);
     shadowMesh.rotation.y = p.heading;
@@ -5739,11 +6395,17 @@
     // 3. Smooth Camera Distance Interpolation
     cs.distance = THREE.MathUtils.lerp(cs.distance, cs.targetDistance, delta * 8);
 
-    // 4. Dynamic Speed FOV Pullback
+    // 4. Dynamic Speed FOV Pullback or Tactical Scope Zoom
     const speedRatio = THREE.MathUtils.clamp((p.speed - 8.0) / 18.0, 0, 1.0);
-    const targetFov = 65 + speedRatio * 12; // 65° base up to 77° at top speed
-    if (Math.abs(camera.fov - targetFov) > 0.1) {
-      camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, delta * 6);
+    let targetFov;
+    if (combat && combat.scopeLevel > 0) {
+      targetFov = combat.scopedTargetFov || 28;
+    } else {
+      targetFov = 65 + speedRatio * 12; // 65° base up to 77° at top speed
+    }
+    const fovLerpSpeed = (combat && combat.scopeLevel > 0) ? 22 : 6;
+    if (Math.abs(camera.fov - targetFov) > 0.05) {
+      camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, delta * fovLerpSpeed);
       camera.updateProjectionMatrix();
     }
 

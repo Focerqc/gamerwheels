@@ -2526,4 +2526,98 @@ body.exp9-standalone-page .exp9-hud-layer {
   height: 2px;
 }
 
+/* ==========================================================================
+   Tactical Scoped Optical Sight Overlay (AWP, Scout, AUG, SG 553)
+   ========================================================================== */
+.exp9-scope-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 1500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  animation: exp9-scope-snap-in 0.08s ease-out;
+}
+
+@keyframes exp9-scope-snap-in {
+  from {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.exp9-scope-overlay.hidden {
+  display: none !important;
+}
+
+/* Outer Screen Blackout Vignette with Circular Aperture */
+.exp9-scope-vignette {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.exp9-scope-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Scope HUD Diagnostics / Telemetry Badge */
+.exp9-scope-badge {
+  position: absolute;
+  bottom: 8%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+  padding: 6px 18px;
+  color: #f8fafc;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.exp9-scope-badge .exp9-scope-mag {
+  color: #38bdf8;
+  font-weight: 700;
+}
+
+.exp9-scope-badge .exp9-scope-optic {
+  color: #22c55e;
+  font-weight: 600;
+}
+
+/* Mobile Scope Button */
+.exp9-scope-touch-btn {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.4) 0%, rgba(2, 132, 199, 0.7) 100%) !important;
+  border-color: rgba(56, 189, 248, 0.7) !important;
+  color: #38bdf8 !important;
+  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.4) !important;
+}
+
+.exp9-scope-touch-btn.active {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.5) 0%, rgba(185, 28, 28, 0.8) 100%) !important;
+  border-color: rgba(248, 113, 113, 0.8) !important;
+  color: #fca5a5 !important;
+}
+
+
 

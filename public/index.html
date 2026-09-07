@@ -251,6 +251,9 @@
         <div class="exp9-crosshair-bar right"></div>
       </div>
 
+      <!-- Scoped Optical Sight Overlay (AWP, Scout, AUG, SG 553) -->
+      <div class="exp9-scope-overlay hidden" id="scopeOverlay"></div>
+
       <!-- Interactive Rail Grind Balance HUD -->
       <div class="exp9-balance-hud" id="balanceHud">
         <div class="exp9-balance-label" id="balanceLabel">NOSESLIDE</div>
@@ -286,8 +289,12 @@
         </div>
       </div>
 
-      <!-- Mobile Jump Button (Bottom Right next to Twist Stick) -->
+      <!-- Mobile Jump & Scope Buttons (Bottom Right next to Twist Stick) -->
       <div class="exp9-jump-btn-zone" id="jumpBtnZone">
+        <button type="button" class="exp9-jump-btn exp9-scope-touch-btn hidden" id="btnTouchScope" aria-label="Scope / Zoom">
+          <span>SCOPE</span>
+          <small>Zoom</small>
+        </button>
         <button type="button" class="exp9-jump-btn" id="btnTouchJump" aria-label="Jump / Bunny Hop">
           <span>HOP</span>
           <small>Space</small>
@@ -330,6 +337,8 @@
         <span><kbd>B</kbd> Buy</span>
         <span><kbd>E</kbd> Plant C4</span>
         <span><kbd>Left Click</kbd> Fire</span>
+        <span><kbd>Right Click</kbd> Scope</span>
+        <span><kbd>Q</kbd> Switch</span>
         <span><kbd>R</kbd> Reload</span>
         <span><kbd>1</kbd>–<kbd>5</kbd> Checkpoints</span>
       </div>
