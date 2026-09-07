@@ -127,6 +127,43 @@ body {
   pointer-events: auto;
 }
 
+/* Top Left Darkride Indicator */
+.exp9-darkride-badge {
+  display: none;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.85rem;
+  background: linear-gradient(135deg, #e11d48 0%, #7c3aed 50%, #2563eb 100%);
+  border: 1.5px solid rgba(255, 255, 255, 0.65);
+  border-radius: var(--radius-full);
+  font-family: var(--font-display, sans-serif);
+  font-size: 0.85rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ffffff;
+  box-shadow: 0 0 16px rgba(225, 29, 72, 0.7), 0 0 32px rgba(124, 58, 237, 0.5);
+  animation: darkridePulse 0.85s infinite alternate ease-in-out;
+  pointer-events: none;
+  backdrop-filter: blur(10px);
+  user-select: none;
+}
+
+.exp9-darkride-badge.active {
+  display: inline-flex;
+}
+
+@keyframes darkridePulse {
+  0% {
+    transform: scale(0.98);
+    box-shadow: 0 0 12px rgba(225, 29, 72, 0.6), 0 0 20px rgba(124, 58, 237, 0.4);
+  }
+  100% {
+    transform: scale(1.06);
+    box-shadow: 0 0 24px rgba(244, 63, 94, 0.95), 0 0 40px rgba(168, 85, 247, 0.75);
+  }
+}
+
 /* Corner Game Brand Card */
 .exp9-brand-card {
   display: flex;
@@ -703,7 +740,11 @@ body {
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 1.25rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  max-width: calc(100vw - 2rem);
+  gap: 1.0rem 1.25rem;
   padding: 0.45rem 1rem;
   background: rgba(15, 23, 42, 0.75);
   backdrop-filter: blur(8px);
@@ -712,6 +753,7 @@ body {
   font-size: 0.78rem;
   color: #94a3b8;
   pointer-events: none;
+  white-space: nowrap;
 }
 
 .exp9-desktop-controls-hint kbd {

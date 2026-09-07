@@ -93,6 +93,7 @@
       inTabletop: false,
       inGap: false,
       inMegaDrop: false,
+      isReverse: false,
     },
     mouse: {
       screenX: 0,
@@ -132,6 +133,7 @@
       spin180Done: false,
       spin360Done: false,
       flipDone: false,
+      preAirFwdSpeed: 0,
     },
     input: {
       up: false,
@@ -169,6 +171,7 @@
       timer: 0,
       toastGiven: false,
     },
+    isDarkride: false,
     controlMode: 'default', // 'default', 'mode1', 'mode2', 'mode3'
     obstacles: [],
     trailSigns: [],
@@ -274,6 +277,20 @@
       setControlMode(savedMode);
       controlModeSelect.addEventListener('change', (e) => {
         setControlMode(e.target.value);
+        controlModeSelect.blur();
+        window.focus();
+      });
+      // Prevent arrow keys, WASD, or Numpad from cycling options when focused
+      controlModeSelect.addEventListener('keydown', (e) => {
+        if ([
+          'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space',
+          'KeyW', 'KeyS', 'KeyA', 'KeyD',
+          'Numpad1', 'Numpad2', 'Numpad3', 'Numpad4', 'Numpad5', 'Numpad6', 'Numpad7', 'Numpad8', 'Numpad9'
+        ].includes(e.code)) {
+          e.preventDefault();
+          controlModeSelect.blur();
+          window.focus();
+        }
       });
     }
 
@@ -316,8 +333,11 @@
       localStorage.setItem('gamerwheels_control_mode', mode);
     } catch (e) {}
 
-    if (controlModeSelect && controlModeSelect.value !== mode) {
-      controlModeSelect.value = mode;
+    if (controlModeSelect) {
+      if (controlModeSelect.value !== mode) {
+        controlModeSelect.value = mode;
+      }
+      controlModeSelect.blur();
     }
 
     // Testing Mode 3 hides the on-screen jump button (uses right-stick tap instead)
@@ -345,6 +365,16 @@
 
     if (mode === 'default') {
       hintContainer.innerHTML = `
+        <span><kbd>▲</kbd><kbd>▼</kbd> / <kbd>W</kbd><kbd>S</kbd> Drive & Brake</span>
+        <span><kbd>◄</kbd><kbd>►</kbd> / <kbd>A</kbd><kbd>D</kbd> Steer & Carve</span>
+        <span><kbd>Space</kbd> / <kbd>5</kbd> Hop</span>
+        <span><kbd>8</kbd><kbd>2</kbd> Nose Down / Up</span>
+        <span><kbd>◄</kbd><kbd>►</kbd> / <kbd>4</kbd><kbd>6</kbd> Air 180</span>
+        <span><kbd>1</kbd><kbd>3</kbd><kbd>7</kbd><kbd>9</kbd> Butter</span>
+        <span><kbd>Rails</kbd> Grind & Vert Hop</span>
+      `;
+    } else if (mode === 'mouse' || mode === 'mouse_move') {
+      hintContainer.innerHTML = `
         <span><kbd>Mouse</kbd> Steer & Drive</span>
         <span><kbd>Space</kbd> / <kbd>Click</kbd> Hop</span>
         <span><kbd>Air Mouse</kbd> Mid-Air Rotate</span>
@@ -360,6 +390,7 @@
     } else if (mode === 'mode2') {
       hintContainer.innerHTML = `
         <span><kbd>W</kbd> Accel &middot; <kbd>S</kbd> Brake</span>
+        <span><kbd>A</kbd><kbd>D</kbd> Steer</span>
         <span><kbd>Release</kbd> Inertial Coast</span>
         <span><kbd>Arrows</kbd> Air Spin & Balance</span>
         <span><kbd>Space</kbd> Jump</span>
@@ -3455,6 +3486,8 @@
     state.player.inTabletop = false;
     state.player.inGap = false;
     state.player.inMegaDrop = false;
+    state.player.isReverse = false;
+    state.isDarkride = false;
 
     // Instant camera target snap
     camera.position.x = cp.x + 30;
@@ -3701,11 +3734,19 @@
     let isBraking = false;
     let targetSpeed = 0;
 
-    // Unit forward and lateral vectors based on current board heading
-    const fwdX = Math.sin(p.heading);
-    const fwdZ = Math.cos(p.heading);
-    const rightX = Math.cos(p.heading);
-    const rightZ = -Math.sin(p.heading);
+    // Determine directional drive orientation (+1 = normal nose-forward, -1 = switch/reverse riding tail-first)
+    const driveSign = p.isReverse ? -1 : 1;
+
+    // Unit forward and lateral vectors based on current board heading and switch drive state
+    const baseFwdX = Math.sin(p.heading);
+    const baseFwdZ = Math.cos(p.heading);
+    const baseRightX = Math.cos(p.heading);
+    const baseRightZ = -Math.sin(p.heading);
+
+    const fwdX = baseFwdX * driveSign;
+    const fwdZ = baseFwdZ * driveSign;
+    const rightX = baseRightX * driveSign;
+    const rightZ = baseRightZ * driveSign;
 
     // Decompose current velocity along forward and lateral axes
     let vFwd = p.vx * fwdX + p.vz * fwdZ;
@@ -3791,9 +3832,10 @@
 
       // Determine Throttle (+1 = Forward Gas, -1 = Brake / Reverse)
       // Supports Arrow Keys (ArrowUp/ArrowDown), W/S keys, and left joystick
+      // Note: Numpad 8 and 2 are strictly Nose Down / Nose Up manual tilts (NOT movement)
       let throttleInput = 0;
-      if (state.input.arrowUp || state.input.up || state.input.numpad8) throttleInput += 1;
-      if (state.input.arrowDown || state.input.down || state.input.numpad2) throttleInput -= 1;
+      if (state.input.arrowUp || state.input.up) throttleInput += 1;
+      if (state.input.arrowDown || state.input.down) throttleInput -= 1;
       if (state.input.joystickActive) {
         throttleInput += state.input.joystickVector.y;
       }
@@ -3980,10 +4022,21 @@
     }
     p.speed = Math.hypot(p.vx, p.vz);
 
-    // Taillight / Brake Light Dynamic Lighting
+    // Reset switch mode back to normal forward if stopped on the ground
+    if (!p.isAirborne && !state.grind.active && p.speed < 0.35 && p.isReverse) {
+      p.isReverse = false;
+    }
+
+    // Continuously track forward velocity on the ground prior to jumps
+    if (!p.isAirborne && !state.grind.active) {
+      state.aerial.preAirFwdSpeed = p.vx * baseFwdX + p.vz * baseFwdZ;
+    }
+
+    // Taillight / Brake Light Dynamic Lighting (Red lights in front when riding switch)
     if (taillightSpot && taillightLens) {
-      const targetIntensity = isBraking ? 4.6 : 2.8;
-      const targetEmissive = isBraking ? 2.6 : 1.6;
+      const baseIntensity = p.isReverse ? 4.5 : 2.8;
+      const targetIntensity = isBraking ? baseIntensity + 1.8 : baseIntensity;
+      const targetEmissive = isBraking ? 2.8 : (p.isReverse ? 2.4 : 1.6);
       taillightSpot.intensity = THREE.MathUtils.lerp(taillightSpot.intensity, targetIntensity, dt * 10);
       taillightLens.material.emissiveIntensity = THREE.MathUtils.lerp(taillightLens.material.emissiveIntensity, targetEmissive, dt * 10);
     }
@@ -4006,10 +4059,23 @@
       const slopePitch = -Math.atan2(hNose - hTail, bumperDist * 2);
       const slopeRoll = Math.atan2(hRight - hLeft, latDist * 2);
 
-      // Check for Snowboard Butter Moves (Numpad 7, 9, 1, 3)
+      // Check for Darkride, Butter moves, or Manual Nose Down (8) / Up (2)
       const isButtering = state.input.butter1 || state.input.butter3 || state.input.butter7 || state.input.butter9;
+      const isManualPitch = (state.input.numpad8 || state.input.twistUp || state.input.numpad2 || state.input.twistDown);
 
-      if (isButtering) {
+      if (state.isDarkride) {
+        // Darkride: board is sliding upside down along terrain
+        const darkTargetPitch = (p.pitch >= 0 ? Math.PI : -Math.PI) - slopePitch;
+        p.pitch = THREE.MathUtils.lerp(p.pitch, darkTargetPitch, dt * 16);
+        p.roll = THREE.MathUtils.lerp(p.roll, -slopeRoll, dt * 12);
+
+        // Ground slide friction feedback while darkriding
+        if (p.speed > 0.8 && Math.random() < 0.45) {
+          const surfaceY = getSurfaceElevation(p.x, p.z);
+          emitGrindSparks(p.x, surfaceY + 0.02, p.z);
+          emitDustParticle(p.x, surfaceY, p.z, 0xa855f7);
+        }
+      } else if (isButtering) {
         let butterPitch = 0;
         let butterRoll = 0;
         let butterType = '';
@@ -4052,8 +4118,6 @@
 
         // Emit slide friction sparks and dust particles from dragged bumper tip
         if (p.speed > 1.2) {
-          // butterPitch < 0: nose up -> tail (-0.37) drags on ground
-          // butterPitch > 0: nose down -> nose (+0.37) drags on ground
           const dragDist = butterPitch < 0 ? -0.37 : 0.37;
           const dragX = p.x + Math.sin(p.heading) * dragDist;
           const dragZ = p.z + Math.cos(p.heading) * dragDist;
@@ -4067,6 +4131,29 @@
             showTrickToast(`${butterType}! 🧈 +150`);
           }
         }
+      } else if (isManualPitch) {
+        if (state.butter.active) {
+          state.butter.active = false;
+          state.butter.timer = 0;
+          state.butter.toastGiven = false;
+        }
+
+        // Manual Pitch: strictly Numpad 8 (Nose Down) & Numpad 2 (Nose Up / Tail Wheelie)
+        const isNoseDown = state.input.numpad8 || state.input.twistUp;
+        const manualPitchOffset = isNoseDown ? 0.22 : -0.22;
+
+        p.pitch = THREE.MathUtils.lerp(p.pitch, slopePitch + manualPitchOffset, dt * 18);
+        p.roll = THREE.MathUtils.lerp(p.roll, p.roll * 0.75 + THREE.MathUtils.clamp(slopeRoll, -0.15, 0.15), dt * 10);
+
+        if (p.speed > 1.0) {
+          const dragDist = isNoseDown ? 0.37 : -0.37;
+          const dragX = p.x + Math.sin(p.heading) * dragDist;
+          const dragZ = p.z + Math.cos(p.heading) * dragDist;
+          if (Math.random() < 0.5) {
+            emitGrindSparks(dragX, p.groundY + 0.02, dragZ);
+            emitDustParticle(dragX, p.groundY, dragZ, isNoseDown ? 0xffffff : 0xef4444);
+          }
+        }
       } else {
         if (state.butter.active) {
           if (state.butter.toastGiven && state.butter.timer > 0.75) {
@@ -4077,11 +4164,31 @@
           state.butter.toastGiven = false;
         }
 
-        // Rider acceleration tilt (pitch nose down slightly on acceleration, up on brake)
-        const accelRate = (targetSpeed - p.speed) / MAX_SPEED;
-        const riderPitch = THREE.MathUtils.clamp(-accelRate * 0.04, -0.03, 0.03);
+        // Rider dynamic acceleration / deceleration pitch animation
+        // On acceleration, lean nose down (+pitch). On deceleration / braking, lean nose up / tail down (-pitch).
+        let targetTilt = 0;
+        if (state.controlMode === 'wheel') {
+          if (throttleInput > 0.05) {
+            targetTilt = 0.08 * throttleInput; // Nose down
+          } else if (throttleInput < -0.05 || isBraking) {
+            targetTilt = -0.09 * (throttleInput < -0.05 ? Math.abs(throttleInput) : 0.8); // Nose up / tail down
+          } else {
+            // Coasting / friction deceleration
+            targetTilt = 0;
+          }
+        } else {
+          // Modes 1, 2, 3
+          if (isBraking) {
+            targetTilt = -0.09; // Nose up / tail down on brake
+          } else if (inputMagnitude > 0.1 && targetSpeed > p.speed + 0.5) {
+            targetTilt = 0.08 * Math.min(1.0, (targetSpeed - p.speed) / 5.0); // Nose down on push/accel
+          } else if (inputMagnitude < 0.05 && p.speed > 1.0) {
+            // Natural friction coasting decel: slight tail settle
+            targetTilt = -0.02;
+          }
+        }
 
-        p.pitch = THREE.MathUtils.lerp(p.pitch, slopePitch + riderPitch, dt * 18);
+        p.pitch = THREE.MathUtils.lerp(p.pitch, slopePitch + targetTilt, dt * 10);
         p.roll = THREE.MathUtils.lerp(p.roll, p.roll * 0.75 + THREE.MathUtils.clamp(slopeRoll, -0.15, 0.15), dt * 10);
       }
     }
@@ -4180,12 +4287,12 @@
 
           // If in a straight-up rail hop and user presses throttle movement keys, allow flying out:
           if (state.grind.straightUpJump) {
-            if (state.input.arrowUp || state.input.up || state.input.numpad8) {
+            if (state.input.arrowUp || state.input.up) {
               p.vx = Math.sin(p.heading) * 6.5;
               p.vz = Math.cos(p.heading) * 6.5;
               p.speed = 6.5;
               state.grind.straightUpJump = false;
-            } else if (state.input.arrowDown || state.input.down || state.input.numpad2) {
+            } else if (state.input.arrowDown || state.input.down) {
               p.vx = -Math.sin(p.heading) * 6.5;
               p.vz = -Math.cos(p.heading) * 6.5;
               p.speed = 6.5;
@@ -4217,12 +4324,25 @@
               showTrickToast(state.aerial.airPitch > 0 ? 'FRONTFLIP! +600 🤸' : 'BACKFLIP! +600 🤸');
             }
           }
+
+          // If airborne and flipped upright, revert darkride
+          const airUpY = Math.cos(p.pitch) * Math.cos(p.roll);
+          if (state.isDarkride && airUpY > 0.35) {
+            state.isDarkride = false;
+            showTrickToast('DARKRIDE REVERT! +500 ✨');
+          }
         }
       }
 
-      // Landing check
-      if (p.y <= p.groundY && p.vy <= 0) {
-        p.y = p.groundY;
+      // Landing check (accounting for inverted deck contact height when upside down)
+      const upY = Math.cos(p.pitch) * Math.cos(p.roll);
+      const isFlipped = (upY < -0.15);
+      const surfaceElevation = getSurfaceElevation(p.x, p.z);
+      const landingElevation = (isFlipped || state.isDarkride) ? (surfaceElevation + 0.26) : p.groundY;
+
+      if (p.y <= landingElevation && p.vy <= 0) {
+        p.y = landingElevation;
+        p.groundY = landingElevation;
         p.vy = 0;
         p.isAirborne = false;
 
@@ -4232,15 +4352,48 @@
           state.grind.comboCount = 0;
         }
 
-        // Wrap pitch to [-PI, PI]
+        // Wrap pitch and roll to [-PI, PI]
         while (p.pitch > Math.PI) p.pitch -= Math.PI * 2;
         while (p.pitch < -Math.PI) p.pitch += Math.PI * 2;
+        while (p.roll > Math.PI) p.roll -= Math.PI * 2;
+        while (p.roll < -Math.PI) p.roll += Math.PI * 2;
 
-        if (Math.abs(p.pitch) > 1.25) {
+        if (isFlipped) {
+          // Board landed upside down! Enter Darkride!
+          if (!state.isDarkride) {
+            state.isDarkride = true;
+            showTrickToast('DARKRIDE! 🛹⚡ +400');
+          }
+        } else if (upY > 0.25) {
+          // Board landed upright!
+          if (state.isDarkride) {
+            state.isDarkride = false;
+            showTrickToast('DARKRIDE REVERT! +500 ✨');
+          }
+        }
+
+        // Check 180 switch / reverse landing
+        // Strictly requires entering the jump moving forward at speed (>= 2.8 m/s ~ 6.3 MPH) and completing a 180 air spin
+        const landSpeed = Math.hypot(p.vx, p.vz);
+        const minForwardSpeed = 2.8; // ~6.3 MPH forward speed required before jump
+        const did180AirSpin = state.aerial.spin180Done || Math.abs(state.aerial.airYaw) >= Math.PI * 0.72;
+
+        if (landSpeed >= 2.2) {
+          const moveDotNose = (p.vx * Math.sin(p.heading) + p.vz * Math.cos(p.heading)) / landSpeed;
+          if (!p.isReverse && (state.aerial.preAirFwdSpeed >= minForwardSpeed) && moveDotNose < -0.48 && did180AirSpin) {
+            p.isReverse = true;
+            showTrickToast('180 SWITCH REVERSE! 🔄');
+          } else if (p.isReverse && (moveDotNose > 0.48 || did180AirSpin)) {
+            p.isReverse = false;
+            showTrickToast('REVERT TO NORMAL! ✨');
+          }
+        }
+
+        if (!state.isDarkride && Math.abs(p.pitch) > 1.25) {
           showTrickToast('SKETCHY LANDING! ⚠️');
           p.vx *= 0.55;
           p.vz *= 0.55;
-        } else if (p.airtime > 0.45 && !state.aerial.spin180Done) {
+        } else if (p.airtime > 0.45 && !state.aerial.spin180Done && !state.isDarkride) {
           showTrickToast('BIG AIR! +150');
         }
         p.airtime = 0;
@@ -4263,8 +4416,8 @@
       }
     }
 
-    // Hard Bumper Clearance Clamping (Strictly prevents nose and tail from penetrating terrain or ramps)
-    if (!p.isAirborne && !state.grind.active) {
+    // Hard Bumper Clearance Clamping (Strictly prevents nose and tail from penetrating terrain or ramps when upright)
+    if (!p.isAirborne && !state.grind.active && !state.isDarkride) {
       const bumperDist = 0.37;
       const bumperRestH = 0.13; // Physical bumper baseline height above axle contact patch
       const nX = p.x + Math.sin(p.heading) * bumperDist;
@@ -4310,7 +4463,8 @@
     const shadowSlopePitch = -Math.atan2(hShadowFwd - hShadowBack, epsShadow * 2);
     const shadowSlopeRoll = Math.atan2(hShadowRight - hShadowLeft, epsShadow * 2);
 
-    shadowMesh.position.set(p.x, p.groundY + 0.018, p.z);
+    const groundPlaneY = getSurfaceElevation(p.x, p.z);
+    shadowMesh.position.set(p.x, groundPlaneY + 0.018, p.z);
     shadowMesh.rotation.order = 'YXZ';
     shadowMesh.rotation.y = p.heading;
     shadowMesh.rotation.x = shadowSlopePitch;
@@ -4325,7 +4479,7 @@
     if (p.speed > 1.2 && !p.isAirborne) {
       if (Math.random() < 0.45) {
         const dustCol = getTerrainColor(p.x, p.z);
-        emitDustParticle(p.x, p.groundY, p.z, dustCol);
+        emitDustParticle(p.x, groundPlaneY, p.z, dustCol);
       }
     }
 
@@ -4430,8 +4584,8 @@
             let vZ_local = -p.vx * Math.sin(rot) + p.vz * Math.cos(rot);
 
             // Throttle & stall control on rail:
-            const isPushingFwd = state.input.arrowUp || state.input.up || state.input.numpad8;
-            const isBraking = state.input.arrowDown || state.input.down || state.input.numpad2;
+            const isPushingFwd = state.input.arrowUp || state.input.up;
+            const isBraking = state.input.arrowDown || state.input.down;
 
             if (state.grind.straightUpJump && Math.abs(vZ_local) < 0.5) {
               // Landed from straight-up jump: balance stall on rail until movement key is pressed!
@@ -4510,8 +4664,8 @@
             // 2. Spacebar Pop-Off (Sets comboActive = true so chaining to next rail triggers transfer combo!)
             if (state.input.jumpPressed) {
               state.input.jumpPressed = false;
-              const hasFwd = state.input.arrowUp || state.input.up || state.input.numpad8 || (state.input.joystickActive && state.input.joystickVector.y > 0.2);
-              const hasBack = state.input.arrowDown || state.input.down || state.input.numpad2 || (state.input.joystickActive && state.input.joystickVector.y < -0.2);
+              const hasFwd = state.input.arrowUp || state.input.up || (state.input.joystickActive && state.input.joystickVector.y > 0.2);
+              const hasBack = state.input.arrowDown || state.input.down || (state.input.joystickActive && state.input.joystickVector.y < -0.2);
               const hasLeft = state.input.arrowLeft || state.input.left || state.input.numpad4 || (state.input.joystickActive && state.input.joystickVector.x < -0.2);
               const hasRight = state.input.arrowRight || state.input.right || state.input.numpad6 || (state.input.joystickActive && state.input.joystickVector.x > 0.2);
 
@@ -4984,28 +5138,38 @@
       if (balanceHud) balanceHud.classList.remove('active');
     }
 
-    // Multi-point ground clearance check to guarantee nose and tail bumpers never clip:
-    const bumperDist = 0.38; // Distance from axle to bumper tip
-    const bumperRestH = 0.13; // Bumper height above tire contact patch
-    const noseX = p.x + Math.sin(p.heading) * bumperDist;
-    const noseZ = p.z + Math.cos(p.heading) * bumperDist;
-    const tailX = p.x - Math.sin(p.heading) * bumperDist;
-    const tailZ = p.z - Math.cos(p.heading) * bumperDist;
+    const surfaceH = getSurfaceElevation(p.x, p.z);
+    targetGround = Math.max(targetGround, surfaceH);
 
-    const hNose = getSurfaceElevation(noseX, noseZ);
-    const hTail = getSurfaceElevation(tailX, tailZ);
+    if (state.isDarkride) {
+      // In Darkride, the board is upside down.
+      // Geometry extends ~0.26m from upright tire bottom to deck top.
+      // Elevating p.groundY by +0.26m places the inverted footpads/deck resting cleanly on top of the terrain surface!
+      p.groundY = targetGround + 0.26;
+    } else {
+      // Multi-point ground clearance check to guarantee nose and tail bumpers never clip:
+      const bumperDist = 0.38; // Distance from axle to bumper tip
+      const bumperRestH = 0.13; // Bumper height above tire contact patch
+      const noseX = p.x + Math.sin(p.heading) * bumperDist;
+      const noseZ = p.z + Math.cos(p.heading) * bumperDist;
+      const tailX = p.x - Math.sin(p.heading) * bumperDist;
+      const tailZ = p.z - Math.cos(p.heading) * bumperDist;
 
-    // Height offset of nose/tail relative to center axle:
-    // With rotation order 'YXZ', pitch < 0 is nose up (+Y), tail down (-Y).
-    const noseDeltaY = -Math.sin(p.pitch) * bumperDist;
-    const tailDeltaY = Math.sin(p.pitch) * bumperDist;
+      const hNose = getSurfaceElevation(noseX, noseZ);
+      const hTail = getSurfaceElevation(tailX, tailZ);
 
-    // Minimum center height so bumpers clear local ground by at least 0.02m
-    const minCenterForNose = hNose - (bumperRestH + noseDeltaY) + 0.02;
-    const minCenterForTail = hTail - (bumperRestH + tailDeltaY) + 0.02;
+      // Height offset of nose/tail relative to center axle:
+      // With rotation order 'YXZ', pitch < 0 is nose up (+Y), tail down (-Y).
+      const noseDeltaY = -Math.sin(p.pitch) * bumperDist;
+      const tailDeltaY = Math.sin(p.pitch) * bumperDist;
 
-    targetGround = Math.max(targetGround, minCenterForNose, minCenterForTail);
-    p.groundY = targetGround;
+      // Minimum center height so bumpers clear local ground by at least 0.02m
+      const minCenterForNose = hNose - (bumperRestH + noseDeltaY) + 0.02;
+      const minCenterForTail = hTail - (bumperRestH + tailDeltaY) + 0.02;
+
+      targetGround = Math.max(targetGround, minCenterForNose, minCenterForTail);
+      p.groundY = targetGround;
+    }
   }
 
   // Terrain particle tint helper
@@ -5140,6 +5304,16 @@
     if (hudSpeedBar) {
       const pct = Math.min(100, (p.speed / MAX_SPEED) * 100);
       hudSpeedBar.style.width = pct + '%';
+    }
+
+    // Top-left Darkride indicator badge
+    const darkrideBadge = document.getElementById('darkrideBadge');
+    if (darkrideBadge) {
+      if (state.isDarkride) {
+        darkrideBadge.classList.add('active');
+      } else {
+        darkrideBadge.classList.remove('active');
+      }
     }
 
     // Compass pointing back to town square center (0, 0)
