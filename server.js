@@ -228,6 +228,53 @@ const BOT_COLORS_T    = ['#f59e0b', '#ef4444'];
 const BOT_COLORS_CT   = ['#06b6d4', '#10b981'];
 const BOT_COLORS_PARK = ['#8b5cf6', '#ec4899'];
 
+// Simplified 2D wall segments for Dust2 line-of-sight checks (x,z coordinates).
+// Each segment is [x1, z1, x2, z2] representing a solid wall edge.
+const DUST2_WALL_SEGMENTS = [
+  // ── Mid building west wall (separates Mid from B tunnels) ──
+  [-5, 25, -5, 5],
+  // ── Mid building east wall (separates Mid from Long A) ──
+  [6, 25, 6, 5],
+  // ── A site back wall ──
+  [28, -18, 28, -32],
+  // ── A site platform south edge ──
+  [10, -18, 28, -18],
+  // ── B tunnels upper wall ──
+  [-8, -5, -18, -5],
+  // ── B site enclosure north ──
+  [-18, -8, -30, -8],
+  // ── B site enclosure east ──
+  [-18, -8, -18, -22],
+  // ── CT spawn building wall (separates CT from A ramp) ──
+  [-5, -28, -5, -40],
+  // ── Long A doors wall ──
+  [10, 8, 10, 22],
+];
+
+/**
+ * Simple 2D line-segment intersection check for bot line-of-sight.
+ * Returns true if the line from (ax,az) to (bx,bz) does NOT cross any wall.
+ */
+function hasLineOfSight(ax, az, bx, bz) {
+  for (const seg of DUST2_WALL_SEGMENTS) {
+    if (segmentsIntersect(ax, az, bx, bz, seg[0], seg[1], seg[2], seg[3])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Returns true if line segment (p1→p2) intersects (p3→p4). */
+function segmentsIntersect(p1x, p1z, p2x, p2z, p3x, p3z, p4x, p4z) {
+  const d1x = p2x - p1x, d1z = p2z - p1z;
+  const d2x = p4x - p3x, d2z = p4z - p3z;
+  const cross = d1x * d2z - d1z * d2x;
+  if (Math.abs(cross) < 0.0001) return false; // parallel
+  const t = ((p3x - p1x) * d2z - (p3z - p1z) * d2x) / cross;
+  const u = ((p3x - p1x) * d1z - (p3z - p1z) * d1x) / cross;
+  return t > 0 && t < 1 && u > 0 && u < 1;
+}
+
 // Dust2 patrol waypoints {x, z, y} — along actual corridors & open pathways
 const BOT_DUST2_WAYPOINTS = [
   { x:  -8.0, z:  32.0, y: 2.58 },   // 0: T Spawn Terrace
@@ -418,7 +465,10 @@ function tickBots(dt) {
         if (d < nearestDist) { nearestDist = d; attackTarget = p; }
       }
 
-      if (attackTarget && nearestDist < ATTACK_RANGE) {
+      // Only attack if within range AND bot has line-of-sight to target
+      const canSee = attackTarget && hasLineOfSight(bot.x, bot.z, attackTarget.x, attackTarget.z);
+
+      if (attackTarget && nearestDist < ATTACK_RANGE && canSee) {
         bot.fsm = 'attack';
 
         // Fire if cooldown elapsed
@@ -489,23 +539,23 @@ function tickBots(dt) {
           }
         }
       } else {
+        // No target, out of range, or no LOS — go back to patrolling
         bot.fsm = 'patrol';
+        attackTarget = null; // don't chase into walls
       }
     }
 
     // ── Steering ───────────────────────────────────────────────────────────
-    let targetX, targetZ, targetY;
+    let targetX, targetZ;
     if (bot.fsm === 'attack' && attackTarget) {
-      // Chase: steer toward player
+      // Chase: steer toward player (only when LOS confirmed above)
       targetX = attackTarget.x;
       targetZ = attackTarget.z;
-      targetY = bot.y; // keep current y during chase
     } else {
       // Patrol: steer toward next waypoint
       const wp = waypoints[bot.waypointIdx];
       targetX = wp.x;
       targetZ = wp.z;
-      targetY = wp.y;
     }
 
     const dx   = targetX - bot.x;
@@ -531,9 +581,37 @@ function tickBots(dt) {
 
     bot.roll = dh * -0.12; // gentle carving roll
 
-    bot.x += Math.sin(bot.heading) * bot.speed * dt;
-    bot.z += Math.cos(bot.heading) * bot.speed * dt;
-    if (bot.fsm === 'patrol') bot.y = Math.max(0.0, targetY); // clamp above world floor
+    // Move — wall collision only during chase (patrol waypoints follow corridors)
+    const moveX = Math.sin(bot.heading) * bot.speed * dt;
+    const moveZ = Math.cos(bot.heading) * bot.speed * dt;
+
+    if (bot.fsm === 'attack' && bot.mapId === 'dust2') {
+      // During chase, check walls before moving — don't drive through buildings
+      let blocked = false;
+      for (const seg of DUST2_WALL_SEGMENTS) {
+        if (segmentsIntersect(bot.x, bot.z, bot.x + moveX, bot.z + moveZ, seg[0], seg[1], seg[2], seg[3])) {
+          blocked = true;
+          break;
+        }
+      }
+      if (blocked) {
+        // Can't reach target — drop back to patrol instead of ramming the wall
+        bot.fsm = 'patrol';
+      } else {
+        bot.x += moveX;
+        bot.z += moveZ;
+      }
+    } else {
+      // Patrol: trust waypoint corridors, no wall check needed
+      bot.x += moveX;
+      bot.z += moveZ;
+    }
+
+    // Lerp Y toward current waypoint target (client will snap to actual ground)
+    if (bot.fsm === 'patrol') {
+      const wp = waypoints[bot.waypointIdx];
+      bot.y += (wp.y - bot.y) * Math.min(1.0, 3.0 * dt); // smooth lerp
+    }
 
     bot.lastUpdate = now;
   }

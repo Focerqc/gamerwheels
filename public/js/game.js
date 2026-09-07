@@ -5134,9 +5134,10 @@
   // ==========================================================================
   // Unified Surface Elevation Query (Terrain + All Stunt Obstacles & Ramps)
   // ==========================================================================
-  function getSurfaceElevation(x, z) {
+  function getSurfaceElevation(x, z, queryY) {
     if (currentMapId === 'dust2') {
-      return getDust2SurfaceElevation(x, z, state.player.y);
+      const refY = (queryY !== undefined) ? queryY : (state.player ? state.player.y : 0.2);
+      return getDust2SurfaceElevation(x, z, refY);
     }
 
     let surfaceH = getTerrainElevation(x, z);
