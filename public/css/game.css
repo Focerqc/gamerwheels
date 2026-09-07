@@ -1175,6 +1175,54 @@ body.exp9-standalone-page .exp9-hud-layer {
   box-shadow: 0 0 14px rgba(56, 189, 248, 0.4);
 }
 
+/* Control Mode Dropdown Selector */
+.exp9-control-mode-wrap {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+}
+
+.exp9-control-mode-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  color: #f1f5f9;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.38rem 1.85rem 0.38rem 0.75rem;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  outline: none;
+  backdrop-filter: blur(12px);
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2338bdf8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.55rem center;
+  background-size: 0.85rem;
+}
+
+.exp9-control-mode-select:hover {
+  border-color: #38bdf8;
+  background-color: rgba(30, 41, 59, 0.95);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+}
+
+.exp9-control-mode-select:focus {
+  border-color: #a855f7;
+  box-shadow: 0 0 14px rgba(168, 85, 247, 0.5);
+}
+
+.exp9-control-mode-select option {
+  background: #0f172a;
+  color: #f1f5f9;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 0.8rem;
+  padding: 0.4rem;
+}
+
 /* Online Riders Indicator Badge */
 .exp9-online-badge {
   display: inline-flex;

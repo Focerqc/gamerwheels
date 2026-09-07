@@ -24,10 +24,10 @@
       name: 'Plaza Park',
       zone: 'Central Town Square',
       x: 0,
-      z: 0,
-      heading: -Math.PI * 0.75, // Screen-up facing
+      z: -20,
+      heading: 0, // Facing South down the transfer line
       spawnYOffset: 0.18,
-      desc: 'Central skate park with funboxes, tabletop jumps, rails, and ledges'
+      desc: 'Expanded 64m street skate park with transfer rails, kickers, funboxes, and quarter banks'
     },
     {
       id: 1,
@@ -75,24 +75,34 @@
   const state = {
     player: {
       x: 0,
-      y: 0.2,
-      z: 0,
+      y: 0.26,
+      z: -20,
       vx: 0,
       vy: 0,
       vz: 0,
       speed: 0,
-      heading: -Math.PI * 0.75, // board yaw angle (radians)
-      pitch: 0,                 // nose-down/up tilt
-      roll: 0,                  // carving bank roll
+      heading: 0, // board yaw angle (radians, 0 = South down the park)
+      pitch: 0,   // nose-down/up tilt
+      roll: 0,    // carving bank roll
       isAirborne: false,
       isGrinding: false,
       airtime: 0,
-      groundY: 0.08,
+      groundY: 0.12,
       currentZone: 'Central Town Square',
       zoneType: 'PLAZA',
       inTabletop: false,
       inGap: false,
       inMegaDrop: false,
+    },
+    mouse: {
+      screenX: 0,
+      screenY: 0,
+      ndcX: 0,
+      ndcY: 0,
+      worldX: 0,
+      worldZ: -20,
+      active: false,
+      isDown: false,
     },
     camera: {
       frustumSize: 18,
@@ -109,6 +119,10 @@
       railX: 0,
       railMinZ: 0,
       railMaxZ: 0,
+      comboActive: false,
+      comboCount: 0,
+      lastRailId: null,
+      railObstacle: null,
     },
     aerial: {
       airYaw: 0,
@@ -122,18 +136,38 @@
       down: false,
       left: false,
       right: false,
+      arrowUp: false,
+      arrowDown: false,
+      arrowLeft: false,
+      arrowRight: false,
       jump: false,
       jumpPressed: false,
       joystickActive: false,
       joystickVector: { x: 0, y: 0 },
-      // Right Twist / Flip / Balance Stick (Arrows on desktop)
+      // Right Twist / Flip / Balance Stick (Numpad or Touch Right Stick)
       twistUp: false,
       twistDown: false,
       twistLeft: false,
       twistRight: false,
+      numpad8: false,
+      numpad2: false,
+      numpad4: false,
+      numpad6: false,
       rightJoystickActive: false,
       rightJoystickVector: { x: 0, y: 0 },
+      // Numpad 7, 9, 1, 3: Snowboard Butter Sliders
+      butter1: false,
+      butter3: false,
+      butter7: false,
+      butter9: false,
     },
+    butter: {
+      active: false,
+      type: null,
+      timer: 0,
+      toastGiven: false,
+    },
+    controlMode: 'default', // 'default', 'mode1', 'mode2', 'mode3'
     obstacles: [],
     trailSigns: [],
     particles: [],
@@ -148,6 +182,7 @@
   let areaToast, areaBadge, areaName, trickToast, trickText;
   let btnRespawn, btnFullscreen, btnTouchJump;
   let btnZoomIn, btnZoomOut;
+  let controlModeSelect;
   let joystickZone, joystickBase, joystickThumb;
   let rightJoystickZone, rightJoystickBase, rightJoystickThumb;
   let balanceHud, balanceLabel, balanceNeedle;
@@ -159,6 +194,12 @@
   let headlightSpot, taillightSpot, taillightLens;
   let sunLight;
   let particleGroup;
+  let targetReticle;
+
+  // --- Mouse Raycaster Globals (2.5D Orthographic Ground Tracking) ---
+  const mouseRaycaster = new THREE.Raycaster();
+  const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  const mouseIntersectPoint = new THREE.Vector3();
 
   // --- Init on DOM Load ---
   window.addEventListener('DOMContentLoaded', () => {
@@ -221,6 +262,19 @@
     if (btnZoomIn) btnZoomIn.addEventListener('click', () => adjustZoom(-3));
     if (btnZoomOut) btnZoomOut.addEventListener('click', () => adjustZoom(+3));
 
+    // Control Modes Dropdown Selector
+    controlModeSelect = document.getElementById('controlModeSelect');
+    if (controlModeSelect) {
+      let savedMode = 'default';
+      try {
+        savedMode = localStorage.getItem('gamerwheels_control_mode') || 'default';
+      } catch (e) {}
+      setControlMode(savedMode);
+      controlModeSelect.addEventListener('change', (e) => {
+        setControlMode(e.target.value);
+      });
+    }
+
     // Checkpoint navigation buttons
     cpButtons = Array.from(document.querySelectorAll('.exp9-cp-btn'));
     cpButtons.forEach((btn) => {
@@ -247,6 +301,74 @@
           accordionHintText.textContent = !isOpen ? 'Hide Info' : 'Show Info';
         }
       });
+    }
+  }
+
+  // --- Dynamic Control Modes Management ---
+  function setControlMode(mode) {
+    if (!['default', 'mouse', 'mouse_move', 'mode1', 'mode2', 'mode3'].includes(mode)) {
+      mode = 'default';
+    }
+    state.controlMode = mode;
+    try {
+      localStorage.setItem('gamerwheels_control_mode', mode);
+    } catch (e) {}
+
+    if (controlModeSelect && controlModeSelect.value !== mode) {
+      controlModeSelect.value = mode;
+    }
+
+    // Testing Mode 3 hides the on-screen jump button (uses right-stick tap instead)
+    const jumpBtnZone = document.querySelector('.exp9-jump-btn-zone');
+    if (jumpBtnZone) {
+      if (mode === 'mode3') {
+        jumpBtnZone.style.display = 'none';
+      } else {
+        jumpBtnZone.style.display = '';
+      }
+    }
+
+    // Target reticle is only displayed in mouse move mode
+    if (targetReticle) {
+      targetReticle.visible = ((mode === 'mouse' || mode === 'mouse_move') && state.mouse.active);
+    }
+
+    // Update bottom controls legend
+    updateControlsHintUI(mode);
+  }
+
+  function updateControlsHintUI(mode) {
+    const hintContainer = document.querySelector('.exp9-desktop-controls-hint');
+    if (!hintContainer) return;
+
+    if (mode === 'default') {
+      hintContainer.innerHTML = `
+        <span><kbd>Mouse</kbd> Steer & Drive</span>
+        <span><kbd>Space</kbd> / <kbd>Click</kbd> Hop</span>
+        <span><kbd>Air Mouse</kbd> Mid-Air Rotate</span>
+        <span><kbd>Rails</kbd> Noseslide & Transfers</span>
+      `;
+    } else if (mode === 'mode1') {
+      hintContainer.innerHTML = `
+        <span><kbd>WASD</kbd> Drive & Steer</span>
+        <span><kbd>Arrows</kbd> Air Spin & Balance</span>
+        <span><kbd>Space</kbd> Jump / Hop</span>
+        <span><kbd>Rails</kbd> Noseslide & Grinds</span>
+      `;
+    } else if (mode === 'mode2') {
+      hintContainer.innerHTML = `
+        <span><kbd>W</kbd> Accel &middot; <kbd>S</kbd> Brake</span>
+        <span><kbd>Release</kbd> Inertial Coast</span>
+        <span><kbd>Arrows</kbd> Air Spin & Balance</span>
+        <span><kbd>Space</kbd> Jump</span>
+      `;
+    } else if (mode === 'mode3') {
+      hintContainer.innerHTML = `
+        <span><kbd>WASD</kbd> / <kbd>Left Stick</kbd> Drive</span>
+        <span><kbd>Right Stick Tap (&lt;1s)</kbd> Jump</span>
+        <span><kbd>Hold (&gt;1s)</kbd> Spin / Balance</span>
+        <span><kbd>Space</kbd> Jump</span>
+      `;
     }
   }
 
@@ -343,6 +465,54 @@
     shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
     shadowMesh.position.set(0, 0.02, 0);
     scene.add(shadowMesh);
+
+    // Initialize ground target reticle for mouse following
+    initTargetReticle();
+  }
+
+  // --- Visual Mouse Target Reticle (Ground Aim Indicator) ---
+  function initTargetReticle() {
+    targetReticle = new THREE.Group();
+
+    // Outer luminous cyan ring
+    const ringGeo = new THREE.RingGeometry(0.32, 0.42, 32);
+    ringGeo.rotateX(-Math.PI / 2);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      transparent: true,
+      opacity: 0.82,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+    targetReticle.add(ringMesh);
+
+    // Inner bright center dot
+    const dotGeo = new THREE.CircleGeometry(0.08, 16);
+    dotGeo.rotateX(-Math.PI / 2);
+    const dotMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.95,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const dotMesh = new THREE.Mesh(dotGeo, dotMat);
+    targetReticle.add(dotMesh);
+
+    targetReticle.visible = false;
+    scene.add(targetReticle);
+  }
+
+  // --- 2.5D Orthographic Raycaster to World Ground Target ---
+  function updateMouseWorldTarget() {
+    if (!camera || !container || !state.mouse.active) return;
+    mouseRaycaster.setFromCamera(new THREE.Vector2(state.mouse.ndcX, state.mouse.ndcY), camera);
+    groundPlane.constant = -(state.player.groundY || 0.12);
+    if (mouseRaycaster.ray.intersectPlane(groundPlane, mouseIntersectPoint)) {
+      state.mouse.worldX = mouseIntersectPoint.x;
+      state.mouse.worldZ = mouseIntersectPoint.z;
+    }
   }
 
   // ==========================================================================
@@ -354,15 +524,15 @@
    * Returns terrain elevation Y (meters) for any world (x, z) coordinate.
    */
   function getTerrainElevation(x, z) {
-    const dist = Math.hypot(x, z);
+    const plazaDist = Math.max(Math.abs(x), Math.abs(z));
 
-    // 1. Central Town Square Plaza is flat at +0.08m
-    if (dist < 19) {
-      return 0.08;
+    // 1. Central Town Square Plaza is flat at +0.12m (expanded 64m square plaza)
+    if (plazaDist <= 32.0) {
+      return 0.12;
     }
 
-    // Smooth transition feathering from plaza to wild terrain
-    const plazaBlend = dist < 25 ? (dist - 19) / 6 : 1;
+    // Smooth transition feathering from plaza to wild terrain (strictly clamped [0, 1])
+    const plazaBlend = THREE.MathUtils.clamp((plazaDist - 32.0) / 6.0, 0, 1);
 
     let h = 0.5;
 
@@ -382,8 +552,8 @@
         }
       }
 
-      // Carve Mega Drop Canyon Corridor (z from -90 to -17, perfectly clear below all ramps)
-      if (Math.abs(x) < 11.5 && z >= -90 && z <= -17) {
+      // Carve Mega Drop Canyon Corridor (z from -90 to -32, perfectly clear below all ramps)
+      if (Math.abs(x) < 11.5 && z >= -90 && z <= -32) {
         let targetFloor = 0.6;
         if (z < -78) {
           // Smooth mountain slope rising behind tower staging (z: -90 to -78)
@@ -403,9 +573,9 @@
           // Under canyon jump gap chasm (z: -43.5 to -35.5)
           targetFloor = 0.4;
         } else {
-          // Under landing transition (z: -35.5 to -17, landing slopes 3.6m to 0.12m)
-          const t = (z - (-35.5)) / 18.5;
-          targetFloor = THREE.MathUtils.lerp(0.35, 0.08, THREE.MathUtils.clamp(t, 0, 1));
+          // Under landing transition approaching plaza (z: -35.5 to -32, slopes 3.6m to 2.92m)
+          const t = (z - (-35.5)) / 3.5;
+          targetFloor = THREE.MathUtils.lerp(0.35, 0.12, THREE.MathUtils.clamp(t, 0, 1));
         }
 
         // Smooth canyon profile: perfectly flat 10m wide floor (|x| <= 5.0m), smooth walls up to 11.5m
@@ -512,7 +682,7 @@
       h = 0.8 + Math.sin(x * 0.09) * 0.7 + Math.cos(z * 0.09) * 0.7;
     }
 
-    return THREE.MathUtils.lerp(0.08, Math.max(0.05, h), plazaBlend);
+    return THREE.MathUtils.lerp(0.12, Math.max(0.05, h), plazaBlend);
   }
 
   /**
@@ -598,7 +768,18 @@
       const gz = pos.getZ(i);
 
       // Displace Y coordinate according to mathematical heightfield
-      const gy = getTerrainElevation(gx, gz);
+      let gy = getTerrainElevation(gx, gz);
+      const plazaDist = Math.max(Math.abs(gx), Math.abs(gz));
+
+      // Depress base ground mesh under the 64m plaza pavers to eliminate Z-fighting.
+      // The plazaMesh slab sits at y = 0.12m with skirt foundation down to -0.12m across [-32, 32].
+      if (plazaDist < 31.0) {
+        gy = 0.00;
+      } else if (plazaDist <= 32.5) {
+        const t = (plazaDist - 31.0) / 1.5;
+        gy = THREE.MathUtils.lerp(0.00, gy, t);
+      }
+
       pos.setY(i, gy);
 
       // Biome vertex color blending
@@ -689,8 +870,8 @@
         `#include <dithering_fragment>
          // Topographic Elevation Contour Lines & Slope Shading
          float elevY = vWorldPosition.y;
-         float distPlaza = length(vWorldPosition.xz);
-         if (distPlaza > 18.0) {
+         float distPlaza = max(abs(vWorldPosition.x), abs(vWorldPosition.z));
+         if (distPlaza > 31.5) {
            // Major 1.0m elevation contour isolines
            float fw1 = max(fwidth(elevY) * 1.8, 0.035);
            float isoline1 = 1.0 - smoothstep(0.0, fw1, abs(fract(elevY + 0.5) - 0.5));
@@ -714,20 +895,21 @@
     groundMesh.receiveShadow = true;
     scene.add(groundMesh);
 
-    // 2. Central Plaza Pavers (Town Square)
-    const plazaGeo = new THREE.BoxGeometry(38, 0.12, 38);
+    // 2. Central Plaza Pavers (Town Square - Expanded 64m x 64m Skate Park)
+    // 24cm deep foundation slab: top surface sits at +0.12m, bottom sinks to -0.12m
+    const plazaGeo = new THREE.BoxGeometry(64, 0.24, 64);
     const plazaMat = new THREE.MeshStandardMaterial({
       color: 0x3e4758,
       roughness: 0.7,
       metalness: 0.1,
     });
     const plazaMesh = new THREE.Mesh(plazaGeo, plazaMat);
-    plazaMesh.position.set(0, 0.06, 0);
+    plazaMesh.position.set(0, 0.00, 0);
     plazaMesh.receiveShadow = true;
     scene.add(plazaMesh);
 
     // Center Inset Mosaic / Charging Pad
-    const padGeo = new THREE.BoxGeometry(10, 0.16, 10);
+    const padGeo = new THREE.BoxGeometry(12, 0.16, 12);
     const padMat = new THREE.MeshStandardMaterial({
       color: 0x6366f1,
       roughness: 0.4,
@@ -746,11 +928,11 @@
     // 4. Stunt Features (Tabletop, Gap Jump, Whale Tail, Mega Drop)
     createStuntJumpLines();
 
-    // 5. Trail Signs
-    createTrailSign('North: Thunder Peak', '[MEGA DROP]', -6.0, -18, 0, 0xf59e0b);
-    createTrailSign('South: Cactus Canyon', '[DESERT BERMS]', 0, 20, Math.PI, 0x14b8a6);
-    createTrailSign('East: Pine Ridge', '[SLOPESTYLE TIMBER]', 20, 0, Math.PI / 2, 0x10b981);
-    createTrailSign('West: Slickrock Bluff', '[MOTOCROSS CANYON]', -20, 0, -Math.PI / 2, 0xf59e0b);
+    // 5. Trail Signs (At expanded 64m perimeter exits)
+    createTrailSign('North: Thunder Peak', '[MEGA DROP]', -6.0, -31, 0, 0xf59e0b);
+    createTrailSign('South: Cactus Canyon', '[DESERT BERMS]', 0, 31, Math.PI, 0x14b8a6);
+    createTrailSign('East: Pine Ridge', '[SLOPESTYLE TIMBER]', 31, 0, Math.PI / 2, 0x10b981);
+    createTrailSign('West: Slickrock Bluff', '[MOTOCROSS CANYON]', -31, 0, -Math.PI / 2, 0xf59e0b);
 
     // 6. Scenery (Trees, Rocks, Cacti placed on contour elevation)
     populateScenery();
@@ -844,7 +1026,7 @@
     return group;
   }
 
-  // Authentic Street Skate Park (Multi-Line Flow: Funbox, Banks, Ledges, Rails)
+  // Authentic Street Skate Park (Expanded 64m x 64m Plaza: Staggered Transfer Rails, Kickers, Banks)
   function createStreetParkFeatures() {
     const concreteMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.65 });
     const bankMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.6 });
@@ -852,260 +1034,287 @@
     const copingMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, metalness: 0.88, roughness: 0.2 });
 
     // =========================================================================
-    // 1. CENTRAL FUNBOX / PYRAMID (x: 0, z: 0)
+    // 1. THE STAGGERED TRIPLE TRANSFER RAILS (North-South Flow Line)
+    // Designed for mid-air mouse alignment, noseslides, boardslides, and Spacebar hop-transfers!
+    // =========================================================================
+    // Rail 1: Sunset Gold Flatbar Rail (West line: x = -5.0, spans z: -10 to +2)
+    createGrindRail(-5.0, -4.0, 12.0, 0.42, 0xfacc15, 0, 'rail_transfer_gold');
+
+    // Rail 2: Blaze Red Down-Rail (Center line: x = 0.0, spans z: -4 to +8, overlaps Gold by 6m!)
+    createGrindRail(0.0, 2.0, 12.0, 0.46, 0xef4444, 0, 'rail_transfer_red');
+
+    // Rail 3: Neon Violet Flatbar Rail (East line: x = +5.0, spans z: +2 to +14, overlaps Red by 6m!)
+    createGrindRail(5.0, 8.0, 12.0, 0.42, 0xa855f7, 0, 'rail_transfer_purple');
+
+    // =========================================================================
+    // 2. SOUTHBOUND APPROACH LAUNCH KICKERS (Pointing South towards transfer rails)
+    // =========================================================================
+    // Kicker 1: Approaches Gold Rail from North
+    createKickerRamp(-5.0, -14.0, 3.4, 3.4, 0.65, Math.PI);
+    // Kicker 2: Approaches Center Red Rail from North
+    createKickerRamp(0.0, -8.0, 3.4, 3.4, 0.65, Math.PI);
+    // Kicker 3: Approaches Purple Rail from North
+    createKickerRamp(5.0, -2.0, 3.4, 3.4, 0.65, Math.PI);
+
+    // =========================================================================
+    // 3. NORTHBOUND APPROACH LAUNCH KICKERS (Pointing North for reverse transfer line)
+    // =========================================================================
+    createKickerRamp(5.0, 18.0, 3.4, 3.4, 0.65, 0);
+    createKickerRamp(0.0, 12.0, 3.4, 3.4, 0.65, 0);
+    createKickerRamp(-5.0, 6.0, 3.4, 3.4, 0.65, 0);
+
+    // =========================================================================
+    // 4. CENTRAL STREET FUNBOX / PYRAMID (x: 0, z: -1.0)
     // =========================================================================
     const funboxH = 0.52;
-    const deckSize = 4.6;
-
-    // A. Center Flat Deck
-    const centerDeck = new THREE.Mesh(new THREE.BoxGeometry(deckSize, funboxH, deckSize), concreteMat);
-    centerDeck.position.set(0, funboxH / 2 + 0.06, 0);
+    const deckW = 3.6;
+    const deckL = 4.0;
+    const centerDeck = new THREE.Mesh(new THREE.BoxGeometry(deckW, funboxH, deckL), concreteMat);
+    centerDeck.position.set(0, funboxH / 2 + 0.06, -1.0);
     centerDeck.castShadow = true;
     centerDeck.receiveShadow = true;
     scene.add(centerDeck);
-
     registerObstacle({
       type: 'deck',
       x: 0,
-      z: 0,
-      width: deckSize,
-      length: deckSize,
+      z: -1.0,
+      width: deckW,
+      length: deckL,
       height: funboxH + 0.06,
     });
 
-    // B. North Bank (Slopes up to center deck from z = -5.9 to z = -2.3)
-    const bankNorth = createWedgeMesh(deckSize, 3.6, 0.06, funboxH + 0.06, bankMat);
-    bankNorth.position.set(0, 0, -5.9);
-    scene.add(bankNorth);
+    // A. West Bank of Funbox
+    const fbBankWest = createWedgeMesh(deckL, 2.6, 0.06, funboxH + 0.06, bankMat);
+    fbBankWest.rotation.y = -Math.PI / 2;
+    fbBankWest.position.set(-1.8, 0, -1.0);
+    scene.add(fbBankWest);
     registerObstacle({
-      type: 'bank_z',
-      x: 0,
-      zStart: -5.9,
-      zEnd: -2.3,
-      width: deckSize,
+      type: 'bank_x',
+      z: -1.0,
+      xStart: -4.4,
+      xEnd: -1.8,
+      length: deckL,
       yStart: 0.06,
       yEnd: funboxH + 0.06,
     });
 
-    // C. South Bank (Slopes up to center deck from z = 5.9 to z = 2.3)
-    const bankSouth = createWedgeMesh(deckSize, 3.6, funboxH + 0.06, 0.06, bankMat);
-    bankSouth.position.set(0, 0, 2.3);
-    scene.add(bankSouth);
+    // B. East Bank of Funbox
+    const fbBankEast = createWedgeMesh(deckL, 2.6, funboxH + 0.06, 0.06, bankMat);
+    fbBankEast.rotation.y = -Math.PI / 2;
+    fbBankEast.position.set(1.8, 0, -1.0);
+    scene.add(fbBankEast);
     registerObstacle({
-      type: 'bank_z',
-      x: 0,
-      zStart: 2.3,
-      zEnd: 5.9,
-      width: deckSize,
+      type: 'bank_x',
+      z: -1.0,
+      xStart: 1.8,
+      xEnd: 4.4,
+      length: deckL,
       yStart: funboxH + 0.06,
       yEnd: 0.06,
     });
 
-    // D. West Bank (Slopes up to center deck from x = -5.9 to x = -2.3)
-    const bankWest = createWedgeMesh(deckSize, 3.6, 0.06, funboxH + 0.06, bankMat);
-    bankWest.rotation.y = -Math.PI / 2;
-    bankWest.position.set(-2.3, 0, 0);
-    scene.add(bankWest);
-    registerObstacle({
-      type: 'bank_x',
-      z: 0,
-      xStart: -5.9,
-      xEnd: -2.3,
-      length: deckSize,
-      yStart: 0.06,
-      yEnd: funboxH + 0.06,
-    });
-
-    // E. East Bank (Slopes up to center deck from x = 5.9 to x = 2.3)
-    const bankEast = createWedgeMesh(deckSize, 3.6, funboxH + 0.06, 0.06, bankMat);
-    bankEast.rotation.y = -Math.PI / 2;
-    bankEast.position.set(5.9, 0, 0);
-    scene.add(bankEast);
-    registerObstacle({
-      type: 'bank_x',
-      z: 0,
-      xStart: 2.3,
-      xEnd: 5.9,
-      length: deckSize,
-      yStart: funboxH + 0.06,
-      yEnd: 0.06,
-    });
-
-    // F. Center Down-Rail (Electric Cyan Rail down the North/South axis)
-    createGrindRail(0, 0, 9.5, 0.42 + funboxH, 0x38bdf8);
-
-    // G. Funbox Hubba Ledge with Steel Coping (East Flank)
+    // C. Hubba Ledge with Coping along Funbox East side
     const hubbaW = 0.55;
-    const hubbaL = 6.8;
+    const hubbaL = 6.0;
     const hubbaH = funboxH + 0.16;
     const hubbaMesh = new THREE.Mesh(new THREE.BoxGeometry(hubbaW, hubbaH, hubbaL), concreteMat);
-    hubbaMesh.position.set(deckSize / 2 + hubbaW / 2, hubbaH / 2 + 0.06, 0);
+    hubbaMesh.position.set(deckW / 2 + hubbaW / 2, hubbaH / 2 + 0.06, -1.0);
     hubbaMesh.castShadow = true;
     hubbaMesh.receiveShadow = true;
     scene.add(hubbaMesh);
 
     const hubbaCoping = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, hubbaL, 8), copingMat);
-    hubbaCoping.position.set(deckSize / 2 + hubbaW, hubbaH + 0.06, 0);
+    hubbaCoping.position.set(deckW / 2 + hubbaW, hubbaH + 0.06, -1.0);
     hubbaCoping.castShadow = true;
     scene.add(hubbaCoping);
-
     registerObstacle({
       type: 'ledge',
-      x: deckSize / 2 + hubbaW / 2,
-      z: 0,
+      x: deckW / 2 + hubbaW / 2,
+      z: -1.0,
       width: hubbaW + 0.2,
       length: hubbaL,
       height: hubbaH + 0.06,
     });
 
     // =========================================================================
-    // 2. PERIMETER QUARTER BANK TRANSITIONS (North & South Returns)
+    // 5. WEST STREET PLAZA LINE (Manual Pads & Cyber Cyan Rail)
     // =========================================================================
-    // North Bank Return (Faces South into the park)
-    const qbNorth = createQuarterBankMesh(15.0, 3.2, 0.85, Math.PI, bankMat);
-    qbNorth.position.set(0, 0.06, -15.5);
+    // Lower Stage 1 Manny Pad
+    const mp1 = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.24, 4.8), concreteMat);
+    mp1.position.set(-15.0, 0.12 + 0.06, -5.0);
+    mp1.castShadow = true;
+    mp1.receiveShadow = true;
+    scene.add(mp1);
+    registerObstacle({ type: 'deck', x: -15.0, z: -5.0, width: 2.8, length: 4.8, height: 0.30 });
+
+    // Elevated Stage 2 Manny Pad
+    const mp2 = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.44, 4.8), concreteMat);
+    mp2.position.set(-15.0, 0.22 + 0.06, 3.0);
+    mp2.castShadow = true;
+    mp2.receiveShadow = true;
+    scene.add(mp2);
+    registerObstacle({ type: 'deck', x: -15.0, z: 3.0, width: 2.8, length: 4.8, height: 0.50 });
+
+    // Cyber Cyan Flatbar Rail along West Line
+    createGrindRail(-19.5, 0.0, 13.0, 0.40, 0x06b6d4, 0, 'rail_west_cyan');
+
+    // Concrete Street Coping Ledge
+    const curbLedge = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.32, 10.0), concreteMat);
+    curbLedge.position.set(-11.5, 0.16 + 0.06, -1.0);
+    curbLedge.castShadow = true;
+    curbLedge.receiveShadow = true;
+    scene.add(curbLedge);
+    registerObstacle({ type: 'ledge', x: -11.5, z: -1.0, width: 0.65, length: 10.0, height: 0.38 });
+
+    // =========================================================================
+    // 6. EAST STREET PLAZA LINE (Euro Gap & Neon Lime Rail)
+    // =========================================================================
+    // Euro Gap Launch Kicker (South approach)
+    createKickerRamp(15.0, 6.5, 3.2, 3.2, 0.65, Math.PI);
+    // Elevated Euro Landing Deck (North of kicker with 1.6m gap)
+    const euroDeck = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.58, 4.5), woodDeckMat);
+    euroDeck.position.set(15.0, 0.58 / 2 + 0.06, 0.5);
+    euroDeck.castShadow = true;
+    euroDeck.receiveShadow = true;
+    scene.add(euroDeck);
+    registerObstacle({ type: 'deck', x: 15.0, z: 0.5, width: 3.6, length: 4.5, height: 0.64 });
+
+    // Neon Lime Flatbar Rail along East Line
+    createGrindRail(19.5, 0.0, 13.0, 0.40, 0x10b981, 0, 'rail_east_lime');
+
+    // East Street Manual Pad
+    const eastManny = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.28, 4.8), concreteMat);
+    eastManny.position.set(15.0, 0.14 + 0.06, -7.5);
+    eastManny.castShadow = true;
+    eastManny.receiveShadow = true;
+    scene.add(eastManny);
+    registerObstacle({ type: 'deck', x: 15.0, z: -7.5, width: 3.0, length: 4.8, height: 0.34 });
+
+    // =========================================================================
+    // 7. PERIMETER QUARTER BANK TRANSITIONS (North, South, East, West Returns)
+    // =========================================================================
+    // North Quarter Bank Return (Faces South into park)
+    const qbNorth = createQuarterBankMesh(26.0, 3.8, 1.1, Math.PI, bankMat);
+    qbNorth.position.set(0, 0.06, -28.0);
     scene.add(qbNorth);
     registerObstacle({
       type: 'bank_z',
       x: 0,
-      zStart: -12.3,
-      zEnd: -15.5,
-      width: 15.0,
+      zStart: -24.2,
+      zEnd: -28.0,
+      width: 26.0,
       yStart: 0.06,
-      yEnd: 0.91,
+      yEnd: 1.16,
     });
 
-    // South Bank Return (Faces North into the park)
-    const qbSouth = createQuarterBankMesh(15.0, 3.2, 0.85, 0, bankMat);
-    qbSouth.position.set(0, 0.06, 12.3);
+    // South Quarter Bank Return (Faces North into park)
+    const qbSouth = createQuarterBankMesh(26.0, 3.8, 1.1, 0, bankMat);
+    qbSouth.position.set(0, 0.06, 24.2);
     scene.add(qbSouth);
     registerObstacle({
       type: 'bank_z',
       x: 0,
-      zStart: 12.3,
-      zEnd: 15.5,
-      width: 15.0,
+      zStart: 24.2,
+      zEnd: 28.0,
+      width: 26.0,
       yStart: 0.06,
-      yEnd: 0.91,
+      yEnd: 1.16,
     });
 
-    // =========================================================================
-    // 3. WEST STREET LINE (Double-Tier Manual Pad & Gold Flatbar Rail)
-    // =========================================================================
-    // Stage 1 Low Manny Pad (0.22m)
-    const mp1 = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.22, 3.6), concreteMat);
-    mp1.position.set(-10.5, 0.11 + 0.06, -1.8);
-    mp1.castShadow = true;
-    mp1.receiveShadow = true;
-    scene.add(mp1);
-    registerObstacle({ type: 'deck', x: -10.5, z: -1.8, width: 2.4, length: 3.6, height: 0.28 });
-
-    // Stage 2 Elevated Manny Pad (0.38m)
-    const mp2 = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.38, 3.6), concreteMat);
-    mp2.position.set(-10.5, 0.19 + 0.06, 1.8);
-    mp2.castShadow = true;
-    mp2.receiveShadow = true;
-    scene.add(mp2);
-    registerObstacle({ type: 'deck', x: -10.5, z: 1.8, width: 2.4, length: 3.6, height: 0.44 });
-
-    // Anodized Gold Flatbar Rail (Parallel to manny pad)
-    createGrindRail(-13.2, 0, 9.0, 0.38, 0xfacc15);
-
-    // =========================================================================
-    // 4. EAST STREET LINE (Euro Gap Step-Up & Neon Violet Rail)
-    // =========================================================================
-    // Euro Gap Launch Kicker (South approach)
-    createKickerRamp(10.5, 3.5, 2.8, 2.8, 0.62, Math.PI);
-    // Elevated Landing Deck (North of kicker with 1.4m gap)
-    const euroDeck = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.55, 3.8), woodDeckMat);
-    euroDeck.position.set(10.5, 0.55 / 2 + 0.06, -1.2);
-    euroDeck.castShadow = true;
-    euroDeck.receiveShadow = true;
-    scene.add(euroDeck);
-    registerObstacle({ type: 'deck', x: 10.5, z: -1.2, width: 3.2, length: 3.8, height: 0.61 });
-
-    // Neon Violet Flatbar Rail
-    createGrindRail(13.4, 0, 9.0, 0.38, 0xa855f7);
-
-    // =========================================================================
-    // 5. PLAZA STREET JUMP LINES (Tabletop, Quarter Spine & Hip Transfer)
-    // =========================================================================
-    // A. Concrete Street Tabletop / Launch Box (Northwest Plaza, x: -7.5, z: -7.5)
-    createTabletopJump(-7.5, -7.5, 7.0, 3.4, 0.62);
-
-    // B. Curved Launch Kicker to Bank Transfer (Northeast Plaza, x: 7.5, z: -7.5)
-    createKickerRamp(7.5, -7.5, 3.2, 3.4, 0.68, Math.PI * 0.75);
-
-    // C. Quarter Pipe Return Spine (Southeast Plaza, x: 7.5, z: 7.5)
-    const plazaQuarter = createQuarterBankMesh(5.2, 3.2, 0.78, -Math.PI * 0.25, bankMat);
-    plazaQuarter.position.set(7.5, 0.06, 7.5);
-    scene.add(plazaQuarter);
+    // West Quarter Bank Return (Faces East into park)
+    const qbWest = createQuarterBankMesh(26.0, 3.8, 1.1, Math.PI / 2, bankMat);
+    qbWest.position.set(-24.2, 0.06, 0);
+    scene.add(qbWest);
     registerObstacle({
-      type: 'bank_z',
-      x: 7.5,
-      zStart: 5.9,
-      zEnd: 9.1,
-      width: 5.2,
+      type: 'bank_x',
+      z: 0,
+      xStart: -24.2,
+      xEnd: -28.0,
+      length: 26.0,
       yStart: 0.06,
-      yEnd: 0.84,
+      yEnd: 1.16,
     });
 
-    // Curbs surrounding the plaza
+    // East Quarter Bank Return (Faces West into park)
+    const qbEast = createQuarterBankMesh(26.0, 3.8, 1.1, -Math.PI / 2, bankMat);
+    qbEast.position.set(24.2, 0.06, 0);
+    scene.add(qbEast);
+    registerObstacle({
+      type: 'bank_x',
+      z: 0,
+      xStart: 24.2,
+      xEnd: 28.0,
+      length: 26.0,
+      yStart: 0.06,
+      yEnd: 1.16,
+    });
+
+    // Curbs surrounding the expanded 64m plaza
     createCurbs();
   }
 
-  // Grind Rail Builder with Stanchions & Spark Collider
-  function createGrindRail(x, z, length = 11.0, height = 0.40, colorHex = 0xfacc15) {
+  // Upgraded Grind Rail Builder (Supports multi-angle rotation, custom IDs, and visual stanchions)
+  function createGrindRail(x, z, length = 11.0, height = 0.40, colorHex = 0xfacc15, rotation = 0, railId = null) {
     const railGeo = new THREE.CylinderGeometry(0.045, 0.045, length, 12);
     railGeo.rotateX(Math.PI / 2);
     const railMat = new THREE.MeshStandardMaterial({ color: colorHex, metalness: 0.9, roughness: 0.22 });
     const railMesh = new THREE.Mesh(railGeo, railMat);
     railMesh.position.set(x, height + 0.06, z);
+    railMesh.rotation.y = rotation;
     railMesh.castShadow = true;
     scene.add(railMesh);
 
+    const cosR = Math.cos(rotation);
+    const sinR = Math.sin(rotation);
     const postSpacing = length / 3;
     [-postSpacing, 0, postSpacing].forEach((offset) => {
       const postGeo = new THREE.CylinderGeometry(0.035, 0.035, height, 8);
       const postMat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.8 });
       const post = new THREE.Mesh(postGeo, postMat);
-      post.position.set(x, (height / 2) + 0.06, z + offset);
+      post.position.set(x + sinR * offset, (height / 2) + 0.06, z + cosR * offset);
       post.castShadow = true;
       scene.add(post);
     });
 
     registerObstacle({
       type: 'rail',
+      id: railId || `rail_${Math.round(x)}_${Math.round(z)}`,
       x: x,
       z: z,
-      width: 0.52,
+      width: 0.65,
       length: length,
       height: height + 0.06,
+      rotation: rotation,
     });
   }
 
-  // Curbs surrounding the plaza
+  // Curbs surrounding the expanded 64m plaza (half = 31.5m, leaving 14m clear corridor exits)
   function createCurbs() {
     const curbMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.7 });
     const curbH = 0.22;
     const curbW = 0.35;
-    const half = 19;
+    const half = 31.5;
+    const curbLen = 22.0;
 
     const sides = [
-      { x: 0, z: -half, len: 14, rot: 0, offX: -11 },
-      { x: 0, z: -half, len: 14, rot: 0, offX: 11 },
-      { x: 0, z: half, len: 14, rot: 0, offX: -11 },
-      { x: 0, z: half, len: 14, rot: 0, offX: 11 },
-      { x: -half, z: 0, len: 14, rot: Math.PI / 2, offZ: -11 },
-      { x: -half, z: 0, len: 14, rot: Math.PI / 2, offZ: 11 },
-      { x: half, z: 0, len: 14, rot: Math.PI / 2, offZ: -11 },
-      { x: half, z: 0, len: 14, rot: Math.PI / 2, offZ: 11 },
+      // North edge curbs (Leaving 14m exit to Mega Drop)
+      { x: -17.5, z: -half, len: curbLen, rot: 0 },
+      { x: 17.5, z: -half, len: curbLen, rot: 0 },
+      // South edge curbs (Leaving 14m exit to Desert Berms)
+      { x: -17.5, z: half, len: curbLen, rot: 0 },
+      { x: 17.5, z: half, len: curbLen, rot: 0 },
+      // West edge curbs (Leaving 14m exit to Slickrock Motocross)
+      { x: -half, z: -17.5, len: curbLen, rot: Math.PI / 2 },
+      { x: -half, z: 17.5, len: curbLen, rot: Math.PI / 2 },
+      // East edge curbs (Leaving 14m exit to Pine Ridge Slopestyle)
+      { x: half, z: -17.5, len: curbLen, rot: Math.PI / 2 },
+      { x: half, z: 17.5, len: curbLen, rot: Math.PI / 2 },
     ];
 
     sides.forEach((s) => {
       const curbGeo = new THREE.BoxGeometry(s.len, curbH, curbW);
       const curb = new THREE.Mesh(curbGeo, curbMat);
-      curb.position.set(s.x + (s.offX || 0), curbH / 2 + 0.06, s.z + (s.offZ || 0));
+      curb.position.set(s.x, curbH / 2 + 0.06, s.z);
       curb.rotation.y = s.rot;
       curb.castShadow = true;
       curb.receiveShadow = true;
@@ -2036,16 +2245,18 @@
     lipCoping.castShadow = true;
     group.add(lipCoping);
 
-    // 4. Downhill Landing Transition (High-contrast concrete, z: -35.5 to -17.5, drops 3.6m to 0.4m)
-    const landingMesh = createWedgeMesh(5.8, 18.0, landingTopY, landingBottomY, landingMat);
+    // 4. Downhill Landing Transition (High-contrast concrete, z: -35.5 to -17.5, drops 3.6m to 0.12m with flush run-out apron)
+    const landingWidth = 8.4;
+    const landingMesh = createWedgeMesh(landingWidth, 18.0, landingTopY, landingBottomY, landingMat);
     landingMesh.position.set(0, 0, 36.5);
     group.add(landingMesh);
 
+
     // Yellow / Black Hazard Chevrons along Landing Sides
     const hazardMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.5 });
-    [-2.95, 2.95].forEach((hx) => {
-      const hCurb = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.35, 18.0), hazardMat);
-      hCurb.position.set(hx, (landingTopY + landingBottomY) / 2 + 0.18, 45.5);
+    [-landingWidth / 2 - 0.08, landingWidth / 2 + 0.08].forEach((hx) => {
+      const hCurb = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.45, 20.5), hazardMat);
+      hCurb.position.set(hx, (landingTopY + landingBottomY) / 2 + 0.15, 46.75);
       group.add(hCurb);
     });
 
@@ -2085,13 +2296,14 @@
       yEnd: kickerLipY,
     });
 
-    // D. Downhill Landing Transition (Catches falling rider cleanly)
+    // D. Downhill Landing Transition (Catches falling rider cleanly with wide 8.8m profile & extended apron)
     registerObstacle({
       type: 'megadrop_landing',
       x: x,
-      zStart: z + 36.5,
-      zEnd: z + 54.5,
-      width: 6.0,
+      zStart: z + 36.5,   // -35.5
+      zEnd: z + 57.0,     // -15.0 (extended 2.5m over apron onto plaza)
+      slopeEnd: z + 54.5, // -17.5
+      width: landingWidth + 0.4,
       yStart: landingTopY,
       yEnd: landingBottomY,
     });
@@ -2172,8 +2384,8 @@
 
   // Clear sightline culling helper: excludes scenery from blocking jump lines, runways, and park
   function isExcludedSceneryZone(x, z) {
-    // 1. Central Skatepark
-    if (Math.abs(x) < 22 && Math.abs(z) < 22) return true;
+    // 1. Central Skatepark (Expanded 64m x 64m)
+    if (Math.abs(x) < 33 && Math.abs(z) < 33) return true;
     // 2. North Mega Drop line (runway, kicker, landing, roll-out, tower)
     if (Math.abs(x) < 14 && z <= -16 && z >= -90) return true;
     // 3. East Pine Ridge Timber Slopestyle course (x ~ 55, z from -28 to +48)
@@ -2696,17 +2908,20 @@
 
     // Keyboard Handler
     window.addEventListener('keydown', (e) => {
-      // 1. SCROLL-LOCK: Prevent page scrolling on arrow keys and spacebar
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
+      // 1. SCROLL-LOCK: Prevent page scrolling on arrow keys, spacebar, and numpad
+      if ([
+        'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space',
+        'Numpad1', 'Numpad2', 'Numpad3', 'Numpad4', 'Numpad5', 'Numpad6', 'Numpad7', 'Numpad8', 'Numpad9'
+      ].includes(e.code)) {
         e.preventDefault();
       }
 
-      // 2. CHECKPOINT HOTKEYS (Keys 1 - 5)
-      if (e.code === 'Digit1' || e.code === 'Numpad1') { teleportToCheckpoint(0); return; }
-      if (e.code === 'Digit2' || e.code === 'Numpad2') { teleportToCheckpoint(1); return; }
-      if (e.code === 'Digit3' || e.code === 'Numpad3') { teleportToCheckpoint(2); return; }
-      if (e.code === 'Digit4' || e.code === 'Numpad4') { teleportToCheckpoint(3); return; }
-      if (e.code === 'Digit5' || e.code === 'Numpad5') { teleportToCheckpoint(4); return; }
+      // 2. CHECKPOINT HOTKEYS (Top-row Number Keys 1 - 5)
+      if (e.code === 'Digit1') { teleportToCheckpoint(0); return; }
+      if (e.code === 'Digit2') { teleportToCheckpoint(1); return; }
+      if (e.code === 'Digit3') { teleportToCheckpoint(2); return; }
+      if (e.code === 'Digit4') { teleportToCheckpoint(3); return; }
+      if (e.code === 'Digit5') { teleportToCheckpoint(4); return; }
 
       // 3. ZOOM HOTKEYS
       if (e.code === 'BracketLeft' || e.code === 'Minus' || e.code === 'NumpadSubtract') {
@@ -2718,9 +2933,21 @@
         return;
       }
 
-      // 4. MOVEMENT & TRICK / BALANCE INPUTS
-      switch (e.code) {
-        // Left Stick / Movement (WASD on desktop)
+      // 4. ACTION & MOVEMENT HOTKEYS (Normalize Numpad keys regardless of NumLock state)
+      let code = e.code;
+      if (e.location === 3) {
+        if (e.key === '8' || e.key === 'ArrowUp' || e.code === 'Numpad8') code = 'Numpad8';
+        else if (e.key === '2' || e.key === 'ArrowDown' || e.code === 'Numpad2') code = 'Numpad2';
+        else if (e.key === '4' || e.key === 'ArrowLeft' || e.code === 'Numpad4') code = 'Numpad4';
+        else if (e.key === '6' || e.key === 'ArrowRight' || e.code === 'Numpad6') code = 'Numpad6';
+        else if (e.key === '5' || e.key === 'Clear' || e.code === 'Numpad5') code = 'Numpad5';
+        else if (e.key === '1' || e.key === 'End' || e.code === 'Numpad1') code = 'Numpad1';
+        else if (e.key === '3' || e.key === 'PageDown' || e.code === 'Numpad3') code = 'Numpad3';
+        else if (e.key === '7' || e.key === 'Home' || e.code === 'Numpad7') code = 'Numpad7';
+        else if (e.key === '9' || e.key === 'PageUp' || e.code === 'Numpad9') code = 'Numpad9';
+      }
+
+      switch (code) {
         case 'KeyW':
           state.input.up = true;
           break;
@@ -2734,26 +2961,23 @@
           state.input.right = true;
           break;
 
-        // Right Stick / Twist, Flip & Grind Balance (Arrow Keys on desktop)
         case 'ArrowUp':
-          state.input.twistUp = true;
+          state.input.arrowUp = true;
           if (state.grind.active) {
-            // Tapping Up applies corrective torque impulse to push nose up / balance
             state.grind.balanceVel -= 2.6;
           }
           break;
         case 'ArrowDown':
-          state.input.twistDown = true;
+          state.input.arrowDown = true;
           if (state.grind.active) {
-            // Tapping Down applies corrective torque impulse to push nose down / balance
             state.grind.balanceVel += 2.6;
           }
           break;
         case 'ArrowLeft':
-          state.input.twistLeft = true;
+          state.input.arrowLeft = true;
           break;
         case 'ArrowRight':
-          state.input.twistRight = true;
+          state.input.arrowRight = true;
           break;
 
         case 'Space':
@@ -2763,11 +2987,69 @@
         case 'KeyR':
           respawnPlayer();
           break;
+
+        // --- NUMPAD CONTROLS ---
+        // Numpad 8, 4, 6, 2: Mid-air flips/spins and manual aerial tweaks
+        case 'Numpad8':
+          state.input.numpad8 = true;
+          state.input.twistUp = true;
+          if (state.grind.active) {
+            state.grind.balanceVel -= 2.6;
+          }
+          break;
+        case 'Numpad2':
+          state.input.numpad2 = true;
+          state.input.twistDown = true;
+          if (state.grind.active) {
+            state.grind.balanceVel += 2.6;
+          }
+          break;
+        case 'Numpad4':
+          state.input.numpad4 = true;
+          state.input.twistLeft = true;
+          break;
+        case 'Numpad6':
+          state.input.numpad6 = true;
+          state.input.twistRight = true;
+          break;
+
+        // Numpad 5: Jump / Hop
+        case 'Numpad5':
+          if (!state.input.jump) state.input.jumpPressed = true;
+          state.input.jump = true;
+          break;
+
+        // Numpad 7, 9, 1, 3: Snowboard Butter movements
+        case 'Numpad1':
+          state.input.butter1 = true;
+          break;
+        case 'Numpad3':
+          state.input.butter3 = true;
+          break;
+        case 'Numpad7':
+          state.input.butter7 = true;
+          break;
+        case 'Numpad9':
+          state.input.butter9 = true;
+          break;
       }
     });
 
     window.addEventListener('keyup', (e) => {
-      switch (e.code) {
+      let code = e.code;
+      if (e.location === 3) {
+        if (e.key === '8' || e.key === 'ArrowUp' || e.code === 'Numpad8') code = 'Numpad8';
+        else if (e.key === '2' || e.key === 'ArrowDown' || e.code === 'Numpad2') code = 'Numpad2';
+        else if (e.key === '4' || e.key === 'ArrowLeft' || e.code === 'Numpad4') code = 'Numpad4';
+        else if (e.key === '6' || e.key === 'ArrowRight' || e.code === 'Numpad6') code = 'Numpad6';
+        else if (e.key === '5' || e.key === 'Clear' || e.code === 'Numpad5') code = 'Numpad5';
+        else if (e.key === '1' || e.key === 'End' || e.code === 'Numpad1') code = 'Numpad1';
+        else if (e.key === '3' || e.key === 'PageDown' || e.code === 'Numpad3') code = 'Numpad3';
+        else if (e.key === '7' || e.key === 'Home' || e.code === 'Numpad7') code = 'Numpad7';
+        else if (e.key === '9' || e.key === 'PageUp' || e.code === 'Numpad9') code = 'Numpad9';
+      }
+
+      switch (code) {
         case 'KeyW':
           state.input.up = false;
           break;
@@ -2781,22 +3063,96 @@
           state.input.right = false;
           break;
         case 'ArrowUp':
-          state.input.twistUp = false;
+          state.input.arrowUp = false;
           break;
         case 'ArrowDown':
-          state.input.twistDown = false;
+          state.input.arrowDown = false;
           break;
         case 'ArrowLeft':
-          state.input.twistLeft = false;
+          state.input.arrowLeft = false;
           break;
         case 'ArrowRight':
-          state.input.twistRight = false;
+          state.input.arrowRight = false;
           break;
         case 'Space':
           state.input.jump = false;
           break;
+
+        // Numpad key releases
+        case 'Numpad8':
+          state.input.numpad8 = false;
+          state.input.twistUp = false;
+          break;
+        case 'Numpad2':
+          state.input.numpad2 = false;
+          state.input.twistDown = false;
+          break;
+        case 'Numpad4':
+          state.input.numpad4 = false;
+          state.input.twistLeft = false;
+          break;
+        case 'Numpad6':
+          state.input.numpad6 = false;
+          state.input.twistRight = false;
+          break;
+        case 'Numpad5':
+          state.input.jump = false;
+          break;
+        case 'Numpad1':
+          state.input.butter1 = false;
+          break;
+        case 'Numpad3':
+          state.input.butter3 = false;
+          break;
+        case 'Numpad7':
+          state.input.butter7 = false;
+          break;
+        case 'Numpad9':
+          state.input.butter9 = false;
+          break;
       }
     });
+
+    // Pointer / Mouse Tracking & Click Jump (2.5D Orthographic Guidance)
+    if (container) {
+      container.addEventListener('pointermove', (e) => {
+        const rect = container.getBoundingClientRect();
+        state.mouse.screenX = e.clientX;
+        state.mouse.screenY = e.clientY;
+        state.mouse.ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        state.mouse.ndcY = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+        state.mouse.active = true;
+        updateMouseWorldTarget();
+      });
+
+      container.addEventListener('pointerdown', (e) => {
+        // Prevent hijacking clicks on UI elements, buttons, modals
+        if (e.target.closest && (e.target.closest('button') || e.target.closest('input') || e.target.closest('select') || e.target.closest('.exp9-join-card') || e.target.closest('.exp9-checkpoints-bar') || e.target.closest('.exp9-hud-top-row') || e.target.closest('.exp9-chat-bar') || e.target.closest('.exp9-control-mode-wrap'))) {
+          return;
+        }
+        const rect = container.getBoundingClientRect();
+        state.mouse.screenX = e.clientX;
+        state.mouse.screenY = e.clientY;
+        state.mouse.ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        state.mouse.ndcY = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+        state.mouse.active = true;
+        state.mouse.isDown = true;
+        updateMouseWorldTarget();
+
+        // Left Click triggers bunny hop or rail pop-off in Mouse Move Mode
+        if (e.button === 0 && (state.controlMode === 'mouse' || state.controlMode === 'mouse_move')) {
+          if (!state.player.isAirborne || state.grind.active) {
+            state.input.jumpPressed = true;
+            state.input.jump = true;
+          }
+        }
+      });
+
+      window.addEventListener('pointerup', () => {
+        state.mouse.isDown = false;
+        state.input.jump = false;
+      });
+    }
 
     // Reset input states on window blur/visibilitychange so keys never get stuck
     function resetInputs() {
@@ -2804,18 +3160,25 @@
       state.input.down = false;
       state.input.left = false;
       state.input.right = false;
+      state.input.arrowUp = false;
+      state.input.arrowDown = false;
+      state.input.arrowLeft = false;
+      state.input.arrowRight = false;
+      state.input.numpad8 = false;
+      state.input.numpad2 = false;
+      state.input.numpad4 = false;
+      state.input.numpad6 = false;
       state.input.twistUp = false;
       state.input.twistDown = false;
       state.input.twistLeft = false;
       state.input.twistRight = false;
+      state.input.butter1 = false;
+      state.input.butter3 = false;
+      state.input.butter7 = false;
+      state.input.butter9 = false;
       state.input.jump = false;
       state.input.jumpPressed = false;
-      state.input.joystickActive = false;
-      state.input.rightJoystickActive = false;
-      state.input.joystickVector.x = 0;
-      state.input.joystickVector.y = 0;
-      state.input.rightJoystickVector.x = 0;
-      state.input.rightJoystickVector.y = 0;
+      state.mouse.isDown = false;
     }
 
     window.addEventListener('blur', resetInputs);
@@ -2957,10 +3320,12 @@
 
     let activePointerId = null;
     let baseRect = null;
+    let touchStartTime = 0;
     const maxRadius = 60; // Expanded travel area for balance & trick analog control
 
     function handleStart(clientX, clientY, pointerId, target) {
       activePointerId = pointerId;
+      touchStartTime = performance.now();
       state.input.rightJoystickActive = true;
       rightJoystickThumb.classList.add('active');
       baseRect = rightJoystickBase.getBoundingClientRect();
@@ -3010,6 +3375,20 @@
       rightJoystickThumb.style.transform = 'translate(0px, 0px)';
       if (target && target.releasePointerCapture && pointerId !== undefined) {
         try { target.releasePointerCapture(pointerId); } catch (e) {}
+      }
+
+      // Mode 3 Tap-on-joystick jump mechanic:
+      // Tapping and releasing right stick within 1.0 second triggers jump/hop.
+      // Holding right stick for over 1.0 second cancels jump on release.
+      const touchDuration = performance.now() - touchStartTime;
+      if (state.controlMode === 'mode3' && touchDuration <= 1000) {
+        if (!state.player.isAirborne || state.grind.active) {
+          state.input.jumpPressed = true;
+          state.input.jump = true;
+          setTimeout(() => {
+            state.input.jump = false;
+          }, 120);
+        }
       }
     }
 
@@ -3134,7 +3513,8 @@
         const minZ = Math.min(obs.zStart, obs.zEnd);
         const maxZ = Math.max(obs.zStart, obs.zEnd);
         if (Math.abs(x - obs.x) <= halfW && z >= minZ && z <= maxZ) {
-          const ratio = THREE.MathUtils.clamp((z - obs.zStart) / (obs.zEnd - obs.zStart), 0, 1);
+          const slopeEnd = obs.slopeEnd || obs.zEnd;
+          const ratio = THREE.MathUtils.clamp((z - obs.zStart) / (slopeEnd - obs.zStart), 0, 1);
           const landY = obs.yStart + ratio * (obs.yEnd - obs.yStart);
           surfaceH = Math.max(surfaceH, landY);
         }
@@ -3310,30 +3690,8 @@
   function updatePhysics(dt) {
     const p = state.player;
 
-    // 1. Desired Screen-Space Direction
-    let inputX = 0;
-    let inputY = 0;
-
-    if (state.input.joystickActive) {
-      inputX = state.input.joystickVector.x;
-      inputY = state.input.joystickVector.y;
-    } else {
-      if (state.input.right) inputX += 1;
-      if (state.input.left) inputX -= 1;
-      if (state.input.up) inputY += 1;
-      if (state.input.down) inputY -= 1;
-
-      const len = Math.hypot(inputX, inputY);
-      if (len > 0) {
-        inputX /= len;
-        inputY /= len;
-      }
-    }
-
-    // Convert Screen Space to Isometric World Coordinates
-    const worldDirX = (inputX - inputY) * 0.7071;
-    const worldDirZ = (-inputX - inputY) * 0.7071;
-    const inputMagnitude = Math.min(1.0, Math.hypot(inputX, inputY));
+    let isBraking = false;
+    let targetSpeed = 0;
 
     // Unit forward and lateral vectors based on current board heading
     const fwdX = Math.sin(p.heading);
@@ -3345,40 +3703,233 @@
     let vFwd = p.vx * fwdX + p.vz * fwdZ;
     let vLat = p.vx * rightX + p.vz * rightZ;
 
-    // 2. Motor Acceleration & Steering (Forces applied relative to board heading)
-    if (inputMagnitude > 0.05) {
-      // Steer heading smoothly towards input direction
-      const desiredHeading = Math.atan2(worldDirX, worldDirZ);
-      let angleDiff = desiredHeading - p.heading;
-      while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-      while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-      p.heading += angleDiff * Math.min(1.0, dt * TURN_SPEED);
+    if (state.controlMode === 'mouse' || state.controlMode === 'mouse_move') {
+      // ----------------------------------------------------------------------
+      // MODE: MOUSE MOVE MODE (Mouse Guidance & Distance-Scaled Velocity)
+      // ----------------------------------------------------------------------
+      updateMouseWorldTarget();
 
-      // Carve Roll banking
-      const rollTarget = THREE.MathUtils.clamp(-angleDiff * 1.5, -0.15, 0.15);
-      p.roll = THREE.MathUtils.lerp(p.roll, rollTarget, dt * 10);
+      let hasTarget = false;
+      let targetWorldX = p.x;
+      let targetWorldZ = p.z;
 
-      // Motor thrust accelerates forward along heading (progressive analog torque curve)
-      const targetSpeed = MAX_SPEED * inputMagnitude;
-      if (vFwd < targetSpeed) {
-        // Progressive motor torque ramp curve (~3 sec to reach 45 MPH)
-        const speedRatio = THREE.MathUtils.clamp(vFwd / MAX_SPEED, 0, 1);
-        const torqueFactor = 1.0 - speedRatio * 0.52; // Tapers at high speed
-        const motorAccel = 11.5 * torqueFactor;
-        vFwd += motorAccel * dt;
-        if (vFwd > targetSpeed) vFwd = targetSpeed;
-      } else if (targetSpeed < vFwd - 0.5) {
-        // Regenerative braking when pulling back on throttle
-        vFwd = THREE.MathUtils.lerp(vFwd, targetSpeed, dt * 4.5);
+      if (state.mouse.active) {
+        targetWorldX = state.mouse.worldX;
+        targetWorldZ = state.mouse.worldZ;
+        hasTarget = true;
       }
+
+      const dx = targetWorldX - p.x;
+      const dz = targetWorldZ - p.z;
+      const distToMouse = Math.hypot(dx, dz);
+      const targetAngle = Math.atan2(dx, dz);
+
+      // 3D visual target reticle position and pulse
+      if (targetReticle) {
+        if (state.mouse.active) {
+          targetReticle.visible = true;
+          const targetGroundY = getSurfaceElevation(targetWorldX, targetWorldZ);
+          targetReticle.position.set(targetWorldX, targetGroundY + 0.035, targetWorldZ);
+          const pulse = 1.0 + Math.sin(performance.now() * 0.007) * 0.08;
+          targetReticle.scale.set(pulse, 1, pulse);
+        } else {
+          targetReticle.visible = false;
+        }
+      }
+
+      if (!p.isAirborne && !state.grind.active) {
+        if (hasTarget && distToMouse >= 0.45) {
+          let angleDiff = targetAngle - p.heading;
+          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+          p.heading += angleDiff * Math.min(1.0, dt * TURN_SPEED);
+
+          const rollTarget = THREE.MathUtils.clamp(-angleDiff * 1.6, -0.22, 0.22);
+          p.roll = THREE.MathUtils.lerp(p.roll, rollTarget, dt * 10);
+
+          targetSpeed = THREE.MathUtils.clamp((distToMouse - 0.45) * 3.8, 0, MAX_SPEED);
+
+          if (vFwd < targetSpeed) {
+            const speedRatio = THREE.MathUtils.clamp(vFwd / MAX_SPEED, 0, 1);
+            const torqueFactor = 1.0 - speedRatio * 0.45;
+            const motorAccel = ACCELERATION * torqueFactor;
+            vFwd += motorAccel * dt;
+            if (vFwd > targetSpeed) vFwd = targetSpeed;
+          } else if (vFwd > targetSpeed + 0.3) {
+            vFwd = THREE.MathUtils.lerp(vFwd, targetSpeed, dt * 3.8);
+          }
+        } else {
+          vFwd = THREE.MathUtils.lerp(vFwd, 0, dt * 5.5);
+          p.roll = THREE.MathUtils.lerp(p.roll, 0, dt * 8.0);
+        }
+      }
+
+      isBraking = (vFwd < 0.2 && distToMouse > 0.6) || (distToMouse < 0.45 && p.speed > 1.0);
+    } else if (state.controlMode === 'default') {
+      // ----------------------------------------------------------------------
+      // MODE: DEFAULT (Vehicle Carving & Steering — Non-Arcade Steer Left/Right)
+      // ----------------------------------------------------------------------
+      if (targetReticle) targetReticle.visible = false;
+
+      // Determine Steering (+1 = Steer Left, -1 = Steer Right)
+      // ArrowLeft / A steers Left (+heading); ArrowRight / D steers Right (-heading)
+      let steerInput = 0;
+      if (state.input.arrowLeft || state.input.twistLeft || state.input.left || state.input.numpad4) steerInput += 1;
+      if (state.input.arrowRight || state.input.twistRight || state.input.right || state.input.numpad6) steerInput -= 1;
+      if (state.input.joystickActive) {
+        steerInput -= state.input.joystickVector.x;
+      }
+      steerInput = THREE.MathUtils.clamp(steerInput, -1.0, 1.0);
+
+      // Determine Throttle (+1 = Forward Gas, -1 = Brake / Reverse)
+      // Supports Arrow Keys (ArrowUp/ArrowDown), W/S keys, and left joystick
+      let throttleInput = 0;
+      if (state.input.arrowUp || state.input.up || state.input.numpad8) throttleInput += 1;
+      if (state.input.arrowDown || state.input.down || state.input.numpad2) throttleInput -= 1;
+      if (state.input.joystickActive) {
+        throttleInput += state.input.joystickVector.y;
+      }
+      throttleInput = THREE.MathUtils.clamp(throttleInput, -1.0, 1.0);
+
+      if (!p.isAirborne && !state.grind.active) {
+        // 1. Carve Steering (Rotate yaw heading left or right relative to current board yaw)
+        if (Math.abs(steerInput) > 0.05) {
+          const speedFactor = THREE.MathUtils.clamp(Math.abs(vFwd) / MAX_SPEED, 0, 1);
+          // 3.8 rad/s base, slight stabilization at high speeds for controllable high-speed line holding
+          const turnRate = 3.8 - speedFactor * 0.9;
+          p.heading += steerInput * turnRate * dt;
+
+          // Realistic carving bank roll into the turn (left roll when steering left, right roll when steering right)
+          const rollLean = steerInput * (0.15 + speedFactor * 0.12);
+          p.roll = THREE.MathUtils.lerp(p.roll, rollLean, dt * 10);
+        } else {
+          // Self-centering roll recovery when going straight
+          p.roll = THREE.MathUtils.lerp(p.roll, 0, dt * 8.0);
+        }
+
+        // 2. Throttle, Progressive Acceleration, Regenerative Braking & Reverse
+        if (throttleInput > 0.05) {
+          targetSpeed = MAX_SPEED * throttleInput;
+          if (vFwd < targetSpeed) {
+            const speedRatio = THREE.MathUtils.clamp(vFwd / MAX_SPEED, 0, 1);
+            const torqueFactor = 1.0 - speedRatio * 0.45;
+            const motorAccel = ACCELERATION * torqueFactor * throttleInput;
+            vFwd += motorAccel * dt;
+            if (vFwd > targetSpeed) vFwd = targetSpeed;
+          }
+        } else if (throttleInput < -0.05) {
+          if (vFwd > 0.35) {
+            // Strong regenerative braking
+            vFwd = Math.max(0, vFwd - DECELERATION * 1.35 * Math.abs(throttleInput) * dt);
+            isBraking = true;
+          } else {
+            // Reverse backing up (up to ~6.0 m/s / 13.5 MPH)
+            const maxRevSpeed = -6.0 * Math.abs(throttleInput);
+            vFwd = Math.max(maxRevSpeed, vFwd - 9.0 * Math.abs(throttleInput) * dt);
+            isBraking = true;
+          }
+        } else {
+          // Coasting: low-friction momentum glide
+          vFwd = THREE.MathUtils.lerp(vFwd, 0, dt * 0.45);
+        }
+      }
+
+      isBraking = isBraking || (throttleInput < -0.05 && vFwd > 0.2);
     } else {
-      // Smooth coasting friction roll-down
-      vFwd = THREE.MathUtils.lerp(vFwd, 0, dt * 1.8);
-      p.roll = THREE.MathUtils.lerp(p.roll, 0, dt * 8);
+      // ----------------------------------------------------------------------
+      // MODES 1, 2, 3: (WASD / Left Stick Drive & Steering)
+      // ----------------------------------------------------------------------
+      if (targetReticle) targetReticle.visible = false;
+
+      let inputX = 0;
+      let inputY = 0;
+
+      if (state.input.joystickActive) {
+        inputX = state.input.joystickVector.x;
+        inputY = state.input.joystickVector.y;
+      } else {
+        if (state.input.right) inputX += 1;
+        if (state.input.left) inputX -= 1;
+        if (state.input.up) inputY += 1;
+        if (state.input.down) inputY -= 1;
+
+        const len = Math.hypot(inputX, inputY);
+        if (len > 0) {
+          inputX /= len;
+          inputY /= len;
+        }
+      }
+
+      const worldDirX = (inputX - inputY) * 0.7071;
+      const worldDirZ = (-inputX - inputY) * 0.7071;
+      const inputMagnitude = Math.min(1.0, Math.hypot(inputX, inputY));
+
+      if (!p.isAirborne && !state.grind.active) {
+        if (state.controlMode === 'mode2') {
+          // --- ARCHIVE CONTROL MODE 2 (Onewheel Inertial Coasting & Manual Decel) ---
+          const isPullingBack = (state.input.down && !state.input.up) || (state.input.joystickActive && inputY < -0.22);
+          if (isPullingBack && vFwd > 1.0) {
+            // Actively brake forward speed without snapping 180 heading
+            vFwd = Math.max(0, vFwd - 16.0 * dt);
+            p.roll = THREE.MathUtils.lerp(p.roll, 0, dt * 8);
+            isBraking = true;
+          } else if (inputMagnitude > 0.05) {
+            const desiredHeading = Math.atan2(worldDirX, worldDirZ);
+            let angleDiff = desiredHeading - p.heading;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            p.heading += angleDiff * Math.min(1.0, dt * TURN_SPEED);
+
+            const rollTarget = THREE.MathUtils.clamp(-angleDiff * 1.5, -0.15, 0.15);
+            p.roll = THREE.MathUtils.lerp(p.roll, rollTarget, dt * 10);
+
+            targetSpeed = MAX_SPEED * inputMagnitude;
+            if (vFwd < targetSpeed) {
+              const speedRatio = THREE.MathUtils.clamp(vFwd / MAX_SPEED, 0, 1);
+              const torqueFactor = 1.0 - speedRatio * 0.52;
+              const motorAccel = 11.5 * torqueFactor;
+              vFwd += motorAccel * dt;
+              if (vFwd > targetSpeed) vFwd = targetSpeed;
+            }
+          } else {
+            // Neutral throttle: COAST! Holds momentum with near-frictionless glide
+            vFwd = THREE.MathUtils.lerp(vFwd, 0, dt * 0.22);
+            p.roll = THREE.MathUtils.lerp(p.roll, 0, dt * 8);
+          }
+        } else {
+          // --- ARCHIVED CONTROL MODE 1 & TESTING MODE 3 ---
+          if (inputMagnitude > 0.05) {
+            const desiredHeading = Math.atan2(worldDirX, worldDirZ);
+            let angleDiff = desiredHeading - p.heading;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            p.heading += angleDiff * Math.min(1.0, dt * TURN_SPEED);
+
+            const rollTarget = THREE.MathUtils.clamp(-angleDiff * 1.5, -0.15, 0.15);
+            p.roll = THREE.MathUtils.lerp(p.roll, rollTarget, dt * 10);
+
+            targetSpeed = MAX_SPEED * inputMagnitude;
+            if (vFwd < targetSpeed) {
+              const speedRatio = THREE.MathUtils.clamp(vFwd / MAX_SPEED, 0, 1);
+              const torqueFactor = 1.0 - speedRatio * 0.52;
+              const motorAccel = 11.5 * torqueFactor;
+              vFwd += motorAccel * dt;
+              if (vFwd > targetSpeed) vFwd = targetSpeed;
+            } else if (targetSpeed < vFwd - 0.5) {
+              vFwd = THREE.MathUtils.lerp(vFwd, targetSpeed, dt * 4.5);
+            }
+          } else {
+            // Standard friction roll-down
+            vFwd = THREE.MathUtils.lerp(vFwd, 0, dt * 2.2);
+            p.roll = THREE.MathUtils.lerp(p.roll, 0, dt * 8);
+          }
+        }
+      }
+
+      isBraking = isBraking || (vFwd < 0.2 && inputMagnitude > 0.1) || state.input.down;
     }
 
-    // 3. Downhill Slope Gravity & Counter-Steering ("Fight Gravity")
-    // Gravity acts continuously across terrain, hills, and elevated stunt ramps!
+    // 3. Downhill Slope Gravity & Counter-Steering (Applied to all modes)
     if (!p.isAirborne && !state.grind.active) {
       const epsG = 0.45;
       const hE = getSurfaceElevation(p.x + epsG, p.z);
@@ -3392,7 +3943,7 @@
       const downhillX = -gradX;
       const downhillZ = -gradZ;
 
-      // Project downhill gravity onto board forward and lateral axes
+      // Project downhill gravity onto forward and lateral axes
       const gravFwd = downhillX * fwdX + downhillZ * fwdZ;
       const gravLat = downhillX * rightX + downhillZ * rightZ;
 
@@ -3400,19 +3951,20 @@
       vFwd += gravFwd * SLOPE_GRAV * dt;
       vLat += gravLat * SLOPE_GRAV * dt;
 
-      // Lateral tire grip: resists sideways drift, but on steep slopes allows realistic sideslip!
-      // This forces the rider to actively counter-steer uphill into the slope to hold a line across steep hills!
-      const TIRE_LATERAL_GRIP = 5.2;
-      vLat = THREE.MathUtils.lerp(vLat, 0, dt * TIRE_LATERAL_GRIP);
-    } else {
-      vLat = THREE.MathUtils.lerp(vLat, 0, dt * 4.0);
+      // Lateral tire grip: resists sideways drift
+      vLat = THREE.MathUtils.lerp(vLat, 0, dt * 5.2);
+
+      // Reconstruct world velocity from forward and lateral components
+      p.vx = vFwd * fwdX + vLat * rightX;
+      p.vz = vFwd * fwdZ + vLat * rightZ;
+    } else if (p.isAirborne) {
+      // In mid-air, horizontal momentum is strictly preserved
+      vLat = THREE.MathUtils.lerp(vLat, 0, dt * 1.5);
+      p.vx = vFwd * fwdX + vLat * rightX;
+      p.vz = vFwd * fwdZ + vLat * rightZ;
     }
 
-    // Reconstruct world velocity from forward and lateral components
-    p.vx = vFwd * fwdX + vLat * rightX;
-    p.vz = vFwd * fwdZ + vLat * rightZ;
-
-    // Downhill top speed cap allows speed up to 26.8 m/s (~60.0 MPH!)
+    // Downhill top speed cap allows speed up to 26.8 m/s (~60.0 MPH)
     const currentSpeed = Math.hypot(p.vx, p.vz);
     if (currentSpeed > 26.8) {
       p.vx = (p.vx / currentSpeed) * 26.8;
@@ -3420,9 +3972,8 @@
     }
     p.speed = Math.hypot(p.vx, p.vz);
 
-    // Taillight / Brake Light Dynamic Lighting (Brightens on brake/reverse, shines rearward)
+    // Taillight / Brake Light Dynamic Lighting
     if (taillightSpot && taillightLens) {
-      const isBraking = (vFwd < 0.2 && inputMagnitude > 0.1) || state.input.down;
       const targetIntensity = isBraking ? 4.6 : 2.8;
       const targetEmissive = isBraking ? 2.6 : 1.6;
       taillightSpot.intensity = THREE.MathUtils.lerp(taillightSpot.intensity, targetIntensity, dt * 10);
@@ -3431,7 +3982,6 @@
 
     // 4. Terrain & Ramp Slope Pitch & Carving Roll Alignment
     if (!p.isAirborne && !state.grind.active) {
-      // Direct terrain sampling under front bumper (nose) and rear bumper (tail)
       const bumperDist = 0.37;
       const noseX = p.x + Math.sin(p.heading) * bumperDist;
       const noseZ = p.z + Math.cos(p.heading) * bumperDist;
@@ -3445,18 +3995,87 @@
       const hRight = getSurfaceElevation(p.x + Math.cos(p.heading) * latDist, p.z - Math.sin(p.heading) * latDist);
       const hLeft = getSurfaceElevation(p.x - Math.cos(p.heading) * latDist, p.z + Math.sin(p.heading) * latDist);
 
-      // In Three.js with 'YXZ' rotation order, local +Z is forward.
-      // Negative rotation around local X elevates the front nose (+Y).
-      // When going uphill (hNose > hTail), pitch must be negative so nose lifts up!
       const slopePitch = -Math.atan2(hNose - hTail, bumperDist * 2);
       const slopeRoll = Math.atan2(hRight - hLeft, latDist * 2);
 
-      // Rider acceleration tilt (pitch nose down slightly on acceleration, up on brake)
-      const accelRate = (inputMagnitude * MAX_SPEED - p.speed) / MAX_SPEED;
-      const riderPitch = THREE.MathUtils.clamp(-accelRate * 0.04, -0.03, 0.03);
+      // Check for Snowboard Butter Moves (Numpad 7, 9, 1, 3)
+      const isButtering = state.input.butter1 || state.input.butter3 || state.input.butter7 || state.input.butter9;
 
-      p.pitch = THREE.MathUtils.lerp(p.pitch, slopePitch + riderPitch, dt * 18);
-      p.roll = THREE.MathUtils.lerp(p.roll, p.roll * 0.75 + THREE.MathUtils.clamp(slopeRoll, -0.15, 0.15), dt * 10);
+      if (isButtering) {
+        let butterPitch = 0;
+        let butterRoll = 0;
+        let butterType = '';
+
+        if (state.input.butter1) {
+          // Key 1: Nose UP (-pitch), rolled LEFT (+roll) -> Tail drags on ground
+          butterPitch = -0.28;
+          butterRoll = 0.24;
+          butterType = 'TAIL BUTTER SLIDE';
+        } else if (state.input.butter3) {
+          // Key 3: Nose UP (-pitch), rolled RIGHT (-roll) -> Tail drags on ground
+          butterPitch = -0.28;
+          butterRoll = -0.24;
+          butterType = 'BLUNT BUTTER SLIDE';
+        } else if (state.input.butter7) {
+          // Key 7: Nose DOWN (+pitch), rolled LEFT (+roll) -> Nose drags on ground
+          butterPitch = 0.28;
+          butterRoll = 0.24;
+          butterType = 'NOSE BUTTER PRESS';
+        } else if (state.input.butter9) {
+          // Key 9: Nose DOWN (+pitch), rolled RIGHT (-roll) -> Nose drags on ground
+          butterPitch = 0.28;
+          butterRoll = -0.24;
+          butterType = 'OVER-NOSE BUTTER';
+        }
+
+        state.butter.active = true;
+        state.butter.type = butterType;
+        state.butter.timer += dt;
+
+        p.pitch = THREE.MathUtils.lerp(p.pitch, slopePitch + butterPitch, dt * 18);
+        p.roll = THREE.MathUtils.lerp(p.roll, slopeRoll + butterRoll, dt * 16);
+
+        // Smooth yaw carving in the butter roll direction
+        if (butterRoll > 0) {
+          p.heading += 2.2 * dt;
+        } else {
+          p.heading -= 2.2 * dt;
+        }
+
+        // Emit slide friction sparks and dust particles from dragged bumper tip
+        if (p.speed > 1.2) {
+          // butterPitch < 0: nose up -> tail (-0.37) drags on ground
+          // butterPitch > 0: nose down -> nose (+0.37) drags on ground
+          const dragDist = butterPitch < 0 ? -0.37 : 0.37;
+          const dragX = p.x + Math.sin(p.heading) * dragDist;
+          const dragZ = p.z + Math.cos(p.heading) * dragDist;
+          if (Math.random() < 0.6) {
+            emitGrindSparks(dragX, p.groundY + 0.02, dragZ);
+            emitDustParticle(dragX, p.groundY, dragZ, 0xd97706);
+          }
+
+          if (!state.butter.toastGiven && state.butter.timer > 0.32) {
+            state.butter.toastGiven = true;
+            showTrickToast(`${butterType}! 🧈 +150`);
+          }
+        }
+      } else {
+        if (state.butter.active) {
+          if (state.butter.toastGiven && state.butter.timer > 0.75) {
+            showTrickToast('BUTTER REVERT! +250 ✨');
+          }
+          state.butter.active = false;
+          state.butter.timer = 0;
+          state.butter.toastGiven = false;
+        }
+
+        // Rider acceleration tilt (pitch nose down slightly on acceleration, up on brake)
+        const accelRate = (targetSpeed - p.speed) / MAX_SPEED;
+        const riderPitch = THREE.MathUtils.clamp(-accelRate * 0.04, -0.03, 0.03);
+
+        p.pitch = THREE.MathUtils.lerp(p.pitch, slopePitch + riderPitch, dt * 18);
+        p.roll = THREE.MathUtils.lerp(p.roll, p.roll * 0.75 + THREE.MathUtils.clamp(slopeRoll, -0.15, 0.15), dt * 10);
+      }
     }
 
     // 5. Position Integration & Boundary Clamping
@@ -3481,57 +4100,98 @@
       state.aerial.flipDone = false;
     }
 
-    // Airborne Gravity Simulation & Aerial Rigid-Body Rotation
+    // Airborne Gravity Simulation & Aerial Rigid-Body Mouse Orientation
     if (p.isAirborne) {
       p.vy += GRAVITY * dt;
       p.y += p.vy * dt;
       p.airtime += dt;
 
-      // In-Air Rigid Body+Board Aerial Rotation (Spins & Flips)
+      // In mid-air:
+      // In Mouse Move Mode: mouse cursor controls board yaw orientation (free-aiming for rails)
+      // In Default Mode & Modes 1, 2, 3: Arrow keys or Right Stick control yaw spin & pitch flips
       if (!state.grind.active) {
-        let twistX = 0;
-        let twistY = 0;
-        if (state.input.rightJoystickActive) {
-          twistX = state.input.rightJoystickVector.x;
-          twistY = state.input.rightJoystickVector.y;
+        if ((state.controlMode === 'mouse' || state.controlMode === 'mouse_move') && state.mouse.active) {
+          const airDx = state.mouse.worldX - p.x;
+          const airDz = state.mouse.worldZ - p.z;
+          if (Math.hypot(airDx, airDz) > 0.35) {
+            const airTargetHeading = Math.atan2(airDx, airDz);
+            let airAngleDiff = airTargetHeading - p.heading;
+            while (airAngleDiff < -Math.PI) airAngleDiff += Math.PI * 2;
+            while (airAngleDiff > Math.PI) airAngleDiff -= Math.PI * 2;
+
+            const prevHeading = p.heading;
+            // Responsive aerial steering so swinging mouse turns board sideways quickly
+            p.heading += airAngleDiff * Math.min(1.0, dt * 16.0);
+
+            let dSpin = p.heading - prevHeading;
+            while (dSpin < -Math.PI) dSpin += Math.PI * 2;
+            while (dSpin > Math.PI) dSpin -= Math.PI * 2;
+            state.aerial.airYaw += dSpin;
+
+            if (!state.aerial.spin180Done && Math.abs(state.aerial.airYaw) >= Math.PI * 0.88) {
+              state.aerial.spin180Done = true;
+              showTrickToast('180 AIR SPIN! +250 🔄');
+            }
+            if (!state.aerial.spin360Done && Math.abs(state.aerial.airYaw) >= Math.PI * 1.88) {
+              state.aerial.spin360Done = true;
+              showTrickToast('360 AIR SPIN! +500 🌪️');
+            }
+          }
         } else {
-          if (state.input.twistRight) twistX += 1;
-          if (state.input.twistLeft) twistX -= 1;
-          if (state.input.twistUp) twistY += 1;
-          if (state.input.twistDown) twistY -= 1;
-        }
+          // Default Mode & Modes 1, 2, 3: Aerial flips, spins, and butter cork tweaks
+          // Flips strictly driven by Numpad 8 (Frontflip) & Numpad 2 (Backflip) or Touch Right Stick
+          // Forward / Back Arrow keys (and W/S) are throttles and do NOT flip the board in mid-air!
+          let twistX = 0;
+          let twistY = 0;
+          if (state.input.rightJoystickActive) {
+            twistX = state.input.rightJoystickVector.x;
+            twistY = state.input.rightJoystickVector.y;
+          } else {
+            // Spin left / right: ArrowLeft/Numpad4 spin left (+yaw), ArrowRight/Numpad6 spin right (-yaw)
+            if (state.input.arrowLeft || state.input.twistLeft || state.input.left || state.input.numpad4) twistX += 1;
+            if (state.input.arrowRight || state.input.twistRight || state.input.right || state.input.numpad6) twistX -= 1;
 
-        // Horizontal Twist (Yaw Spin: 180, 360)
-        if (Math.abs(twistX) > 0.05) {
-          const spinDelta = twistX * 8.2 * dt;
-          p.heading += spinDelta;
-          state.aerial.airYaw += spinDelta;
+            // Pitch flips: strictly Numpad 8 (Nose Down / Frontflip) and Numpad 2 (Nose Up / Backflip)
+            if (state.input.numpad8 || state.input.twistUp) twistY += 1;
+            if (state.input.numpad2 || state.input.twistDown) twistY -= 1;
 
-          if (!state.aerial.spin180Done && Math.abs(state.aerial.airYaw) >= Math.PI * 0.88) {
-            state.aerial.spin180Done = true;
-            showTrickToast('180 SPIN! +250 🔄');
+            // Numpad 7, 9, 1, 3: Diagonal off-axis corks & butter tweaks in mid-air
+            // 1 & 3: Nose UP (twistY = -1.0)
+            // 7 & 9: Nose DOWN (twistY = +1.0)
+            if (state.input.butter1) { twistY -= 1.0; twistX += 0.8; } // Nose UP, spin left
+            if (state.input.butter3) { twistY -= 1.0; twistX -= 0.8; } // Nose UP, spin right
+            if (state.input.butter7) { twistY += 1.0; twistX += 0.8; } // Nose DOWN, spin left
+            if (state.input.butter9) { twistY += 1.0; twistX -= 0.8; } // Nose DOWN, spin right
           }
-          if (!state.aerial.spin360Done && Math.abs(state.aerial.airYaw) >= Math.PI * 1.88) {
-            state.aerial.spin360Done = true;
-            showTrickToast('360 SPIN! +500 🌪️');
+
+          if (state.input.butter1 || state.input.butter7) {
+            p.roll = THREE.MathUtils.lerp(p.roll, 0.35, dt * 12);
+          } else if (state.input.butter3 || state.input.butter9) {
+            p.roll = THREE.MathUtils.lerp(p.roll, -0.35, dt * 12);
           }
-        }
 
-        // Vertical Twist (Pitch Flips: Backflip / Frontflip)
-        if (Math.abs(twistY) > 0.05) {
-          // Pulling down / stick back (twistY < 0): Backflip
-          // Pushing up / stick forward (twistY > 0): Frontflip
-          const flipDelta = -twistY * 7.5 * dt;
-          p.pitch += flipDelta;
-          state.aerial.airPitch += flipDelta;
+          if (Math.abs(twistX) > 0.08) {
+            const spinDelta = twistX * 6.5 * dt;
+            p.heading += spinDelta;
+            state.aerial.airYaw += spinDelta;
+            if (!state.aerial.spin180Done && Math.abs(state.aerial.airYaw) >= Math.PI * 0.88) {
+              state.aerial.spin180Done = true;
+              showTrickToast('180 AIR SPIN! +250 🔄');
+            }
+            if (!state.aerial.spin360Done && Math.abs(state.aerial.airYaw) >= Math.PI * 1.88) {
+              state.aerial.spin360Done = true;
+              showTrickToast('360 AIR SPIN! +500 🌪️');
+            }
+          }
 
-          if (!state.aerial.flipDone) {
-            if (state.aerial.airPitch >= Math.PI * 1.80) {
+          if (Math.abs(twistY) > 0.08) {
+            // twistY > 0 is nose down (pitch increases, frontflip); twistY < 0 is nose up (pitch decreases, backflip)
+            const pitchDelta = twistY * 4.8 * dt;
+            p.pitch += pitchDelta;
+            state.aerial.airPitch += pitchDelta;
+            if (!state.aerial.flipDone && Math.abs(state.aerial.airPitch) >= Math.PI * 1.8) {
               state.aerial.flipDone = true;
-              showTrickToast('BACKFLIP! +750 🌀');
-            } else if (state.aerial.airPitch <= -Math.PI * 1.80) {
-              state.aerial.flipDone = true;
-              showTrickToast('FRONTFLIP! +750 🔄');
+              showTrickToast(state.aerial.airPitch > 0 ? 'FRONTFLIP! +600 🤸' : 'BACKFLIP! +600 🤸');
             }
           }
         }
@@ -3543,6 +4203,12 @@
         p.vy = 0;
         p.isAirborne = false;
 
+        // Reset transfer combo when touching ground
+        if (state.grind.comboActive) {
+          state.grind.comboActive = false;
+          state.grind.comboCount = 0;
+        }
+
         // Wrap pitch to [-PI, PI]
         while (p.pitch > Math.PI) p.pitch -= Math.PI * 2;
         while (p.pitch < -Math.PI) p.pitch += Math.PI * 2;
@@ -3551,7 +4217,7 @@
           showTrickToast('SKETCHY LANDING! ⚠️');
           p.vx *= 0.55;
           p.vz *= 0.55;
-        } else if (p.airtime > 0.45 && !state.aerial.spin180Done && !state.aerial.flipDone) {
+        } else if (p.airtime > 0.45 && !state.aerial.spin180Done) {
           showTrickToast('BIG AIR! +150');
         }
         p.airtime = 0;
@@ -3577,6 +4243,7 @@
     // Hard Bumper Clearance Clamping (Strictly prevents nose and tail from penetrating terrain or ramps)
     if (!p.isAirborne && !state.grind.active) {
       const bumperDist = 0.37;
+      const bumperRestH = 0.13; // Physical bumper baseline height above axle contact patch
       const nX = p.x + Math.sin(p.heading) * bumperDist;
       const nZ = p.z + Math.cos(p.heading) * bumperDist;
       const tX = p.x - Math.sin(p.heading) * bumperDist;
@@ -3584,19 +4251,18 @@
       const elevNose = getSurfaceElevation(nX, nZ);
       const elevTail = getSurfaceElevation(tX, tZ);
 
-      const minBumperClearance = 0.045; // 4.5cm guaranteed clearance
+      const minBumperClearance = 0.02; // 2cm clearance margin
       const directSlopePitch = -Math.atan2(elevNose - elevTail, bumperDist * 2);
 
       // Max downward pitch before nose clips into terrain:
-      const maxPitchForNose = Math.asin(THREE.MathUtils.clamp((p.y - elevNose - minBumperClearance) / bumperDist, -1.0, 1.0));
+      const maxPitchForNose = Math.asin(THREE.MathUtils.clamp((p.y + bumperRestH - elevNose - minBumperClearance) / bumperDist, -1.0, 1.0));
       // Max upward pitch before tail drags into terrain:
-      const minPitchForTail = Math.asin(THREE.MathUtils.clamp((elevTail + minBumperClearance - p.y) / bumperDist, -1.0, 1.0));
+      const minPitchForTail = Math.asin(THREE.MathUtils.clamp((elevTail + minBumperClearance - (p.y + bumperRestH)) / bumperDist, -1.0, 1.0));
 
       if (maxPitchForNose >= minPitchForTail) {
         p.pitch = THREE.MathUtils.clamp(p.pitch, minPitchForTail, maxPitchForNose);
       } else {
-        p.y = Math.max(p.y, Math.max(elevNose, elevTail) + minBumperClearance);
-        p.pitch = directSlopePitch;
+        p.pitch = THREE.MathUtils.lerp(p.pitch, directSlopePitch, dt * 25);
       }
     }
 
@@ -3652,7 +4318,173 @@
 
     for (const obs of state.obstacles) {
       const halfW = obs.width / 2;
-      const halfL = obs.length / 2;
+      const halfL = (obs.length || 0) / 2;
+
+      // 0. GRIND RAILS (Rotated local coordinate collision & multi-trick slide detection)
+      if (obs.type === 'rail') {
+        const rot = obs.rotation || 0;
+        const dx = p.x - obs.x;
+        const dz = p.z - obs.z;
+        const cosR = Math.cos(-rot);
+        const sinR = Math.sin(-rot);
+        const localX = dx * cosR + dz * sinR;
+        const localZ = -dx * sinR + dz * cosR;
+
+        const isCloseX = Math.abs(localX) <= 0.65;
+        const isCloseZ = localZ >= -halfL - 0.45 && localZ <= halfL + 0.45;
+        const isCloseY = p.y >= obs.height - 0.35 && p.y <= obs.height + 0.75;
+
+        if (isCloseX && isCloseZ && isCloseY) {
+          targetGround = Math.max(targetGround, obs.height);
+
+          // Lock into rail if not currently grinding on this specific rail
+          if (!state.grind.active || (state.grind.active && state.grind.lastRailId !== obs.id)) {
+            // Calculate relative angle between board heading and rail axis:
+            let relAngle = Math.abs(p.heading - rot) % Math.PI;
+            if (relAngle > Math.PI / 2) relAngle = Math.PI - relAngle;
+
+            // Project contact point along board longitudinal heading axis:
+            // Board forward unit vector is (sin(p.heading), cos(p.heading))
+            const contactOffset = (obs.x - p.x) * Math.sin(p.heading) + (obs.z - p.z) * Math.cos(p.heading);
+
+            let grindType = '50-50';
+            if (relAngle >= 0.70) { // > 40 degrees: Sideways Slide
+              if (contactOffset > 0.08) {
+                grindType = 'noseslide';
+              } else if (contactOffset < -0.08) {
+                grindType = 'tailslide';
+              } else {
+                grindType = 'boardslide';
+              }
+            } else {
+              grindType = '50-50';
+            }
+
+            state.grind.active = true;
+            state.grind.type = grindType;
+            state.grind.balance = (Math.random() - 0.5) * 0.14;
+            state.grind.balanceVel = (Math.random() - 0.5) * 0.25;
+            state.grind.timer = 0;
+            state.grind.railObstacle = obs;
+
+            const prevRailId = state.grind.lastRailId;
+            state.grind.lastRailId = obs.id;
+
+            if (balanceHud) balanceHud.classList.add('active');
+            if (balanceLabel) balanceLabel.textContent = grindType.toUpperCase();
+
+            // Rail Transfer Combo: Hop from one rail directly to another!
+            if (state.grind.comboActive && prevRailId && prevRailId !== obs.id) {
+              state.grind.comboCount = (state.grind.comboCount || 1) + 1;
+              showTrickToast(`RAIL TRANSFER COMBO x${state.grind.comboCount}! +${state.grind.comboCount * 400} 🔥🛹`);
+            } else {
+              state.grind.comboCount = 1;
+              showTrickToast(`LOCKED: ${grindType.toUpperCase()}! 🔥`);
+            }
+            state.grind.comboActive = false;
+          }
+
+          if (state.grind.active && state.grind.lastRailId === obs.id) {
+            p.isGrinding = true;
+            p.isAirborne = false;
+            p.vy = 0;
+            p.y = obs.height;
+            state.grind.timer += dt;
+
+            // Smoothly snap lateral coordinate onto rail line
+            const snappedLocalX = THREE.MathUtils.lerp(localX, 0, dt * 20);
+            p.x = obs.x + (snappedLocalX * Math.cos(rot) - localZ * Math.sin(rot));
+            p.z = obs.z + (snappedLocalX * Math.sin(rot) + localZ * Math.cos(rot));
+
+            // Forward glide along rail length (never stall out)
+            const vZ_local = -p.vx * Math.sin(rot) + p.vz * Math.cos(rot);
+            const glideSign = Math.sign(vZ_local) || (p.vz >= 0 ? 1 : -1);
+            const minGlide = 6.2;
+            let newVZ_local = vZ_local;
+            if (Math.abs(newVZ_local) < minGlide) {
+              newVZ_local = glideSign * minGlide;
+            }
+            p.vx = -newVZ_local * Math.sin(rot);
+            p.vz = newVZ_local * Math.cos(rot);
+            p.speed = Math.hypot(p.vx, p.vz);
+
+            // Trick-specific bumper sparks & tilt pitch
+            const bumperDist = 0.38;
+            const nX = p.x + Math.sin(p.heading) * bumperDist;
+            const nZ = p.z + Math.cos(p.heading) * bumperDist;
+            const tX = p.x - Math.sin(p.heading) * bumperDist;
+            const tZ = p.z - Math.cos(p.heading) * bumperDist;
+
+            if (state.grind.type === 'noseslide') {
+              // Nose down on rail, tail tilted up into air
+              p.pitch = -0.28 + state.grind.balance * 0.12;
+              emitGrindSparks(nX, obs.height + 0.02, nZ);
+            } else if (state.grind.type === 'tailslide') {
+              // Tail down on rail, nose tilted up into air
+              p.pitch = 0.28 + state.grind.balance * 0.12;
+              emitGrindSparks(tX, obs.height + 0.02, tZ);
+            } else {
+              // Boardslide or 50-50
+              p.pitch = state.grind.balance * 0.12;
+              emitGrindSparks(p.x, obs.height + 0.02, p.z);
+            }
+
+            // Balance drift simulation
+            state.grind.balanceVel += (state.grind.balance * 2.0 + (Math.random() - 0.5) * 1.2) * dt;
+            state.grind.balanceVel *= (1.0 - 0.45 * dt);
+
+            // Continuous correction from right joystick (mobile or desktop drag)
+            if (state.input.rightJoystickActive) {
+              state.grind.balanceVel -= state.input.rightJoystickVector.y * 3.8 * dt;
+            }
+
+            state.grind.balance += state.grind.balanceVel * dt;
+
+            if (balanceNeedle) {
+              const needleOffset = THREE.MathUtils.clamp(state.grind.balance, -1.2, 1.2) * 65;
+              balanceNeedle.style.transform = `translateX(${needleOffset}px)`;
+              if (Math.abs(state.grind.balance) > 0.6) {
+                balanceNeedle.classList.add('danger');
+              } else {
+                balanceNeedle.classList.remove('danger');
+              }
+            }
+
+            // 1. Slip off rail (Bail if balance exceeded)
+            if (Math.abs(state.grind.balance) > 1.1) {
+              showTrickToast('SLIPPED OFF RAIL! 💥');
+              state.grind.active = false;
+              p.isGrinding = false;
+              p.x += Math.sin(rot + Math.PI / 2) * (state.grind.balance > 0 ? 0.45 : -0.45);
+              p.z += Math.cos(rot + Math.PI / 2) * (state.grind.balance > 0 ? 0.45 : -0.45);
+              if (balanceHud) balanceHud.classList.remove('active');
+            }
+
+            // 2. Spacebar Pop-Off (Sets comboActive = true so chaining to next rail triggers transfer combo!)
+            if (state.input.jumpPressed) {
+              state.input.jumpPressed = false;
+              p.vy = JUMP_VELOCITY * 1.25;
+              p.isAirborne = true;
+              state.grind.active = false;
+              state.grind.comboActive = true;
+              p.isGrinding = false;
+              if (balanceHud) balanceHud.classList.remove('active');
+              const pts = Math.round(state.grind.timer * 160 + 300);
+              showTrickToast(`${state.grind.type.toUpperCase()} POP-OFF! +${pts} 🛹`);
+            }
+
+            // 3. Dismount at end of rail
+            if (localZ < -halfL - 0.25 || localZ > halfL + 0.25) {
+              state.grind.active = false;
+              p.isGrinding = false;
+              if (balanceHud) balanceHud.classList.remove('active');
+              const pts = Math.round(state.grind.timer * 120 + 200);
+              showTrickToast(`${state.grind.type.toUpperCase()} LANDED! +${pts} ✨`);
+            }
+          }
+          continue;
+        }
+      }
 
       // 1. KICKER RAMPS (Rotated local coordinate collision)
       if (obs.type === 'kicker') {
@@ -3717,10 +4549,19 @@
           const dropY = obs.yStart + ratio * (obs.yEnd - obs.yStart);
           targetGround = Math.max(targetGround, dropY);
 
-          // Steep downhill gravity acceleration (South along +Z)
+          // Steep downhill gravity acceleration & firm adhesion (South along +Z)
           if (!p.isAirborne) {
+            p.y = dropY;
+            p.vy = 0;
             p.vz += 26.0 * dt;
             p.speed = Math.hypot(p.vx, p.vz);
+          }
+
+          // Lateral runway curb containment
+          const halfLimit = obs.width / 2 - 0.2;
+          if (Math.abs(p.x - obs.x) > halfLimit) {
+            p.x = obs.x + Math.sign(p.x - obs.x) * halfLimit;
+            p.vx = -p.vx * 0.25;
           }
         }
         continue;
@@ -3753,18 +4594,38 @@
         const minZ = Math.min(obs.zStart, obs.zEnd);
         const maxZ = Math.max(obs.zStart, obs.zEnd);
         if (Math.abs(p.x - obs.x) <= obs.width / 2 && p.z >= minZ && p.z <= maxZ) {
-          const ratio = THREE.MathUtils.clamp((p.z - obs.zStart) / (obs.zEnd - obs.zStart), 0, 1);
+          const slopeEnd = obs.slopeEnd || obs.zEnd;
+          const ratio = THREE.MathUtils.clamp((p.z - obs.zStart) / (slopeEnd - obs.zStart), 0, 1);
           const landY = obs.yStart + ratio * (obs.yEnd - obs.yStart);
           targetGround = Math.max(targetGround, landY);
 
           // Catch landing slope cleanly
-          if (p.isAirborne && p.y <= landY + 0.4) {
-            p.y = landY;
+          if (p.isAirborne && p.y <= landY + 0.45) {
+            p.y = Math.max(p.y, landY);
             p.vy = 0;
             p.isAirborne = false;
             p.vz += 8.0 * dt;
             p.speed = Math.hypot(p.vx, p.vz);
             showTrickToast('MEGA DROP LANDED! 🔥 +500');
+          }
+
+          // Anti-tunneling & downhill adhesion:
+          // Keep board firmly glued to ramp surface, never sink underground or falsely bounce into airborne
+          if (!p.isAirborne) {
+            p.y = landY;
+            p.vy = 0;
+            if (ratio < 0.95) {
+              p.vz += 14.0 * dt;
+              p.speed = Math.hypot(p.vx, p.vz);
+            }
+          }
+
+          // Lateral hazard curb containment (elastic rebound keeping rider on track)
+          const halfLimit = obs.width / 2 - 0.25;
+          if (Math.abs(p.x - obs.x) > halfLimit) {
+            p.x = obs.x + Math.sign(p.x - obs.x) * halfLimit;
+            p.vx = -p.vx * 0.25;
+            emitGrindSparks(p.x, landY + 0.15, p.z);
           }
         }
         continue;
@@ -4025,140 +4886,6 @@
             }
             targetGround = Math.max(targetGround, spineY);
           }
-        } else if (obs.type === 'rail') {
-          if (p.y >= obs.height - 0.28 && p.y <= obs.height + 0.65) {
-            targetGround = Math.max(targetGround, obs.height);
-
-            // If not currently grinding, lock into rail
-            if (!state.grind.active) {
-              let twistY = 0;
-              if (state.input.rightJoystickActive) {
-                twistY = state.input.rightJoystickVector.y;
-              } else {
-                if (state.input.twistUp) twistY += 1;
-                if (state.input.twistDown) twistY -= 1;
-              }
-
-              // Determine grind trick:
-              // twistY > 0.2: Up / Noseslide
-              // twistY < -0.2: Down / Tailslide
-              // Cross angle: Boardslide
-              // Neutral: 50-50
-              let grindType = '50-50';
-              if (twistY > 0.2) {
-                grindType = 'noseslide';
-              } else if (twistY < -0.2) {
-                grindType = 'tailslide';
-              } else if (Math.abs(Math.cos(p.heading)) < 0.65) {
-                grindType = 'boardslide';
-              }
-
-              state.grind.active = true;
-              state.grind.type = grindType;
-              state.grind.balance = (Math.random() - 0.5) * 0.16;
-              state.grind.balanceVel = (Math.random() - 0.5) * 0.35;
-              state.grind.timer = 0;
-              state.grind.railX = obs.x;
-              state.grind.railMinZ = obs.z - halfL;
-              state.grind.railMaxZ = obs.z + halfL;
-
-              if (balanceHud) balanceHud.classList.add('active');
-              if (balanceLabel) balanceLabel.textContent = grindType.toUpperCase();
-              showTrickToast(`LOCKED: ${grindType.toUpperCase()}! 🔥`);
-            }
-
-            // Grind physics loop
-            if (state.grind.active) {
-              p.isGrinding = true;
-              p.isAirborne = false;
-              p.vy = 0;
-              p.y = obs.height;
-              state.grind.timer += dt;
-
-              // Pull board smoothly onto rail line
-              p.x = THREE.MathUtils.lerp(p.x, obs.x, dt * 18);
-
-              // Maintain forward glide along the rail (never stall out)
-              const grindSign = Math.sign(p.vz) || 1;
-              const minGrindSpeed = 4.5;
-              if (Math.abs(p.vz) < minGrindSpeed) {
-                p.vz = grindSign * minGrindSpeed;
-              }
-              p.vx = THREE.MathUtils.lerp(p.vx, 0, dt * 10);
-              p.speed = Math.hypot(p.vx, p.vz);
-
-              // Trick-specific board pitch & spark emitter
-              if (state.grind.type === 'noseslide') {
-                // Nose rests down on rail, tail tilted up in air
-                p.pitch = -0.26 + state.grind.balance * 0.12;
-                emitGrindSparks(p.x, obs.height + 0.02, p.z - 0.36);
-              } else if (state.grind.type === 'tailslide') {
-                // Tail rests down on rail, nose tilted up in air
-                p.pitch = 0.26 + state.grind.balance * 0.12;
-                emitGrindSparks(p.x, obs.height + 0.02, p.z + 0.36);
-              } else {
-                // Boardslide or 50-50
-                p.pitch = state.grind.balance * 0.14;
-                emitGrindSparks(p.x, obs.height + 0.02, p.z);
-              }
-
-              // Balance mini-game drift simulation:
-              // Natural instability pushes needle away from center
-              state.grind.balanceVel += (state.grind.balance * 2.2 + (Math.random() - 0.5) * 1.4) * dt;
-              // Mild damping
-              state.grind.balanceVel *= (1.0 - 0.45 * dt);
-
-              // Continuous correction from right joystick (mobile or gamepad)
-              if (state.input.rightJoystickActive) {
-                state.grind.balanceVel -= state.input.rightJoystickVector.y * 3.8 * dt;
-              }
-
-              // Integrate balance position
-              state.grind.balance += state.grind.balanceVel * dt;
-
-              // Update HUD Needle
-              if (balanceNeedle) {
-                const needleOffset = THREE.MathUtils.clamp(state.grind.balance, -1.2, 1.2) * 65;
-                balanceNeedle.style.transform = `translateX(${needleOffset}px)`;
-                if (Math.abs(state.grind.balance) > 0.6) {
-                  balanceNeedle.classList.add('danger');
-                } else {
-                  balanceNeedle.classList.remove('danger');
-                }
-              }
-
-              // 1. SLIP OFF RAIL (Bail if balance exceeds limits)
-              if (Math.abs(state.grind.balance) > 1.0) {
-                showTrickToast('SLIPPED OFF RAIL! 💥');
-                state.grind.active = false;
-                p.isGrinding = false;
-                p.x += (state.grind.balance > 0 ? 0.42 : -0.42);
-                p.vx = (state.grind.balance > 0 ? 2.0 : -2.0);
-                if (balanceHud) balanceHud.classList.remove('active');
-              }
-
-              // 2. HOP OFF RAIL (Space / Hop button)
-              if (state.input.jumpPressed) {
-                state.input.jumpPressed = false;
-                p.vy = JUMP_VELOCITY * 1.15;
-                p.isAirborne = true;
-                state.grind.active = false;
-                p.isGrinding = false;
-                if (balanceHud) balanceHud.classList.remove('active');
-                const pts = Math.round(state.grind.timer * 160 + 250);
-                showTrickToast(`${state.grind.type.toUpperCase()} POP-OFF! +${pts} 🛹`);
-              }
-
-              // 3. REACHED END OF RAIL (Dismount)
-              if (p.z < obs.z - halfL - 0.25 || p.z > obs.z + halfL + 0.25) {
-                state.grind.active = false;
-                p.isGrinding = false;
-                if (balanceHud) balanceHud.classList.remove('active');
-                const pts = Math.round(state.grind.timer * 120 + 200);
-                showTrickToast(`${state.grind.type.toUpperCase()} LANDED! +${pts} ✨`);
-              }
-            }
-          }
         } else {
           // Ledges, curbs, boardwalks
           if (p.y >= obs.height - 0.15) {
@@ -4176,6 +4903,7 @@
 
     // Multi-point ground clearance check to guarantee nose and tail bumpers never clip:
     const bumperDist = 0.38; // Distance from axle to bumper tip
+    const bumperRestH = 0.13; // Bumper height above tire contact patch
     const noseX = p.x + Math.sin(p.heading) * bumperDist;
     const noseZ = p.z + Math.cos(p.heading) * bumperDist;
     const tailX = p.x - Math.sin(p.heading) * bumperDist;
@@ -4189,9 +4917,9 @@
     const noseDeltaY = -Math.sin(p.pitch) * bumperDist;
     const tailDeltaY = Math.sin(p.pitch) * bumperDist;
 
-    // Minimum center height so bumpers clear local ground by at least 0.055m
-    const minCenterForNose = hNose - noseDeltaY + 0.055;
-    const minCenterForTail = hTail - tailDeltaY + 0.055;
+    // Minimum center height so bumpers clear local ground by at least 0.02m
+    const minCenterForNose = hNose - (bumperRestH + noseDeltaY) + 0.02;
+    const minCenterForTail = hTail - (bumperRestH + tailDeltaY) + 0.02;
 
     targetGround = Math.max(targetGround, minCenterForNose, minCenterForTail);
     p.groundY = targetGround;

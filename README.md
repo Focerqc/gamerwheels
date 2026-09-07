@@ -95,12 +95,13 @@ git push -u origin main
 
 | Action | Desktop Keys | Mobile Touch |
 | :--- | :--- | :--- |
-| **Drive & Steer** | <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> | Left Virtual Joystick |
-| **Twist, Flip & Balance** | <kbd>▲</kbd> <kbd>◄</kbd> <kbd>▼</kbd> <kbd>►</kbd> | Right Virtual Joystick |
-| **Hop / Jump** | <kbd>Space</kbd> | HOP Button |
+| **Drive & Steer** | <kbd>▲</kbd> <kbd>◄</kbd> <kbd>▼</kbd> <kbd>►</kbd> / <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> | Left Virtual Joystick |
+| **Mid-Air Flips & Spins** | Numpad <kbd>8</kbd> <kbd>4</kbd> <kbd>6</kbd> <kbd>2</kbd> | Right Virtual Joystick |
+| **Snowboard Butter Slides** | Numpad <kbd>1</kbd> <kbd>3</kbd> (Tail Drag), <kbd>7</kbd> <kbd>9</kbd> (Nose Drag) | — |
+| **Hop / Jump** | <kbd>Space</kbd> / Numpad <kbd>5</kbd> | HOP Button |
 | **Checkpoints** | <kbd>1</kbd>–<kbd>5</kbd> | Checkpoints Bar |
 | **Reset / Respawn** | <kbd>R</kbd> | Reset Button |
-| **Camera Zoom** | Scroll / <kbd>[</kbd> <kbd>]</kbd> | Zoom Buttons |
+| **Camera Zoom** | Scroll / <kbd>[</kbd> <kbd>]</kbd> / Numpad <kbd>+</kbd> <kbd>-</kbd> | Zoom Buttons |
 | **Chat** | <kbd>Enter</kbd> | Chat Input / Emotes |
 
 ---
