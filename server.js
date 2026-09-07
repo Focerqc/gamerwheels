@@ -10,6 +10,13 @@ const http = require('http');
 const path = require('path');
 const { Server } = require('socket.io');
 
+process.on('uncaughtException', (err) => {
+  console.error('[UNCAUGHT EXCEPTION]', err.stack || err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[UNHANDLED REJECTION]', reason);
+});
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -680,7 +687,8 @@ function tickBots(dt) {
             bot.z += moveZ;
             bot.y = node.y !== undefined ? node.y : 0.38; // snap to terrain elevation
           } else {
-            // Re-path immediately if blocked by wall
+            // Re-path & advance goal if blocked by wall
+            bot.goalIdx = (bot.goalIdx + 1) % DUST2_TACTICAL_GOALS.length;
             bot.path = [];
           }
         }
