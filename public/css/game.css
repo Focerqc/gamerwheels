@@ -2782,6 +2782,11 @@ body.exp9-standalone-page .exp9-hud-layer {
 .exp9-kill-weapon { color: #94a3b8; font-family: monospace; }
 .exp9-kill-hs { color: #eab308; }
 
+/* Utility Hidden */
+.hidden {
+  display: none !important;
+}
+
 /* Death Screen Overlay */
 .exp9-death-overlay {
   position: fixed;
@@ -2792,6 +2797,9 @@ body.exp9-standalone-page .exp9-hud-layer {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.exp9-death-overlay.hidden {
+  display: none !important;
 }
 .exp9-death-modal {
   background: rgba(30, 41, 59, 0.95);

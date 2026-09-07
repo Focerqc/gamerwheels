@@ -6875,7 +6875,10 @@
         const deathTimer = document.getElementById('deathTimer');
 
         if (deathTitle) deathTitle.textContent = `ELIMINATED BY ${data.killerName ? data.killerName.toUpperCase() : 'ENEMY'}`;
-        if (deathOverlay) deathOverlay.classList.remove('hidden');
+        if (deathOverlay) {
+          deathOverlay.style.display = 'flex';
+          deathOverlay.classList.remove('hidden');
+        }
 
         let remaining = 3;
         if (deathTimer) deathTimer.textContent = remaining;
@@ -6904,7 +6907,10 @@
         updateVitalsHUD();
 
         const deathOverlay = document.getElementById('deathOverlay');
-        if (deathOverlay) deathOverlay.classList.add('hidden');
+        if (deathOverlay) {
+          deathOverlay.style.display = 'none';
+          deathOverlay.classList.add('hidden');
+        }
 
         if (combat.team === 'CT') {
           teleportToCheckpoint(1);
