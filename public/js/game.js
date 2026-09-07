@@ -171,9 +171,9 @@
       fov: 65,
       yaw: -Math.PI * 0.75 + Math.PI, // initial camera yaw trailing behind spawn heading
       pitch: 0.35,                    // ~20 degrees elevation
-      distance: 5.6,
-      targetDistance: 5.6,
-      minDistance: 2.8,
+      distance: 2.2,
+      targetDistance: 2.2,
+      minDistance: 0.0,               // 0 = true first-person
       maxDistance: 15.0,
       manualTimer: 0,
     },
@@ -3215,14 +3215,14 @@
       window.addEventListener('mousemove', (e) => {
         updatePointerLockState();
         if (isPointerLocked) {
-          const baseSens = 0.0024;
+          const baseSens = 0.0018; // Slightly reduced for smoother feel
           const sensScale = (combat && combat.scopeLevel > 0 && camera && camera.fov) ? (camera.fov / 65) : 1.0;
           const mouseSens = baseSens * sensScale;
           state.camera.yaw -= (e.movementX || 0) * mouseSens;
           state.camera.pitch = THREE.MathUtils.clamp(
             state.camera.pitch + (e.movementY || 0) * mouseSens,
-            -0.15,
-            1.25
+            -0.20,  // allow slight upward look
+            1.30
           );
           state.camera.manualTimer = 999999; // Never auto-chase camera while mouse aiming!
         }
@@ -3256,13 +3256,20 @@
           lastMouseX = e.clientX;
           lastMouseY = e.clientY;
 
-          state.camera.manualTimer = 3.0;
-          state.camera.yaw -= dx * 0.0055;
-          state.camera.pitch = THREE.MathUtils.clamp(state.camera.pitch + dy * 0.0045, 0.08, 1.25);
+          state.camera.manualTimer = 999999; // Hold manual until user releases drag
+          state.camera.yaw -= dx * 0.0040;
+          state.camera.pitch = THREE.MathUtils.clamp(state.camera.pitch + dy * 0.0035, -0.20, 1.30);
         }
       });
 
-      window.addEventListener('pointerup', () => { isMouseDraggingCam = false; });
+      window.addEventListener('pointerup', () => {
+        if (isMouseDraggingCam) {
+          isMouseDraggingCam = false;
+          // After releasing drag, allow auto-chase to resume after 2s
+          state.camera.manualTimer = 2.0;
+        }
+      });
+
       window.addEventListener('pointercancel', () => { isMouseDraggingCam = false; });
     }
 
@@ -3551,7 +3558,7 @@
 
     // Instant camera target snap behind rider
     state.camera.yaw = cp.heading + Math.PI;
-    state.camera.pitch = 0.35;
+    state.camera.pitch = 0.25;
     state.camera.manualTimer = 0;
     const snapHDist = state.camera.distance * Math.cos(state.camera.pitch);
     camera.position.x = cp.x + snapHDist * Math.sin(state.camera.yaw);
@@ -5062,7 +5069,8 @@
     }
 
     const isSpawning = (currentY >= 10.0);
-    const rayStartY = isSpawning ? 12.0 : Math.min(Math.max(currentY + 2.0, 5.0), 6.5);
+    // Ray starts 1.5m above player; never go below y=0.5 to avoid shooting into geometry from underground
+    const rayStartY = isSpawning ? 12.0 : Math.max(currentY + 1.5, 0.5);
     dust2RayOrigin.set(x, rayStartY, z);
     dust2Ray.set(dust2RayOrigin, dust2DownDir);
     dust2Ray.far = 25.0;
@@ -5080,6 +5088,11 @@
             ((hit.point.z >= 7.8 && hit.point.z <= 9.8) || (hit.point.z >= 15.5 && hit.point.z <= 17.5))) {
           continue;
         }
+
+        // Reject any surface more than 1.2m above the player's current position (prevents stair-teleport)
+        // Allow more step-up only during airborne to handle landing on ledges
+        const maxStepUp = (state.player && state.player.isAirborne) ? 2.0 : 1.2;
+        if (!isSpawning && hit.point.y > currentY + maxStepUp) continue;
 
         const norm = getHitWorldNormal(hit);
         // Only accept surfaces that are flat or drivable slopes (steeper than ~49 deg is a wall)
@@ -6562,7 +6575,7 @@
       let yawDiff = behindTravel - cs.yaw;
       while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
       while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
-      cs.yaw += yawDiff * Math.min(1.0, delta * 2.8);
+      cs.yaw += yawDiff * Math.min(1.0, delta * 1.8); // Slower chase = less sticky
     }
 
     // Normalize camera yaw to [-PI, PI]
@@ -6603,10 +6616,18 @@
     const rightX = Math.cos(cs.yaw);
     const rightZ = -Math.sin(cs.yaw);
 
-    // Over-the-shoulder offset: 0.44m to right, 0.22m above eye level (tighter when scoped)
-    const shoulderRight = isScoped ? 0.08 : 0.44;
-    const shoulderUp = isScoped ? 0.06 : 0.22;
+    // Over-the-shoulder offset: scales to 0 at close range (enabling first-person view)
+    const distFactor = THREE.MathUtils.clamp((cs.distance - 0.3) / 2.5, 0, 1);
+    const shoulderRight = isScoped ? 0.08 : (0.44 * distFactor);
+    const shoulderUp = isScoped ? 0.06 : (0.22 * distFactor);
     const effDist = isScoped ? 1.3 : (cs.distance + speedRatio * 0.9);
+
+    // Hide boardGroup when nearly first-person to avoid clipping
+    if (boardGroup) {
+      const fpThreshold = 0.5;
+      const boardVisible = cs.distance > fpThreshold;
+      boardGroup.visible = boardVisible;
+    }
 
     // Camera desired position behind rider
     const desiredCamX = targetX - fwdX * effDist + rightX * shoulderRight;
