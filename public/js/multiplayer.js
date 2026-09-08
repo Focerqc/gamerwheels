@@ -679,11 +679,20 @@
 
       // Apply 3D wall collision solver to prevent remote riders/bots from clipping inside walls
       if (window.GamerWheels && typeof window.GamerWheels.checkDust2Wall === 'function') {
-        const wallHit = window.GamerWheels.checkDust2Wall(cur.x, meshY, cur.z, Math.sin(cur.heading), Math.cos(cur.heading), 0.40);
-        if (wallHit && wallHit.distance < 0.40) {
-          const push = 0.40 - wallHit.distance;
-          cur.x += wallHit.normalX * push;
-          cur.z += wallHit.normalZ * push;
+        const headingsToTest = [
+          { dx: Math.sin(cur.heading), dz: Math.cos(cur.heading) },
+          { dx: -Math.sin(cur.heading), dz: -Math.cos(cur.heading) },
+          { dx: 1, dz: 0 }, { dx: -1, dz: 0 },
+          { dx: 0, dz: 1 }, { dx: 0, dz: -1 }
+        ];
+        for (let hIdx = 0; hIdx < headingsToTest.length; hIdx++) {
+          const dir = headingsToTest[hIdx];
+          const wallHit = window.GamerWheels.checkDust2Wall(cur.x, meshY, cur.z, dir.dx, dir.dz, 0.45);
+          if (wallHit && wallHit.distance < 0.45) {
+            const push = 0.45 - wallHit.distance;
+            cur.x += wallHit.normalX * push;
+            cur.z += wallHit.normalZ * push;
+          }
         }
       }
 

@@ -408,12 +408,17 @@ function hasLineOfSight(ax, ay, az, bx, by, bz) {
     return false;
   }
 
-  const steps = Math.ceil(dist / (dust2NavGrid.resolution * 0.4));
+  // Fine step resolution for strict wall collision checks along line of sight
+  const stepSize = Math.min(dust2NavGrid.resolution * 0.25, 0.20);
+  const steps = Math.ceil(dist / stepSize);
   for (let i = 0; i <= steps; i++) {
     const t = steps > 0 ? i / steps : 0;
     const x = ax + (bx - ax) * t;
     const z = az + (bz - az) * t;
     const expectedY = (ay !== undefined && by !== undefined) ? (ay + (by - ay) * t) : undefined;
+
+    // Strict radial probe along ray to prevent shooting past thin wall corners
+    if (!isPositionWalkable(x, z, 0.25)) return false;
 
     const node = posToNavNode(x, z);
     if (node === null) return false; // passes through a wall/obstacle
@@ -442,9 +447,20 @@ function simplifyPath(path) {
       const p1 = path[curr];
       const p2 = path[next];
       if (hasLineOfSight(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z)) {
-        const midX = (p1.x + p2.x) * 0.5;
-        const midZ = (p1.z + p2.z) * 0.5;
-        if (isPositionWalkable(midX, midZ, 0.35)) {
+        // Check intermediate points with proper bot body clearance radius
+        let pathClear = true;
+        const segmentDist = Math.hypot(p2.x - p1.x, p2.z - p1.z);
+        const steps = Math.ceil(segmentDist / 0.40);
+        for (let s = 1; s < steps; s++) {
+          const st = s / steps;
+          const px = p1.x + (p2.x - p1.x) * st;
+          const pz = p1.z + (p2.z - p1.z) * st;
+          if (!isPositionWalkable(px, pz, 0.40)) {
+            pathClear = false;
+            break;
+          }
+        }
+        if (pathClear) {
           break;
         }
       }
