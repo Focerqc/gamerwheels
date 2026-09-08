@@ -602,17 +602,17 @@
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    if (typeof THREE.ACESFilmicToneMapping !== 'undefined') {
-      renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.16;
+    if (typeof THREE.LinearToneMapping !== 'undefined') {
+      renderer.toneMapping = THREE.LinearToneMapping;
+      renderer.toneMappingExposure = 1.05;
     }
 
     // --- Lighting (Global Radiosity & Ambient Fill for Tunnels, Interiors & Slopes) ---
-    ambientLight = new THREE.AmbientLight(0xfff7ed, 0.85);
+    ambientLight = new THREE.AmbientLight(0xfff7ed, 1.25);
     scene.add(ambientLight);
 
     // Hemisphere light (sky vs warm ground bounce)
-    hemiLight = new THREE.HemisphereLight(0xffedd5, 0x78350f, 0.65);
+    hemiLight = new THREE.HemisphereLight(0xffedd5, 0x78350f, 0.75);
     hemiLight.position.set(0, 60, 0);
     scene.add(hemiLight);
 
@@ -2819,11 +2819,11 @@
 
   // Headlight & Taillight System (+Z White Front, -Z Red Rear)
   function setupBoardLights() {
-    // 1. Front Headlight Beam (Bright White Spotlight shining forward along ground)
-    headlightSpot = new THREE.SpotLight(0xecfeff, 2.6, 16, 0.55, 0.35, 1.4);
+    // 1. Front Headlight Beam (Bright White Spotlight shining forward along ground & tunnels)
+    headlightSpot = new THREE.SpotLight(0xfff8ee, 4.8, 30, 0.70, 0.40, 1.2);
     headlightSpot.position.set(0, TIRE_RADIUS + 0.03, 0.34);
     const frontTargetObj = new THREE.Object3D();
-    frontTargetObj.position.set(0, -0.15, 8); // Shines forward along +Z onto ground
+    frontTargetObj.position.set(0, -0.15, 10); // Shines forward along +Z onto ground
     boardGroup.add(frontTargetObj);
     headlightSpot.target = frontTargetObj;
     boardGroup.add(headlightSpot);
@@ -2838,7 +2838,7 @@
     boardGroup.add(frontLens);
 
     // 2. Rear Taillight Beam (Focused Red Spotlight shining backwards towards -Z rear along ground)
-    taillightSpot = new THREE.SpotLight(0xff1414, 3.0, 14, 0.58, 0.45, 1.3);
+    taillightSpot = new THREE.SpotLight(0xff1414, 3.5, 18, 0.62, 0.45, 1.2);
     taillightSpot.position.set(0, TIRE_RADIUS + 0.03, -0.34);
     const rearTargetObj = new THREE.Object3D();
     rearTargetObj.position.set(0, -0.15, -8); // Shines backwards along -Z onto ground behind board
@@ -2855,9 +2855,9 @@
     taillightLens.position.set(0, TIRE_RADIUS + 0.015, -0.345);
     boardGroup.add(taillightLens);
 
-    // 3. Tactical Rider Ambient Lantern (Illuminates dark tunnels, underpasses & corridors around player)
-    const riderFill = new THREE.PointLight(0xffedd5, 1.4, 20, 1.5);
-    riderFill.position.set(0, 0.45, 0);
+    // 3. Tactical Rider Ambient Lantern (Illuminates immediate vicinity around player)
+    const riderFill = new THREE.PointLight(0xffedd5, 1.8, 22, 1.2);
+    riderFill.position.set(0, 0.55, 0);
     boardGroup.add(riderFill);
 
     // Mount floating 3D weapon above tire
@@ -3765,14 +3765,48 @@
             if (child.material) {
               child.material.side = THREE.DoubleSide;
               child.material.roughness = 0.82;
+              if (typeof child.material.metalness !== 'undefined') {
+                child.material.metalness = Math.min(child.material.metalness, 0.08);
+              }
             }
             dust2WalkMeshes.push(child);
           }
         });
 
+        // Add dedicated warm interior lanterns for all covered buildings, tunnels & underpasses
+        const buildingLightCoords = [
+          // B Tunnels & Underpasses
+          { x: -14.0, y: 3.8, z: 4.0, int: 4.5, dist: 30 },   // Upper B Tunnel
+          { x: -15.0, y: 2.8, z: -12.0, int: 4.5, dist: 30 },  // Lower B Tunnel
+          { x: -18.0, y: 3.2, z: -4.0, int: 4.0, dist: 25 },   // Tunnel Stairs / Corner
+          { x: -9.0,  y: 3.8, z: 12.0, int: 4.0, dist: 28 },   // T Tunnel Entrance
+          { x: 0.0,   y: 3.5, z: -28.0, int: 4.2, dist: 30 },  // CT Spawn Underpass
+          { x: -24.0, y: 3.2, z: -16.0, int: 3.8, dist: 25 },  // Bombsite B Back Covered
+
+          // Long A Buildings & Doors
+          { x: 18.0,  y: 3.8, z: 12.0, int: 4.5, dist: 30 },  // Long Doors Entry Building
+          { x: 21.0,  y: 3.8, z: 2.0,  int: 4.5, dist: 30 },  // Long Doors Exit Building / Corridor
+          { x: 22.0,  y: 3.8, z: -10.0, int: 4.0, dist: 28 }, // Long A Corner / Arch
+          { x: 25.0,  y: 3.8, z: 22.0, int: 4.0, dist: 28 },  // Long A Pit Alcove Building
+
+          // Mid Doors & Catwalk / A Ramp Buildings
+          { x: 0.0,   y: 3.8, z: 2.0,  int: 4.5, dist: 30 },  // Mid Doors Archway / Room
+          { x: 14.0,  y: 3.5, z: -15.0, int: 4.2, dist: 28 }, // Catwalk / A Short Arch
+          { x: 20.0,  y: 3.8, z: -25.0, int: 4.0, dist: 28 }, // Bombsite A Covered Ramp
+
+          // T Spawn Buildings & Terraces
+          { x: -5.0,  y: 4.2, z: 32.0, int: 4.5, dist: 30 },  // T Spawn West Building
+          { x: 5.0,   y: 4.2, z: 30.0, int: 4.5, dist: 30 },  // T Spawn East Building / Ramp
+        ];
+        buildingLightCoords.forEach(c => {
+          const bLight = new THREE.PointLight(0xffedd5, c.int, c.dist, 0.8);
+          bLight.position.set(c.x, c.y, c.z);
+          dust2Group.add(bLight);
+        });
+
         dust2Group.add(dust2Model);
         initBombSiteBeacons();
-        console.log(`[Dust 2] Map loaded successfully with ${dust2WalkMeshes.length} meshes!`);
+        console.log(`[Dust 2] Map loaded successfully with ${dust2WalkMeshes.length} meshes & building interior lighting!`);
         if (onReady) onReady();
       },
       undefined,
@@ -3786,7 +3820,7 @@
   function setEnvironmentLighting(mapId) {
     if (!renderer || !scene) return;
     if (mapId === 'dust2') {
-      // Warm Moroccan / Desert Sun with strong global ambient fill for tunnels
+      // Warm Moroccan / Desert Sun with strong global ambient fill for tunnels & covered areas
       scene.background.setHex(0xdfcfb2);
       if (scene.fog) {
         scene.fog.color.setHex(0xdfcfb2);
@@ -3794,11 +3828,11 @@
       }
       if (ambientLight) {
         ambientLight.color.setHex(0xfff7ed);
-        ambientLight.intensity = 1.05; // Bright global ambient so tunnels, alcoves & interiors stay clearly illuminated
+        ambientLight.intensity = 1.25;
       }
       if (hemiLight) {
         hemiLight.color.setHex(0xffedd5);
-        hemiLight.groundColor.setHex(0xb45309); // Warm desert terracotta floor bounce
+        hemiLight.groundColor.setHex(0x78350f);
         hemiLight.intensity = 0.75;
       }
       if (sunLight) {
