@@ -3526,12 +3526,11 @@
 
     let spawnY = 0.2;
     if (currentMapId === 'dust2') {
-      // CP1 = CT Spawn (under cat): cast from 2.5m so ray starts below the catwalk
-      // roof (~4.5m) and finds the ground floor at ~0.18m instead.
-      const rayY = (index === 1) ? 2.5 : 20.0;
-      const groundH = getDust2SurfaceElevation(cp.x, cp.z, rayY);
+      // Cast from cp.spawnYOffset + 1.2m so ray starts below catwalks/roofs (e.g. CT spawn under cat)
+      const targetRefY = (cp.spawnYOffset !== undefined) ? cp.spawnYOffset : 0.2;
+      const groundH = getDust2SurfaceElevation(cp.x, cp.z, targetRefY, true);
       spawnY = (groundH !== null && groundH !== undefined && !isNaN(groundH) && groundH > -10)
-        ? groundH + 0.18
+        ? groundH + 0.08
         : (cp.spawnYOffset || 0.2);
     } else {
       const baseElevation = getTerrainElevation(cp.x, cp.z);
@@ -5066,14 +5065,14 @@
     }
   }
 
-  function getDust2SurfaceElevation(x, z, currentY) {
+  function getDust2SurfaceElevation(x, z, currentY, isSpawning = false) {
     if (!dust2WalkMeshes || dust2WalkMeshes.length === 0) {
       return 0.1;
     }
 
-    const isSpawning = (currentY >= 10.0);
-    // Ray starts 1.5m above player; never go below y=0.5 to avoid shooting into geometry from underground
-    const rayStartY = isSpawning ? 12.0 : Math.max(currentY + 1.5, 0.5);
+    const refY = (currentY !== undefined) ? currentY : 0.2;
+    // Ray starts 1.2m above reference height when spawning, or 1.5m when driving
+    const rayStartY = isSpawning ? (refY + 1.2) : Math.max(refY + 1.5, 0.5);
     dust2RayOrigin.set(x, rayStartY, z);
     dust2Ray.set(dust2RayOrigin, dust2DownDir);
     dust2Ray.far = 25.0;
@@ -5092,10 +5091,10 @@
           continue;
         }
 
-        // Reject any surface more than 1.2m above the player's current position (prevents stair-teleport)
-        // Allow more step-up only during airborne to handle landing on ledges
-        const maxStepUp = (state.player && state.player.isAirborne) ? 2.0 : 1.2;
-        if (!isSpawning && hit.point.y > currentY + maxStepUp) continue;
+        // Reject any surface more than 0.45m above the player's current position (prevents stair/ceiling teleport)
+        // Allow more step-up only during airborne to handle landing on high ledges
+        const maxStepUp = (state.player && state.player.isAirborne) ? 1.8 : 0.45;
+        if (!isSpawning && hit.point.y > refY + maxStepUp) continue;
 
         const norm = getHitWorldNormal(hit);
         // Only accept surfaces that are flat or drivable slopes (steeper than ~49 deg is a wall)
@@ -5105,17 +5104,18 @@
       }
 
       if (validWalkHits.length > 0) {
-        // Sort descending by height
-        validWalkHits.sort((a, b) => b - a);
-
         if (isSpawning) {
-          // For checkpoint teleport or initial spawn, pick highest floor below roof
+          // For checkpoint teleport or initial spawn, pick floor surface closest to target spawn height
+          validWalkHits.sort((a, b) => Math.abs(a - refY) - Math.abs(b - refY));
           return validWalkHits[0];
         }
 
+        // Sort descending by height for driving/jumping queries
+        validWalkHits.sort((a, b) => b - a);
+
         // When grounded, max step-up is 0.38m; when jumping, ground must be below feet
         const isAir = (state.player && state.player.isAirborne);
-        const maxAllowedY = isAir ? (currentY + 0.20) : (currentY + 0.38);
+        const maxAllowedY = isAir ? (refY + 0.20) : (refY + 0.38);
 
         for (let j = 0; j < validWalkHits.length; j++) {
           const hy = validWalkHits[j];
@@ -5125,7 +5125,7 @@
         }
 
         // If no walkable surface was at or below maxAllowedY (e.g. against a wall or roof)
-        return currentY;
+        return refY;
       }
     }
     return (currentY !== undefined && !isSpawning) ? currentY : 0.1;
@@ -5823,13 +5823,17 @@
         state.aerial.flipDone = false;
       }
     } else {
-      // Ground elevation clamping (NEVER sink below ground or ramps!)
+      // Ground elevation clamping & airborne drop handling
       if (p.y < p.groundY) {
         p.y = p.groundY; // Solid contact: never sink below surface
-      } else if (p.y > p.groundY + 0.22 && p.speed > 3.0) {
-        // Rode off a drop or crest at speed: smoothly become airborne!
-        p.isAirborne = true;
-        p.vy = 0;
+        p.vy = Math.max(0, p.vy);
+      } else if (p.y > p.groundY + 0.18) {
+        // Rode or dropped off a ledge, crest, or elevated platform: enter airborne state!
+        // Gravity smoothly pulls rider down to surface without teleporting into wall geometry
+        if (!p.isAirborne) {
+          p.isAirborne = true;
+          p.vy = Math.min(0, p.vy);
+        }
       } else {
         p.y = p.groundY;
       }

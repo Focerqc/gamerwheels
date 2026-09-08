@@ -372,17 +372,61 @@ function findNearestWalkableNode(x, z) {
 
 /**
  * Line of sight check across NavGrid.
- * Returns true if straight ray from (ax, az) to (bx, bz) does not hit null (unwalkable/wall) grid cells.
+/**
+ * Probe radial points around (x, z) to verify bot body clearance (prevents clipping through walls)
  */
-function hasLineOfSight(ax, az, bx, bz) {
+function isPositionWalkable(x, z, radius = 0.40) {
   if (!dust2NavGrid) return true;
-  const steps = Math.ceil(Math.hypot(bx - ax, bz - az) / (dust2NavGrid.resolution * 0.5));
+  const points = [
+    { x, z },
+    { x: x + radius, z },
+    { x: x - radius, z },
+    { x, z: z + radius },
+    { x, z: z - radius },
+    { x: x + radius * 0.707, z: z + radius * 0.707 },
+    { x: x - radius * 0.707, z: z - radius * 0.707 }
+  ];
+  for (let i = 0; i < points.length; i++) {
+    if (posToNavNode(points[i].x, points[i].z) === null) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * 3D Line-of-sight check across NavGrid (checks 2D walls & vertical 3D height differences).
+ * Returns true if straight ray from (ax, ay, az) to (bx, by, bz) is unblocked by walls or floors.
+ */
+function hasLineOfSight(ax, ay, az, bx, by, bz) {
+  if (!dust2NavGrid) return true;
+  const dist = Math.hypot(bx - ax, bz - az);
+  if (dist < 0.1) return true;
+
+  // Height separation check: if vertical gap > 2.0m without ramp/elevation match, blocked by floor/roof
+  if (ay !== undefined && by !== undefined && Math.abs(ay - by) > 2.2) {
+    return false;
+  }
+
+  const steps = Math.ceil(dist / (dust2NavGrid.resolution * 0.4));
   for (let i = 0; i <= steps; i++) {
     const t = steps > 0 ? i / steps : 0;
     const x = ax + (bx - ax) * t;
     const z = az + (bz - az) * t;
+    const expectedY = (ay !== undefined && by !== undefined) ? (ay + (by - ay) * t) : undefined;
+
     const node = posToNavNode(x, z);
     if (node === null) return false; // passes through a wall/obstacle
+
+    if (expectedY !== undefined) {
+      const cellPos = navNodeToPos(node);
+      if (cellPos && cellPos.y !== undefined) {
+        // Block if cell terrain/wall height is significantly above line of sight
+        if (cellPos.y > expectedY + 1.2) {
+          return false;
+        }
+      }
+    }
   }
   return true;
 }
@@ -395,8 +439,14 @@ function simplifyPath(path) {
   while (curr < path.length - 1) {
     let next = path.length - 1;
     while (next > curr + 1) {
-      if (hasLineOfSight(path[curr].x, path[curr].z, path[next].x, path[next].z)) {
-        break;
+      const p1 = path[curr];
+      const p2 = path[next];
+      if (hasLineOfSight(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z)) {
+        const midX = (p1.x + p2.x) * 0.5;
+        const midZ = (p1.z + p2.z) * 0.5;
+        if (isPositionWalkable(midX, midZ, 0.35)) {
+          break;
+        }
       }
       next--;
     }
@@ -570,13 +620,15 @@ function tickBots(dt) {
     if (bot.mapId === 'dust2' && dust2Tactical) {
       let nearestDist = Infinity;
       for (const p of players.values()) {
-        if (p.isBot || p.mapId !== 'dust2' || !p.isAlive) continue;
+        if (p.mapId !== 'dust2' || !p.isAlive || p.id === bot.id) continue;
+        // Do NOT attack teammates! Bots only target riders on the opposing team
+        if (p.team && bot.team && p.team === bot.team) continue;
         const d = Math.hypot(p.x - bot.x, p.z - bot.z);
         if (d < nearestDist) { nearestDist = d; attackTarget = p; }
       }
 
-      // Check LOS through NavGrid raycasting
-      const canSee = attackTarget && hasLineOfSight(bot.x, bot.z, attackTarget.x, attackTarget.z);
+      // Check 3D line-of-sight through NavGrid raycasting (checks 3D walls & height differences)
+      const canSee = attackTarget && hasLineOfSight(bot.x, bot.y, bot.z, attackTarget.x, attackTarget.y, attackTarget.z);
 
       if (attackTarget && nearestDist < ATTACK_RANGE && canSee) {
         bot.fsm = 'attack';
@@ -680,12 +732,12 @@ function tickBots(dt) {
           const moveX = Math.sin(bot.heading) * BOT_SPEED * dt;
           const moveZ = Math.cos(bot.heading) * BOT_SPEED * dt;
 
-          // Check if proposed move stays inside walkable NavGrid
-          const nextNode = posToNavNode(bot.x + moveX, bot.z + moveZ);
-          if (nextNode !== null) {
+          // Check if proposed move stays inside walkable NavGrid (with 0.40m body clearance)
+          if (isPositionWalkable(bot.x + moveX, bot.z + moveZ, 0.40)) {
             bot.x += moveX;
             bot.z += moveZ;
-            bot.y = node.y !== undefined ? node.y : 0.38; // snap to terrain elevation
+            const nodePos = navNodeToPos(posToNavNode(bot.x, bot.z));
+            bot.y = (nodePos && nodePos.y !== undefined) ? nodePos.y : 0.38; // snap to terrain elevation
           } else {
             // Re-path & advance goal if blocked by wall
             bot.goalIdx = (bot.goalIdx + 1) % DUST2_TACTICAL_GOALS.length;
@@ -1114,6 +1166,8 @@ io.on('connection', (socket) => {
     const victim = players.get(data.targetId);
     if (!victim || !victim.isAlive) return;
     if (attacker.mapId !== victim.mapId) return;
+    // Disable friendly fire on teammates
+    if (attacker.team && victim.team && attacker.team === victim.team && attacker.id !== victim.id) return;
 
     // Base damage calculation with CS-style armor absorption
     let rawDamage = Math.max(1, Math.min(250, Number(data.damage) || 25));

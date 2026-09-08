@@ -677,6 +677,16 @@
         }
       }
 
+      // Apply 3D wall collision solver to prevent remote riders/bots from clipping inside walls
+      if (window.GamerWheels && typeof window.GamerWheels.checkDust2Wall === 'function') {
+        const wallHit = window.GamerWheels.checkDust2Wall(cur.x, meshY, cur.z, Math.sin(cur.heading), Math.cos(cur.heading), 0.40);
+        if (wallHit && wallHit.distance < 0.40) {
+          const push = 0.40 - wallHit.distance;
+          cur.x += wallHit.normalX * push;
+          cur.z += wallHit.normalZ * push;
+        }
+      }
+
       rp.group.position.set(cur.x, meshY, cur.z);
       rp.group.rotation.y = cur.heading;
       rp.group.rotation.x = cur.pitch;
