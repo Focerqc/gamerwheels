@@ -611,8 +611,21 @@
   }
 
   function sendChat(text) {
-    if (!socket || !socket.connected) return;
-    socket.emit('chat_message', { text });
+    if (!text) return;
+    if (socket && socket.connected) {
+      socket.emit('chat_message', { text });
+    }
+    // Provide immediate visual feedback for local player
+    const tickerTextEl = document.getElementById('tickerText');
+    const trickTickerEl = document.getElementById('trickTicker');
+    if (tickerTextEl && trickTickerEl) {
+      tickerTextEl.textContent = `💬 ${selfName || 'You'}: "${text}"`;
+      trickTickerEl.classList.add('visible');
+      clearTimeout(tickerTimeout);
+      tickerTimeout = setTimeout(() => {
+        trickTickerEl.classList.remove('visible');
+      }, 3000);
+    }
   }
 
   // Hook called every frame from game.js
@@ -663,14 +676,17 @@
       cur.roll += (tgt.roll - cur.roll) * lerpAlpha;
       cur.speed += (tgt.speed - cur.speed) * lerpAlpha;
 
-      // Apply to 3D meshes (prevent bots/riders from clipping into or sinking under floor)
+      // Apply to 3D meshes (prevent bots/riders from clipping into or sinking under floor / flying off ramps)
       let meshY = cur.y;
       if (window.GamerWheels && typeof window.GamerWheels.getSurfaceElevation === 'function') {
         const groundElevation = window.GamerWheels.getSurfaceElevation(cur.x, cur.z, cur.y);
         if (groundElevation !== null && groundElevation !== undefined && !isNaN(groundElevation) && groundElevation > -10) {
-          // If remote player is near ground (not jumping/airborne), snap to ground; otherwise clamp above floor
-          if (!rp.target.isAirborne && Math.abs(meshY - groundElevation) < 1.5) {
-            meshY = groundElevation;
+          // If remote entity is on/near ground (not jumping), smoothly stick Y to slope surface height
+          if (!rp.target.isAirborne && Math.abs(meshY - groundElevation) < 3.0) {
+            // Lerp target Y to ground elevation so server y & mesh y remain synchronized on ramps
+            tgt.y = groundElevation;
+            meshY += (groundElevation - meshY) * Math.min(dt * 18.0, 1.0);
+            cur.y = meshY;
           } else {
             meshY = Math.max(meshY, groundElevation);
           }

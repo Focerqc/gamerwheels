@@ -1,0 +1,19 @@
+providers:
+  9router:
+    base_url: "http://localhost:20128/v1"
+    api_key: "sk-2584a6f2ae675875-zqzohn-38f5ce2a"
+
+# Your main orchestrator (GPT-6 Astra via Combo2)
+model:
+  provider: "9router"
+  name: "Combo2"
+
+# Subagent delegation pool routed through your grunt fallback queue
+delegation:
+  provider: "9router"
+  model: "Combo_Pool_1"
+
+auxiliary:
+  code_generation:
+    provider: "9router"
+    model: "Combo_Pool_1"

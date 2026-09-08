@@ -478,7 +478,7 @@ const DUST2_TACTICAL_GOALS = [
   { name: 'Mid Doors', x: 0.5, z: 11.3 },
   { name: 'B Lower Tunnels', x: -14.0, z: -15.0 },
   { name: 'B Site Platform', x: -25.0, z: -15.0 },
-  { name: 'CT Spawn', x: -25.0, z: -35.0 },
+  { name: 'CT Spawn', x: -1.0, z: -16.0 },
   { name: 'Short A / Catwalk', x: 8.0, z: -30.0 },
   { name: 'A Site Platform', x: 20.0, z: -25.0 },
   { name: 'Long A Doors', x: 14.0, z: 18.0 }
@@ -753,7 +753,8 @@ function tickBots(dt) {
             bot.x += moveX;
             bot.z += moveZ;
             const nodePos = navNodeToPos(posToNavNode(bot.x, bot.z));
-            bot.y = (nodePos && nodePos.y !== undefined) ? nodePos.y : 0.38; // snap to terrain elevation
+            const targetY = (nodePos && nodePos.y !== undefined) ? nodePos.y : (node.y !== undefined ? node.y : 0.38);
+            bot.y += (targetY - bot.y) * Math.min(dt * 12.0, 1.0);
           } else {
             // Re-path & advance goal if blocked by wall
             bot.goalIdx = (bot.goalIdx + 1) % DUST2_TACTICAL_GOALS.length;

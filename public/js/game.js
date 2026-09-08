@@ -45,11 +45,11 @@
         id: 1,
         name: 'CT Spawn',
         zone: 'CT Spawn Base',
-        x: -25.0,
-        z: -35.0,
-        heading: Math.PI,
-        spawnYOffset: 0.18,  // ground floor under cat catwalk
-        desc: 'Counter-Terrorist base below cat catwalk'
+        x: -1.0,
+        z: -16.0,
+        heading: 0,
+        spawnYOffset: 0.18,
+        desc: 'Counter-Terrorist base at ground level'
       },
       {
         id: 2,
@@ -2959,6 +2959,14 @@
 
     // Keyboard Handler
     window.addEventListener('keydown', (e) => {
+      // Ignore game shortcuts if user is typing in chat/input
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement && document.activeElement.tagName)) {
+        if (e.code === 'Escape') {
+          document.activeElement.blur();
+        }
+        return;
+      }
+
       // 1. SCROLL-LOCK: Prevent page scrolling on arrow keys and spacebar
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
         e.preventDefault();
@@ -2966,19 +2974,28 @@
 
       // 2. BUY MENU & COMBAT SHORTCUTS
       if (e.code === 'KeyB') {
-        if (!['INPUT', 'TEXTAREA'].includes(document.activeElement && document.activeElement.tagName)) {
-          toggleBuyMenu();
-          return;
-        }
+        toggleBuyMenu();
+        return;
       }
       if (e.code === 'KeyQ') {
-        if (!['INPUT', 'TEXTAREA'].includes(document.activeElement && document.activeElement.tagName)) {
-          quickSwitchWeapon();
-          return;
+        quickSwitchWeapon();
+        return;
+      }
+      if (e.code === 'KeyC') {
+        if (document.pointerLockElement) {
+          document.exitPointerLock();
         }
+        const chatInput = document.getElementById('chatInput');
+        if (chatInput) {
+          chatInput.focus();
+        }
+        return;
       }
       if (e.code === 'Escape') {
         closeBuyMenu();
+        if (document.pointerLockElement) {
+          document.exitPointerLock();
+        }
         return;
       }
       if (e.code === 'KeyJ') {
@@ -3160,6 +3177,20 @@
 
       document.addEventListener('pointerlockchange', updatePointerLockState);
       document.addEventListener('mozpointerlockchange', updatePointerLockState);
+
+      const btnUnlockMouse = document.getElementById('btnUnlockMouse');
+      if (btnUnlockMouse) {
+        btnUnlockMouse.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (document.pointerLockElement) {
+            document.exitPointerLock();
+          }
+          const chatInput = document.getElementById('chatInput');
+          if (chatInput) {
+            chatInput.focus();
+          }
+        });
+      }
 
       // Request Pointer Lock on clicking inside game canvas (outside interactive UI)
       window.addEventListener('mousedown', (e) => {
@@ -4991,7 +5022,7 @@
       combat.bombSite = null;
       showTrickToast('TERRORIST MISSION (Terrace Spawn): Plant C4 at Site A or B! 💣');
     } else {
-      teleportToCheckpoint(1); // CT Spawn Base: x: -25.0, z: -35.0, y: 4.58
+      teleportToCheckpoint(1); // CT Spawn Base: x: -10.0, z: -35.0, y: 0.18
       combat.hasBomb = false;
       showTrickToast('COUNTER-TERRORIST MISSION: Defend Site A and Site B! 🛡️');
     }
@@ -5827,8 +5858,8 @@
       if (p.y < p.groundY) {
         p.y = p.groundY; // Solid contact: never sink below surface
         p.vy = Math.max(0, p.vy);
-      } else if (p.y > p.groundY + 0.18) {
-        // Rode or dropped off a ledge, crest, or elevated platform: enter airborne state!
+      } else if (p.y > p.groundY + 0.65) {
+        // Rode or dropped off a high ledge, crest, or elevated platform: enter airborne state!
         // Gravity smoothly pulls rider down to surface without teleporting into wall geometry
         if (!p.isAirborne) {
           p.isAirborne = true;
@@ -6470,7 +6501,7 @@
       if (p.z > 25) {
         newZone = 'T Spawn (Terrace)';
         newType = 'ATTACKER BASE';
-      } else if (p.z < -30 && p.x < -10) {
+      } else if (p.z < -30 && p.x < 5) {
         newZone = 'CT Spawn';
         newType = 'DEFENDER BASE';
       } else if (p.x > 20 && p.z < -10) {

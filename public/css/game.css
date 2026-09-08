@@ -1685,7 +1685,14 @@ body.exp9-standalone-page .exp9-hud-layer {
     padding: 0.45rem 0.6rem;
   }
   .exp9-chat-bar {
-    display: none;
+    left: 1rem;
+    bottom: 0.8rem;
+  }
+  .exp9-chat-input {
+    width: 140px;
+  }
+  .exp9-chat-input:focus {
+    width: 220px;
   }
   .exp9-match-info {
     display: none;
