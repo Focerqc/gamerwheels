@@ -600,11 +600,11 @@
     });
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.enabled = false;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    if (typeof THREE.LinearToneMapping !== 'undefined') {
-      renderer.toneMapping = THREE.LinearToneMapping;
-      renderer.toneMappingExposure = 1.05;
+    if (typeof THREE.ACESFilmicToneMapping !== 'undefined') {
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.0;
     }
 
     // --- Lighting (Global Radiosity & Ambient Fill for Tunnels, Interiors & Slopes) ---
@@ -619,7 +619,7 @@
     // Directional Sun Light (strong directional shading for hills and berms)
     sunLight = new THREE.DirectionalLight(0xfffbeb, 1.35);
     sunLight.position.set(50, 75, 40);
-    sunLight.castShadow = true;
+    sunLight.castShadow = false;
     sunLight.shadow.mapSize.width = 2048;
     sunLight.shadow.mapSize.height = 2048;
     sunLight.shadow.camera.near = 10;
@@ -2664,8 +2664,10 @@
             // Footpads (Stompie Front & Rear) -> Clean solid footpads with DoubleSide & smooth normals
             if (name.includes('stompie') || name.includes('pad')) {
               child.material = new THREE.MeshStandardMaterial({
-                color: 0xf1f5f9,
-                roughness: 0.8,
+                color: 0xffffff,
+                emissive: 0xd1d5db,
+                emissiveIntensity: 0.25,
+                roughness: 0.5,
                 metalness: 0.05,
                 side: THREE.DoubleSide,
               });
@@ -2677,8 +2679,10 @@
             else if (name.includes('rail')) {
               child.material = new THREE.MeshStandardMaterial({
                 color: 0xef233c,
+                emissive: 0x7f1d1d,
+                emissiveIntensity: 0.35,
                 roughness: 0.32,
-                metalness: 0.78,
+                metalness: 0.6,
                 side: THREE.DoubleSide,
               });
             }
@@ -2686,8 +2690,10 @@
             else if (name.includes('tire')) {
               foundTire = child;
               child.material = new THREE.MeshStandardMaterial({
-                color: 0x18181b,
-                roughness: 0.88,
+                color: 0x3f3f46,
+                emissive: 0x18181b,
+                emissiveIntensity: 0.2,
+                roughness: 0.8,
                 metalness: 0.05,
                 side: THREE.DoubleSide,
               });
@@ -2695,8 +2701,10 @@
             // Bumpers -> Durable Dark Bumper Plastic
             else if (name.includes('bumper')) {
               child.material = new THREE.MeshStandardMaterial({
-                color: 0x0f172a,
-                roughness: 0.85,
+                color: 0x334155,
+                emissive: 0x0f172a,
+                emissiveIntensity: 0.2,
+                roughness: 0.7,
                 metalness: 0.1,
                 side: THREE.DoubleSide,
               });
@@ -2704,18 +2712,22 @@
             // Superflux Motor Hub & Mounts -> Anodized Bronze
             else if (name.includes('superflux') || name.includes('mount')) {
               child.material = new THREE.MeshStandardMaterial({
-                color: 0x92400e,
+                color: 0xd97706,
+                emissive: 0x78350f,
+                emissiveIntensity: 0.3,
                 roughness: 0.3,
-                metalness: 0.85,
+                metalness: 0.7,
                 side: THREE.DoubleSide,
               });
             }
             // Battery & Controller Enclosures -> Matte Dark Slate CNC
             else if (name.includes('box') || name.includes('lid')) {
               child.material = new THREE.MeshStandardMaterial({
-                color: 0x1e293b,
-                roughness: 0.65,
-                metalness: 0.3,
+                color: 0x475569,
+                emissive: 0x1e293b,
+                emissiveIntensity: 0.2,
+                roughness: 0.6,
+                metalness: 0.2,
                 side: THREE.DoubleSide,
               });
             } else {
@@ -2819,11 +2831,11 @@
 
   // Headlight & Taillight System (+Z White Front, -Z Red Rear)
   function setupBoardLights() {
-    // 1. Front Headlight Beam (Bright White Spotlight shining forward along ground & tunnels)
-    headlightSpot = new THREE.SpotLight(0xfff8ee, 4.8, 30, 0.70, 0.40, 1.2);
-    headlightSpot.position.set(0, TIRE_RADIUS + 0.03, 0.34);
+    // 1. Front Headlight Beam (Shines forward along board movement & camera view)
+    headlightSpot = new THREE.SpotLight(0xfff8ee, 12.0, 60, 0.95, 0.35, 1.0);
+    headlightSpot.position.set(0, TIRE_RADIUS + 0.25, 0.1);
     const frontTargetObj = new THREE.Object3D();
-    frontTargetObj.position.set(0, -0.15, 10); // Shines forward along +Z onto ground
+    frontTargetObj.position.set(0, -0.2, 12);
     boardGroup.add(frontTargetObj);
     headlightSpot.target = frontTargetObj;
     boardGroup.add(headlightSpot);
@@ -2855,8 +2867,8 @@
     taillightLens.position.set(0, TIRE_RADIUS + 0.015, -0.345);
     boardGroup.add(taillightLens);
 
-    // 3. Tactical Rider Ambient Lantern (Illuminates immediate vicinity around player)
-    const riderFill = new THREE.PointLight(0xffedd5, 1.8, 22, 1.2);
+    // 3. Tactical Rider Ambient Lantern
+    const riderFill = new THREE.PointLight(0xffedd5, 1.2, 15, 1.2);
     riderFill.position.set(0, 0.55, 0);
     boardGroup.add(riderFill);
 
@@ -3763,11 +3775,11 @@
             child.castShadow = true;
             child.receiveShadow = true;
             if (child.material) {
-              child.material.side = THREE.DoubleSide;
-              child.material.roughness = 0.82;
-              if (typeof child.material.metalness !== 'undefined') {
-                child.material.metalness = Math.min(child.material.metalness, 0.08);
-              }
+              const tex = child.material.map || null;
+              child.material = new THREE.MeshBasicMaterial({
+                map: tex,
+                side: THREE.DoubleSide
+              });
             }
             dust2WalkMeshes.push(child);
           }
@@ -3776,26 +3788,26 @@
         // Add dedicated warm interior lanterns for all covered buildings, tunnels & underpasses
         const buildingLightCoords = [
           // B Tunnels & Underpasses
-          { x: -14.0, y: 3.8, z: 4.0, int: 4.5, dist: 30 },   // Upper B Tunnel
-          { x: -15.0, y: 2.8, z: -12.0, int: 4.5, dist: 30 },  // Lower B Tunnel
-          { x: -18.0, y: 3.2, z: -4.0, int: 4.0, dist: 25 },   // Tunnel Stairs / Corner
-          { x: -9.0,  y: 3.8, z: 12.0, int: 4.0, dist: 28 },   // T Tunnel Entrance
-          { x: 0.0,   y: 3.5, z: -28.0, int: 4.2, dist: 30 },  // CT Spawn Underpass
-          { x: -24.0, y: 3.2, z: -16.0, int: 3.8, dist: 25 },  // Bombsite B Back Covered
+          { x: -14.0, y: 3.8, z: 4.0, int: 16.0, dist: 45 },   // Upper B Tunnel
+          { x: -15.0, y: 2.8, z: -12.0, int: 16.0, dist: 45 },  // Lower B Tunnel
+          { x: -18.0, y: 3.2, z: -4.0, int: 14.0, dist: 40 },   // Tunnel Stairs / Corner
+          { x: -9.0,  y: 3.8, z: 12.0, int: 14.0, dist: 40 },   // T Tunnel Entrance
+          { x: 0.0,   y: 3.5, z: -28.0, int: 14.0, dist: 40 },  // CT Spawn Underpass
+          { x: -24.0, y: 3.2, z: -16.0, int: 14.0, dist: 40 },  // Bombsite B Back Covered
 
           // Long A Buildings & Doors
-          { x: 18.0,  y: 3.8, z: 12.0, int: 4.5, dist: 30 },  // Long Doors Entry Building
-          { x: 21.0,  y: 3.8, z: 2.0,  int: 4.5, dist: 30 },  // Long Doors Exit Building / Corridor
-          { x: 22.0,  y: 3.8, z: -10.0, int: 4.0, dist: 28 }, // Long A Corner / Arch
-          { x: 25.0,  y: 3.8, z: 22.0, int: 4.0, dist: 28 },  // Long A Pit Alcove Building
+          { x: 18.0,  y: 3.8, z: 12.0, int: 15.0, dist: 45 },  // Long Doors Entry Building
+          { x: 21.0,  y: 3.8, z: 2.0,  int: 15.0, dist: 45 },  // Long Doors Exit Building / Corridor
+          { x: 22.0,  y: 3.8, z: -10.0, int: 14.0, dist: 40 }, // Long A Corner / Arch
+          { x: 25.0,  y: 3.8, z: 22.0, int: 14.0, dist: 40 },  // Long A Pit Alcove Building
 
           // Mid Doors & Catwalk / A Ramp Buildings
-          { x: 0.0,   y: 3.8, z: 2.0,  int: 4.5, dist: 30 },  // Mid Doors Archway / Room
-          { x: 14.0,  y: 3.5, z: -15.0, int: 4.2, dist: 28 }, // Catwalk / A Short Arch
-          { x: 20.0,  y: 3.8, z: -25.0, int: 4.0, dist: 28 }, // Bombsite A Covered Ramp
+          { x: 0.0,   y: 3.8, z: 2.0,  int: 15.0, dist: 45 },  // Mid Doors Archway / Room
+          { x: 14.0,  y: 3.5, z: -15.0, int: 14.0, dist: 40 }, // Catwalk / A Short Arch
+          { x: 20.0,  y: 3.8, z: -25.0, int: 14.0, dist: 40 }, // Bombsite A Covered Ramp
 
           // T Spawn Buildings & Terraces
-          { x: -5.0,  y: 4.2, z: 32.0, int: 4.5, dist: 30 },  // T Spawn West Building
+          { x: -5.0,  y: 4.2, z: 32.0, int: 14.0, dist: 40 },  // T Spawn West Building
           { x: 5.0,   y: 4.2, z: 30.0, int: 4.5, dist: 30 },  // T Spawn East Building / Ramp
         ];
         buildingLightCoords.forEach(c => {
@@ -3820,7 +3832,7 @@
   function setEnvironmentLighting(mapId) {
     if (!renderer || !scene) return;
     if (mapId === 'dust2') {
-      // Warm Moroccan / Desert Sun with strong global ambient fill for tunnels & covered areas
+      // Warm Moroccan / Desert Sun with clean balanced values
       scene.background.setHex(0xdfcfb2);
       if (scene.fog) {
         scene.fog.color.setHex(0xdfcfb2);
@@ -3828,16 +3840,16 @@
       }
       if (ambientLight) {
         ambientLight.color.setHex(0xfff7ed);
-        ambientLight.intensity = 1.25;
+        ambientLight.intensity = 1.6;
       }
       if (hemiLight) {
         hemiLight.color.setHex(0xffedd5);
-        hemiLight.groundColor.setHex(0x78350f);
-        hemiLight.intensity = 0.75;
+        hemiLight.groundColor.setHex(0x92400e);
+        hemiLight.intensity = 1.1;
       }
       if (sunLight) {
         sunLight.color.setHex(0xfffae6);
-        sunLight.intensity = 1.30;
+        sunLight.intensity = 1.5;
         sunLight.position.set(45, 80, 45);
       }
     } else {
@@ -3849,12 +3861,12 @@
       }
       if (ambientLight) {
         ambientLight.color.setHex(0xdbeafe);
-        ambientLight.intensity = 0.65;
+        ambientLight.intensity = 1.2;
       }
       if (hemiLight) {
         hemiLight.color.setHex(0xecfeff);
-        hemiLight.groundColor.setHex(0x1e293b);
-        hemiLight.intensity = 0.55;
+        hemiLight.groundColor.setHex(0x334155);
+        hemiLight.intensity = 0.95;
       }
       if (sunLight) {
         sunLight.color.setHex(0xfffbeb);
