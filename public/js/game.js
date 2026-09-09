@@ -138,10 +138,17 @@
       rightJoystickActive: false,
       rightJoystickVector: { x: 0, y: 0 },
     },
-    obstacles: [],
+    obstacles: [],              // Procedural world obstacles (built by buildWorld)
+    communityObstacles: [],     // Obstacles registered from loaded community (THPS) maps
     trailSigns: [],
     particles: [],
     activeCheckpoint: 0,
+    world: {
+      mode: 'procedural',       // 'procedural' | 'community'
+      activeMap: null,          // e.g. 'Braille'
+      spawnX: 0,
+      spawnZ: 0,
+    },
     clock: new THREE.Clock(),
   };
 
@@ -156,6 +163,7 @@
   let rightJoystickZone, rightJoystickBase, rightJoystickThumb;
   let balanceHud, balanceLabel, balanceNeedle;
   let cpButtons = [];
+  let mapButtons = [];
 
   // --- Three.js Globals ---
   let scene, camera, renderer;
@@ -163,12 +171,23 @@
   let headlightSpot, taillightSpot, taillightLens;
   let sunLight;
   let particleGroup;
+  let worldRoot;                    // Container for all procedural world geometry (toggleable)
+  let mapRootsGroup;                // Container for loaded community map roots
+  let communityMapLoader = null;    // CommunityMapLoader instance
 
   // --- Init on DOM Load ---
   window.addEventListener('DOMContentLoaded', () => {
     initDOMElements();
     initThreeScene();
     buildWorld();
+    finalizeWorldGroup();
+
+    // Instantiate the community map loader (used to bring THPS-converted park maps into the scene)
+    if (window.CommunityMapLoader) {
+      communityMapLoader = new window.CommunityMapLoader(scene, registerCommunityObstacle, getTerrainElevation);
+      preloadCommunityMaps();
+    }
+
     loadX7BoardModel();
     initControls();
     initParticlesAndFX();
@@ -225,13 +244,26 @@
     if (btnZoomIn) btnZoomIn.addEventListener('click', () => adjustZoom(-3));
     if (btnZoomOut) btnZoomOut.addEventListener('click', () => adjustZoom(+3));
 
-    // Checkpoint navigation buttons
-    cpButtons = Array.from(document.querySelectorAll('.exp9-cp-btn'));
+    // Checkpoint navigation buttons (pure cp buttons only — map buttons handled below)
+    cpButtons = Array.from(document.querySelectorAll('.exp9-cp-btn')).filter(
+      (btn) => !btn.hasAttribute('data-map')
+    );
     cpButtons.forEach((btn) => {
       btn.addEventListener('click', () => {
         const cpIdx = parseInt(btn.getAttribute('data-cp'), 10);
         if (!isNaN(cpIdx)) {
           teleportToCheckpoint(cpIdx);
+        }
+      });
+    });
+
+    // Community map quick-select buttons (rendered by the manifest / static buttons)
+    mapButtons = Array.from(document.querySelectorAll('.exp9-map-btn'));
+    mapButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const mapName = btn.getAttribute('data-map');
+        if (mapName) {
+          handleMapButtonClick(btn, mapName);
         }
       });
     });
@@ -378,6 +410,11 @@
     sunLight.shadow.bias = -0.0006;
     scene.add(sunLight);
     scene.add(sunLight.target);
+
+    // Container for loaded community map roots (hidden until a map is loaded)
+    mapRootsGroup = new THREE.Group();
+    mapRootsGroup.visible = false;
+    scene.add(mapRootsGroup);
 
     // Create Root Board Group (Rotation order 'YXZ' allows correct pitch along heading)
     boardGroup = new THREE.Group();
@@ -771,6 +808,36 @@
 
     // 6. Scenery (Trees, Rocks, Cacti placed on contour elevation)
     populateScenery();
+  }
+
+  // Group all procedural world geometry under a single toggleable root so we can
+  // swap between the procedural realm and a loaded community (THPS) park map.
+  function finalizeWorldGroup() {
+    if (!worldRoot) {
+      worldRoot = new THREE.Group();
+      // Persist the worldRoot in the scene (we only move the *contents* below).
+      scene.add(worldRoot);
+    }
+    const kids = scene.children.slice();
+    for (let i = 0; i < kids.length; i++) {
+      const child = kids[i];
+      if (
+        child === worldRoot ||
+        child === mapRootsGroup ||
+        child === boardGroup ||
+        child === shadowMesh ||
+        child === particleGroup ||
+        child === sunLight ||
+        child === sunLight.target ||
+        child.isLight
+      ) {
+        continue;
+      }
+      // Everything else (ground, plaza, ramps, scenery, trail signs, etc.)
+      // becomes a child of worldRoot so we can toggle it off when a map is active.
+      scene.remove(child);
+      worldRoot.add(child);
+    }
   }
 
   // Solid mathematical 3D wedge prism (zero rotation/centroid distortion)
@@ -2186,6 +2253,224 @@
     state.obstacles.push(obs);
   }
 
+  // Obstacles coming from a loaded community (THPS) map are tracked separately so
+  // we can clear them all on exit and toggle physics only when that map is active.
+  function registerCommunityObstacle(obs) {
+    obs.communityMap = true;
+    state.communityObstacles.push(obs);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Community (THPS) map mode helpers
+  // ---------------------------------------------------------------------------
+  let communitySurfaceCache = new Map(); // key -> { key, y }
+  const COMMUNITY_CACHE_MAX = 2048;
+
+  function isCommunityMapActive() {
+    return communityMapLoader !== null && state.world.mode === 'community';
+  }
+
+  // The set of obstacles that should affect physics right now.
+  function getActiveObstacles() {
+    return isCommunityMapActive() ? state.communityObstacles : state.obstacles;
+  }
+
+  function communityCacheKey(x, z) {
+    return Math.round(x * 4) / 4 + ',' + Math.round(z * 4) / 4;
+  }
+
+  // Raycast-based surface height for the active community map. Cached per grid
+  // cell because getSurfaceElevation is sampled many times per frame.
+  function getCommunitySurfaceElevation(x, z) {
+    if (!communityMapLoader || state.world.activeMap === null) return null;
+    const key = communityCacheKey(x, z);
+    const cached = communitySurfaceCache.get(key);
+    if (cached !== undefined) return cached.y;
+
+    const y = communityMapLoader.getSurfaceElevationAt(x, z, state.world.activeMap);
+    if (y !== null && y !== undefined && isFinite(y)) {
+      // Insert into LRU-style cache
+      if (communitySurfaceCache.size >= COMMUNITY_CACHE_MAX) {
+        const firstKey = communitySurfaceCache.keys().next().value;
+        communitySurfaceCache.delete(firstKey);
+      }
+      communitySurfaceCache.set(key, { key, y });
+      return y;
+    }
+    return null;
+  }
+
+  function clearCommunitySurfaceCache() {
+    communitySurfaceCache.clear();
+  }
+
+  // Preload / report any maps the user has already converted into assets/maps.
+  function preloadCommunityMaps() {
+    const known = ['Braille'];
+    const manifestBtn = document.querySelector('.exp9-map-btn[data-map="__MANIFEST__"]');
+    known.forEach((name) => {
+      if (communityMapLoader.isLoaded(name)) return;
+      // Try the manifest to discover available maps (best-effort; non-blocking).
+      fetch('assets/maps/maps-manifest.json')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((manifest) => {
+          if (!manifest || !manifest.maps || !manifest.maps.length) {
+            // Fall back to hard-coded known maps
+            if (manifestBtn) manifestBtn.style.display = known.length ? '' : 'none';
+            return;
+          }
+          // Re-render manifest-driven map buttons
+          const bar = document.getElementById('checkpointsBar');
+          manifest.maps.forEach((m, idx) => {
+            if (bar.querySelector(`.exp9-map-btn[data-map="${m.name}"]`)) return;
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'exp9-cp-btn exp9-map-btn';
+            b.setAttribute('data-map', m.name);
+            b.title = `Ride the converted ${m.name} community park`;
+            b.innerHTML = `<span class="exp9-cp-num">🗺️</span><span class="exp9-cp-label">${m.name}</span>`;
+            b.addEventListener('click', () => handleMapButtonClick(b, m.name));
+            bar.appendChild(b);
+          });
+          if (manifestBtn) manifestBtn.style.display = 'none';
+        })
+        .catch(() => {
+          /* manifest unavailable */
+        });
+    });
+  }
+
+  function setCommunityModeActive(active) {
+    if (active && state.world.mode === 'community') return;
+    state.world.mode = active ? 'community' : 'procedural';
+    if (worldRoot) worldRoot.visible = !active;
+    if (mapRootsGroup) mapRootsGroup.visible = active;
+    clearCommunitySurfaceCache();
+    if (!active) {
+      state.world.activeMap = null;
+    }
+  }
+
+  // Load a converted community park map and switch the player into it.
+  function loadCommunityMap(mapName) {
+    if (!communityMapLoader) return;
+    const btn = document.querySelector(`.exp9-map-btn[data-map="${mapName}"]`);
+    if (btn) {
+      btn.classList.add('loading');
+      btn.classList.remove('error');
+    }
+    const doLoad = () => {
+      const wasCached = communityMapLoader.isLoaded(mapName);
+      communityMapLoader
+        .loadMap(mapName, { autoCenter: true })
+        .then((mapData) => {
+          // Reparent map root into the toggleable container.
+          if (mapData && mapData.root && mapData.root.parent !== mapRootsGroup) {
+            if (mapData.root.parent) mapData.root.parent.remove(mapData.root);
+            mapRootsGroup.add(mapData.root);
+          }
+          // On re-entry (cached map), re-register obstacles because
+          // exitCommunityMap clears the community obstacle array. A fresh load
+          // already registered them via onMapLoaded.
+          if (wasCached && communityMapLoader.registerLoadedMap) {
+            communityMapLoader.registerLoadedMap(mapName, registerCommunityObstacle);
+          }
+          state.world.mode = 'community';
+          state.world.activeMap = mapName;
+          state.world.spawnX = 0;
+          state.world.spawnZ = 0;
+          setCommunityModeActive(true);
+          clearCommunitySurfaceCache();
+          if (btn) {
+            btn.classList.remove('loading');
+            btn.classList.add('active');
+          }
+          // Place the player above the map's center ground.
+          teleportToMapSpawn(mapName);
+          showTrickToast(`LOADED MAP: ${mapName.toUpperCase()} 🗺️`);
+        })
+        .catch((err) => {
+          if (btn) {
+            btn.classList.remove('loading');
+            btn.classList.add('error');
+            btn.title = 'Failed to load this map. Convert it first (npm run convert:map).';
+          }
+          showTrickToast(`MAP FAILED: ${mapName.toUpperCase()}`);
+          console.error('[CommunityMap] load failed', mapName, err);
+        });
+    };
+    // If already loading (async), the promise chain handles it; just call.
+    doLoad();
+  }
+
+  function teleportToMapSpawn(mapName) {
+    if (!communityMapLoader) return;
+    const p = state.player;
+    const surfaceY = getCommunitySurfaceElevation(0, 0);
+    const spawnY = (surfaceY !== null ? surfaceY : 0) + 0.18;
+    p.x = 0;
+    p.y = spawnY;
+    p.z = 0;
+    p.groundY = spawnY;
+    p.vx = 0;
+    p.vy = 0;
+    p.vz = 0;
+    p.speed = 0;
+    p.heading = 0;
+    p.pitch = 0;
+    p.roll = 0;
+    p.isAirborne = false;
+    p.airtime = 0;
+    p.isGrinding = false;
+    state.grind.active = false;
+    if (balanceHud) balanceHud.classList.remove('active');
+    state.camera.yaw = Math.PI;
+    state.camera.pitch = 0.35;
+    state.camera.manualTimer = 0;
+    const snapHDist = state.camera.distance * Math.cos(state.camera.pitch);
+    camera.position.x = snapHDist * Math.sin(state.camera.yaw);
+    camera.position.y = spawnY + 0.85 + state.camera.distance * Math.sin(state.camera.pitch);
+    camera.position.z = snapHDist * Math.cos(state.camera.yaw);
+    camera.lookAt(p.x, spawnY + 0.85, p.z);
+
+    // UI: mark this map button as the active destination.
+    document.querySelectorAll('.exp9-map-btn').forEach((b) => b.classList.remove('active'));
+    const btn = document.querySelector(`.exp9-map-btn[data-map="${mapName}"]`);
+    if (btn) btn.classList.add('active');
+    if (hudTerrainVal) hudTerrainVal.textContent = mapName;
+  }
+
+  function exitCommunityMap() {
+    if (!isCommunityMapActive()) return;
+    setCommunityModeActive(false);
+    state.communityObstacles.length = 0;
+    clearCommunitySurfaceCache();
+    state.grind.active = false;
+    const p = state.player;
+    p.isGrinding = false;
+    document.querySelectorAll('.exp9-map-btn').forEach((b) => b.classList.remove('active'));
+    if (hudTerrainVal && state.activeCheckpoint < CHECKPOINTS.length) {
+      hudTerrainVal.textContent = CHECKPOINTS[state.activeCheckpoint] ? CHECKPOINTS[state.activeCheckpoint].name : 'TOWN';
+    }
+    // Return the player to town square.
+    teleportToCheckpoint(0);
+  }
+
+  function handleMapButtonClick(btn, mapName) {
+    if (mapName === '__MANIFEST__') {
+      // Toggle filter: show all known maps.
+      document.querySelectorAll('.exp9-map-btn').forEach((b) => {
+        if (b.getAttribute('data-map') !== '__MANIFEST__') b.style.display = b.style.display === 'none' ? '' : 'none';
+      });
+      return;
+    }
+    if (isCommunityMapActive() && state.world.activeMap === mapName) {
+      exitCommunityMap();
+      return;
+    }
+    loadCommunityMap(mapName);
+  }
+
   // Clear sightline culling helper: excludes scenery from blocking jump lines, runways, and park
   function isExcludedSceneryZone(x, z) {
     // 1. Central Skatepark
@@ -3102,6 +3387,10 @@
   // ==========================================================================
   function teleportToCheckpoint(index) {
     if (index < 0 || index >= CHECKPOINTS.length) return;
+    // Teleporting to a procedural checkpoint exits any active community map.
+    if (isCommunityMapActive()) {
+      exitCommunityMap();
+    }
     const cp = CHECKPOINTS[index];
     state.activeCheckpoint = index;
 
@@ -3151,9 +3440,16 @@
         btn.classList.remove('active');
       }
     });
+    // Selecting a procedural checkpoint also deactivates any community map button.
+    mapButtons.forEach((btn) => btn.classList.remove('active'));
   }
 
   function respawnPlayer() {
+    // If riding a community map, respawn back into that map's spawn.
+    if (isCommunityMapActive() && state.world.activeMap) {
+      teleportToMapSpawn(state.world.activeMap);
+      return;
+    }
     teleportToCheckpoint(0);
   }
 
@@ -3161,12 +3457,41 @@
   // Unified Surface Elevation Query (Terrain + All Stunt Obstacles & Ramps)
   // ==========================================================================
   function getSurfaceElevation(x, z) {
-    let surfaceH = getTerrainElevation(x, z);
+    // In community (THPS map) mode the base surface is resolved by raycasting the
+    // loaded map geometry instead of the procedural heightfield.
+    let surfaceH;
+    let communityActive = isCommunityMapActive();
+    if (communityActive) {
+      const base = getCommunitySurfaceElevation(x, z);
+      surfaceH = base !== null ? base : 0;
+    } else {
+      surfaceH = getTerrainElevation(x, z);
+    }
 
-    for (let i = 0; i < state.obstacles.length; i++) {
-      const obs = state.obstacles[i];
+    const activeObstacles = getActiveObstacles();
+    for (let i = 0; i < activeObstacles.length; i++) {
+      const obs = activeObstacles[i];
       const halfW = obs.width / 2;
       const halfL = (obs.length || 0) / 2;
+
+      // Community obstacles with a mesh reference resolve height precisely via
+      // the raycast fallback when a parametric branch does not match.
+      if (obs.meshRef && obs.communityMap) {
+        if (obs.type === 'rail') {
+          const alongZ = obs.alongZ !== false;
+          const within = alongZ
+            ? Math.abs(x - obs.x) <= halfW && Math.abs(z - obs.z) <= (halfL + 0.4)
+            : Math.abs(z - obs.z) <= halfW && Math.abs(x - obs.x) <= (halfL + 0.4);
+          if (within && state.player.y >= obs.height - 0.28) {
+            surfaceH = Math.max(surfaceH, obs.height);
+          }
+        } else if (obs.type === 'deck' || obs.type === 'ramp' || obs.type === 'gap_trigger') {
+          if (Math.abs(x - obs.x) <= halfW && Math.abs(z - obs.z) <= halfL) {
+            surfaceH = Math.max(surfaceH, obs.height);
+          }
+        }
+        continue;
+      }
 
       // A. Mega Drop Obstacles
       if (obs.type === 'megadrop_platform') {
@@ -3602,10 +3927,14 @@
     }
 
     // 5. Position Integration & Boundary Clamping
+    // (Community maps may extend beyond the procedural ±135m world bounds,
+    //  so relax the clamp while a map is active.)
     p.x += p.vx * dt;
     p.z += p.vz * dt;
-    p.x = THREE.MathUtils.clamp(p.x, -135, 135);
-    p.z = THREE.MathUtils.clamp(p.z, -135, 135);
+    if (!isCommunityMapActive()) {
+      p.x = THREE.MathUtils.clamp(p.x, -135, 135);
+      p.z = THREE.MathUtils.clamp(p.z, -135, 135);
+    }
 
     // 6. Vertical & Jump Physics
     handleObstaclesAndGround(dt);
@@ -3779,15 +4108,210 @@
     checkCurrentZone();
   }
 
+  // Shared grind rail physics: used by both procedural along-Z rails and
+  // community (THPS map) rails which may run along Z OR along X.
+  // Returns the clamped grind surface height.
+  function grindRailBranch(obs, halfW, halfL, dt, p, alongZ = true) {
+    // If not currently grinding, lock into rail
+    if (!state.grind.active) {
+      let twistY = 0;
+      if (state.input.rightJoystickActive) {
+        twistY = state.input.rightJoystickVector.y;
+      } else {
+        if (state.input.twistUp) twistY += 1;
+        if (state.input.twistDown) twistY -= 1;
+      }
+
+      // Determine grind trick:
+      // twistY > 0.2: Up / Noseslide
+      // twistY < -0.2: Down / Tailslide
+      // Cross angle: Boardslide
+      // Neutral: 50-50
+      let grindType = '50-50';
+      if (twistY > 0.2) {
+        grindType = 'noseslide';
+      } else if (twistY < -0.2) {
+        grindType = 'tailslide';
+      } else if (Math.abs(Math.cos(p.heading)) < 0.65) {
+        grindType = 'boardslide';
+      }
+
+      state.grind.active = true;
+      state.grind.type = grindType;
+      state.grind.balance = (Math.random() - 0.5) * 0.16;
+      state.grind.balanceVel = (Math.random() - 0.5) * 0.35;
+      state.grind.timer = 0;
+      state.grind.railX = obs.x;
+      state.grind.railMinZ = obs.z - halfL;
+      state.grind.railMaxZ = obs.z + halfL;
+      state.grind.alongZ = alongZ;
+
+      if (balanceHud) balanceHud.classList.add('active');
+      if (balanceLabel) balanceLabel.textContent = grindType.toUpperCase();
+      showTrickToast(`LOCKED: ${grindType.toUpperCase()}! 🔥`);
+    }
+
+    // Grind physics loop
+    if (state.grind.active) {
+      p.isGrinding = true;
+      p.isAirborne = false;
+      p.vy = 0;
+      p.y = obs.height;
+      state.grind.timer += dt;
+
+      // Pull board smoothly onto the rail line (axis aware)
+      if (alongZ) {
+        p.x = THREE.MathUtils.lerp(p.x, obs.x, dt * 18);
+        // Maintain forward glide along the rail (never stall out)
+        const grindSign = Math.sign(p.vz) || 1;
+        const minGrindSpeed = 4.5;
+        if (Math.abs(p.vz) < minGrindSpeed) {
+          p.vz = grindSign * minGrindSpeed;
+        }
+        p.vx = THREE.MathUtils.lerp(p.vx, 0, dt * 10);
+      } else {
+        p.z = THREE.MathUtils.lerp(p.z, obs.z, dt * 18);
+        const grindSign = Math.sign(p.vx) || 1;
+        const minGrindSpeed = 4.5;
+        if (Math.abs(p.vx) < minGrindSpeed) {
+          p.vx = grindSign * minGrindSpeed;
+        }
+        p.vz = THREE.MathUtils.lerp(p.vz, 0, dt * 10);
+      }
+      p.speed = Math.hypot(p.vx, p.vz);
+
+      // Trick-specific board pitch & spark emitter
+      if (state.grind.type === 'noseslide') {
+        // Nose rests down on rail, tail tilted up in air
+        p.pitch = -0.26 + state.grind.balance * 0.12;
+        emitGrindSparks(p.x, obs.height + 0.02, p.z - 0.36);
+      } else if (state.grind.type === 'tailslide') {
+        // Tail rests down on rail, nose tilted up in air
+        p.pitch = 0.26 + state.grind.balance * 0.12;
+        emitGrindSparks(p.x, obs.height + 0.02, p.z + 0.36);
+      } else {
+        // Boardslide or 50-50
+        p.pitch = state.grind.balance * 0.14;
+        emitGrindSparks(p.x, obs.height + 0.02, p.z);
+      }
+
+      // Balance mini-game drift simulation:
+      // Natural instability pushes needle away from center
+      state.grind.balanceVel += (state.grind.balance * 2.2 + (Math.random() - 0.5) * 1.4) * dt;
+      // Mild damping
+      state.grind.balanceVel *= (1.0 - 0.45 * dt);
+
+      // Continuous correction from right joystick (mobile or gamepad)
+      if (state.input.rightJoystickActive) {
+        state.grind.balanceVel -= state.input.rightJoystickVector.y * 3.8 * dt;
+      }
+
+      // Integrate balance position
+      state.grind.balance += state.grind.balanceVel * dt;
+
+      // Update HUD Needle
+      if (balanceNeedle) {
+        const needleOffset = THREE.MathUtils.clamp(state.grind.balance, -1.2, 1.2) * 65;
+        balanceNeedle.style.transform = `translateX(${needleOffset}px)`;
+        if (Math.abs(state.grind.balance) > 0.6) {
+          balanceNeedle.classList.add('danger');
+        } else {
+          balanceNeedle.classList.remove('danger');
+        }
+      }
+
+      // 1. SLIP OFF RAIL (Bail if balance exceeds limits)
+      if (Math.abs(state.grind.balance) > 1.0) {
+        showTrickToast('SLIPPED OFF RAIL! 💥');
+        state.grind.active = false;
+        p.isGrinding = false;
+        p.x += (state.grind.balance > 0 ? 0.42 : -0.42);
+        p.vx = (state.grind.balance > 0 ? 2.0 : -2.0);
+        if (balanceHud) balanceHud.classList.remove('active');
+        return obs.height;
+      }
+
+      // 2. HOP OFF RAIL (Space / Hop button)
+      if (state.input.jumpPressed) {
+        state.input.jumpPressed = false;
+        p.vy = JUMP_VELOCITY * 1.15;
+        p.isAirborne = true;
+        state.grind.active = false;
+        p.isGrinding = false;
+        if (balanceHud) balanceHud.classList.remove('active');
+        const pts = Math.round(state.grind.timer * 160 + 250);
+        showTrickToast(`${state.grind.type.toUpperCase()} POP-OFF! +${pts} 🛹`);
+        return obs.height;
+      }
+
+      // 3. REACHED END OF RAIL (Dismount) — axis aware
+      const endReached = alongZ
+        ? p.z < obs.z - halfL - 0.25 || p.z > obs.z + halfL + 0.25
+        : p.x < obs.x - halfL - 0.25 || p.x > obs.x + halfL + 0.25;
+      if (endReached) {
+        state.grind.active = false;
+        p.isGrinding = false;
+        if (balanceHud) balanceHud.classList.remove('active');
+        const pts = Math.round(state.grind.timer * 120 + 200);
+        showTrickToast(`${state.grind.type.toUpperCase()} LANDED! +${pts} ✨`);
+        return obs.height;
+      }
+    }
+    return obs.height;
+  }
+
+  // Community (THPS map) kicker/launch behavior: pops the rider when they cross a
+  // gap trigger ramp section with enough speed.
+  function communityRampLaunch(obs, p) {
+    if (p.speed < 2.5 || p.isAirborne) return;
+    const launch = obs.launchPower || 1.35;
+    p.vy = JUMP_VELOCITY * launch;
+    p.isAirborne = true;
+    showTrickToast('THPS KICKER POP! +250');
+  }
+
   // Handle Ground Elevation & Stunt Obstacle Collisions
   function handleObstaclesAndGround(dt) {
     const p = state.player;
     let targetGround = getSurfaceElevation(p.x, p.z);
     p.isGrinding = false;
 
-    for (const obs of state.obstacles) {
+    const activeObstacles = getActiveObstacles();
+    for (const obs of activeObstacles) {
       const halfW = obs.width / 2;
       const halfL = obs.length / 2;
+
+      // --- COMMUNITY (THPS map) OBSTACLES ------------------------------------
+      if (obs.communityMap === true) {
+        if (obs.type === 'rail') {
+          const alongZ = obs.alongZ !== false;
+          // Parametric rail surface (axis aware) so grinding and landing work.
+          const within = alongZ
+            ? Math.abs(p.x - obs.x) <= halfW && Math.abs(p.z - obs.z) <= (halfL + 0.4)
+            : Math.abs(p.z - obs.z) <= halfW && Math.abs(p.x - obs.x) <= (halfL + 0.4);
+          if (within && p.y >= obs.height - 0.28 && p.y <= obs.height + 0.9) {
+            targetGround = Math.max(targetGround, obs.height);
+            grindRailBranch(obs, halfW, halfL, dt, p, alongZ);
+          }
+          continue;
+        }
+        if (obs.type === 'ramp' || obs.type === 'deck') {
+          const within = Math.abs(p.x - obs.x) <= halfW && Math.abs(p.z - obs.z) <= halfL;
+          if (within && p.y >= obs.height - 0.35 && p.y <= obs.height + 1.0) {
+            targetGround = Math.max(targetGround, obs.height);
+          }
+          continue;
+        }
+        if (obs.type === 'gap_trigger') {
+          if (!p.isAirborne && Math.abs(p.x - obs.x) <= obs.width / 2 && Math.abs(p.z - obs.z) <= (obs.length || 1) / 2) {
+            communityRampLaunch(obs, p);
+          }
+          continue;
+        }
+        // static / static_terrain are handled entirely by the raycast surface +
+        // a lateral pushout below the parametric loop.
+        continue;
+      }
 
       // 1. KICKER RAMPS (Rotated local coordinate collision)
       if (obs.type === 'kicker') {
@@ -4163,141 +4687,46 @@
         } else if (obs.type === 'rail') {
           if (p.y >= obs.height - 0.28 && p.y <= obs.height + 0.65) {
             targetGround = Math.max(targetGround, obs.height);
-
-            // If not currently grinding, lock into rail
-            if (!state.grind.active) {
-              let twistY = 0;
-              if (state.input.rightJoystickActive) {
-                twistY = state.input.rightJoystickVector.y;
-              } else {
-                if (state.input.twistUp) twistY += 1;
-                if (state.input.twistDown) twistY -= 1;
-              }
-
-              // Determine grind trick:
-              // twistY > 0.2: Up / Noseslide
-              // twistY < -0.2: Down / Tailslide
-              // Cross angle: Boardslide
-              // Neutral: 50-50
-              let grindType = '50-50';
-              if (twistY > 0.2) {
-                grindType = 'noseslide';
-              } else if (twistY < -0.2) {
-                grindType = 'tailslide';
-              } else if (Math.abs(Math.cos(p.heading)) < 0.65) {
-                grindType = 'boardslide';
-              }
-
-              state.grind.active = true;
-              state.grind.type = grindType;
-              state.grind.balance = (Math.random() - 0.5) * 0.16;
-              state.grind.balanceVel = (Math.random() - 0.5) * 0.35;
-              state.grind.timer = 0;
-              state.grind.railX = obs.x;
-              state.grind.railMinZ = obs.z - halfL;
-              state.grind.railMaxZ = obs.z + halfL;
-
-              if (balanceHud) balanceHud.classList.add('active');
-              if (balanceLabel) balanceLabel.textContent = grindType.toUpperCase();
-              showTrickToast(`LOCKED: ${grindType.toUpperCase()}! 🔥`);
-            }
-
-            // Grind physics loop
-            if (state.grind.active) {
-              p.isGrinding = true;
-              p.isAirborne = false;
-              p.vy = 0;
-              p.y = obs.height;
-              state.grind.timer += dt;
-
-              // Pull board smoothly onto rail line
-              p.x = THREE.MathUtils.lerp(p.x, obs.x, dt * 18);
-
-              // Maintain forward glide along the rail (never stall out)
-              const grindSign = Math.sign(p.vz) || 1;
-              const minGrindSpeed = 4.5;
-              if (Math.abs(p.vz) < minGrindSpeed) {
-                p.vz = grindSign * minGrindSpeed;
-              }
-              p.vx = THREE.MathUtils.lerp(p.vx, 0, dt * 10);
-              p.speed = Math.hypot(p.vx, p.vz);
-
-              // Trick-specific board pitch & spark emitter
-              if (state.grind.type === 'noseslide') {
-                // Nose rests down on rail, tail tilted up in air
-                p.pitch = -0.26 + state.grind.balance * 0.12;
-                emitGrindSparks(p.x, obs.height + 0.02, p.z - 0.36);
-              } else if (state.grind.type === 'tailslide') {
-                // Tail rests down on rail, nose tilted up in air
-                p.pitch = 0.26 + state.grind.balance * 0.12;
-                emitGrindSparks(p.x, obs.height + 0.02, p.z + 0.36);
-              } else {
-                // Boardslide or 50-50
-                p.pitch = state.grind.balance * 0.14;
-                emitGrindSparks(p.x, obs.height + 0.02, p.z);
-              }
-
-              // Balance mini-game drift simulation:
-              // Natural instability pushes needle away from center
-              state.grind.balanceVel += (state.grind.balance * 2.2 + (Math.random() - 0.5) * 1.4) * dt;
-              // Mild damping
-              state.grind.balanceVel *= (1.0 - 0.45 * dt);
-
-              // Continuous correction from right joystick (mobile or gamepad)
-              if (state.input.rightJoystickActive) {
-                state.grind.balanceVel -= state.input.rightJoystickVector.y * 3.8 * dt;
-              }
-
-              // Integrate balance position
-              state.grind.balance += state.grind.balanceVel * dt;
-
-              // Update HUD Needle
-              if (balanceNeedle) {
-                const needleOffset = THREE.MathUtils.clamp(state.grind.balance, -1.2, 1.2) * 65;
-                balanceNeedle.style.transform = `translateX(${needleOffset}px)`;
-                if (Math.abs(state.grind.balance) > 0.6) {
-                  balanceNeedle.classList.add('danger');
-                } else {
-                  balanceNeedle.classList.remove('danger');
-                }
-              }
-
-              // 1. SLIP OFF RAIL (Bail if balance exceeds limits)
-              if (Math.abs(state.grind.balance) > 1.0) {
-                showTrickToast('SLIPPED OFF RAIL! 💥');
-                state.grind.active = false;
-                p.isGrinding = false;
-                p.x += (state.grind.balance > 0 ? 0.42 : -0.42);
-                p.vx = (state.grind.balance > 0 ? 2.0 : -2.0);
-                if (balanceHud) balanceHud.classList.remove('active');
-              }
-
-              // 2. HOP OFF RAIL (Space / Hop button)
-              if (state.input.jumpPressed) {
-                state.input.jumpPressed = false;
-                p.vy = JUMP_VELOCITY * 1.15;
-                p.isAirborne = true;
-                state.grind.active = false;
-                p.isGrinding = false;
-                if (balanceHud) balanceHud.classList.remove('active');
-                const pts = Math.round(state.grind.timer * 160 + 250);
-                showTrickToast(`${state.grind.type.toUpperCase()} POP-OFF! +${pts} 🛹`);
-              }
-
-              // 3. REACHED END OF RAIL (Dismount)
-              if (p.z < obs.z - halfL - 0.25 || p.z > obs.z + halfL + 0.25) {
-                state.grind.active = false;
-                p.isGrinding = false;
-                if (balanceHud) balanceHud.classList.remove('active');
-                const pts = Math.round(state.grind.timer * 120 + 200);
-                showTrickToast(`${state.grind.type.toUpperCase()} LANDED! +${pts} ✨`);
-              }
-            }
+            grindRailBranch(obs, halfW, halfL, dt, p, true);
           }
         } else {
           // Ledges, curbs, boardwalks
           if (p.y >= obs.height - 0.15) {
             targetGround = Math.max(targetGround, obs.height);
+          }
+        }
+      }
+    }
+
+    // Community static obstacle lateral pushout: if the player's center is inside
+    // a registered static (non-rideable) collider and standing on top of it, keep
+    // them out of the mesh volume.
+    if (isCommunityMapActive()) {
+      for (let i = 0; i < state.communityObstacles.length; i++) {
+        const obs = state.communityObstacles[i];
+        if (obs.type !== 'static' && obs.type !== 'static_terrain') continue;
+        const pushHalfW = (obs.pushoutWidth || obs.width || 2) / 2;
+        const pushHalfL = (obs.pushoutLength || obs.length || 2) / 2;
+        if (Math.abs(p.x - obs.x) <= pushHalfW && Math.abs(p.z - obs.z) <= pushHalfL) {
+          // Only push out sideways if we are standing near its top surface.
+          if (p.y >= (obs.height || 0) - 0.9 && p.groundY >= (obs.height || 0) - 0.35) {
+            const pushDirX = Math.abs(p.x - obs.x) > 0.001 ? Math.sign(p.x - obs.x) : 1;
+            const pushDirZ = Math.abs(p.z - obs.z) > 0.001 ? Math.sign(p.z - obs.z) : 1;
+            const distX = Math.abs(p.x - obs.x);
+            const distZ = Math.abs(p.z - obs.z);
+            let pushX = 0;
+            let pushZ = 0;
+            if (distX / (pushHalfW || 1) >= distZ / (pushHalfL || 1)) {
+              pushX = pushDirX * (pushHalfW - distX + 0.05);
+            } else {
+              pushZ = pushDirZ * (pushHalfL - distZ + 0.05);
+            }
+            p.x += pushX;
+            p.z += pushZ;
+            // Reflect velocity to feel solid.
+            p.vx *= -0.35;
+            p.vz *= -0.35;
+            break;
           }
         }
       }
@@ -4334,6 +4763,9 @@
 
   // Terrain particle tint helper
   function getTerrainColor(x, z) {
+    // While a community map is active, use a neutral concrete tint so dust
+    // particles don't spray biome colors that don't match the loaded park.
+    if (isCommunityMapActive()) return 0x94a3b8;
     if (Math.abs(x) < 22 && Math.abs(z) < 22) return 0x94a3b8;
     if (z < -25) return 0x64748b;
     if (z > 25) return 0xc2410c;
@@ -4345,6 +4777,19 @@
   // Zone & Trailhead Entry Detection
   function checkCurrentZone() {
     const p = state.player;
+
+    // In a community map, the whole park is one zone named after the map.
+    if (isCommunityMapActive()) {
+      const mapName = state.world.activeMap || 'Community Park';
+      if (p.currentZone !== mapName) {
+        p.currentZone = mapName;
+        p.zoneType = 'THPS PARK';
+        triggerZoneToast(mapName, 'THPS PARK');
+        if (hudTerrainVal) hudTerrainVal.textContent = mapName;
+      }
+      return;
+    }
+
     let newZone = 'Central Town Square';
     let newType = 'PLAZA';
 

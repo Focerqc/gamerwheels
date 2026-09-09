@@ -1,0 +1,13 @@
+*******************************************************
+* io_thps_scene - Installation
+*******************************************************
+
+1. Extract this zip file to your desired location.
+2. Go to Blender's plugin manager. Click the Install add-on from file button and browse to the io_thps_scene.zip file that appears in the extracted location. The plugin should then appear in the list - click the checkbox to activate it.
+3. Expand the menu item for the THPS Scene Export/Import plugin - this will show a preferences box. Set the Base files directory to the location of the thug_tools folder. Make any other changes to the default plugin settings you wish, and you're ready to go!
+
+-------------------------------------------------------
+v1.1 - July 7, 2018 - by denetii/Ksk (based on io_thug_tools by asdf)
+
+Documentation:  http://tharchive.net/misc/io_thps_scene.html
+GitHub:         https://github.com/denetii/io_thps_scene

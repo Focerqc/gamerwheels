@@ -29,6 +29,42 @@ A real-time multiplayer 2.5D isometric PEV / Onewheel carving, trail, and skate 
 
 ---
 
+## THPS Map Importing (Braille & Friends)
+
+GamerWheels can load converted Tony Hawk's Pro Skater `.prk` park files as playable
+community maps. The conversion pipeline runs Blender headless — see
+[`tools/map-pipeline/README.md`](tools/map-pipeline/README.md) for full details.
+
+**One-liner:** drop a `.prk` into `maps-in/`, then from the project root:
+
+```bash
+npm run convert:map -- Braille.PRK
+```
+
+Output lands in `public/assets/maps/Braille.glb` and the manifest regenerates, so the
+in-game 🗺️ gallery button appears automatically.
+
+### Troubleshooting: Braille won't import
+
+1. **Verify the GLB exists where the game looks** — the frontend fetches
+   `public/assets/maps/<name>.glb`. A manual export to `out/Braille.glb` is **not**
+   visible to the game; copy it into `public/assets/maps/` and re-run the pipeline.
+2. **Re-run conversion manually to see Blender's real error**:
+
+   ```bash
+   "<blender>" -b -P tools/map-pipeline/convert_thps.py -- \
+     "Blender-Addons/io_thps_scene" "maps-in/Braille.PRK" "out/Braille.glb"
+   ```
+
+   Adding this addon path as the first `--` arg is required for the `.prk` import.
+3. **Check the browser console** — `❌ Failed to load map Braille:` tells you whether it
+   was a fetch error (GLB missing / wrong path) or a parse error (bad GLB). Compare file
+   sizes: an 11 MB `Braille.glb` usually parses fine.
+4. **Confirm the manifest lists it** — regenerate `maps-manifest.json` by converting once
+   more successfully.
+
+---
+
 ## Quick Start (Local Development)
 
 1. **Install Dependencies**:

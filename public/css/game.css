@@ -339,6 +339,46 @@ body {
   white-space: nowrap;
 }
 
+/* Community THPS map divider & buttons */
+.exp9-cp-divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.18);
+  margin: 0 0.1rem;
+  flex: 0 0 auto;
+}
+
+.exp9-map-btn {
+  background: rgba(16, 185, 129, 0.14);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #6ee7b7;
+}
+
+.exp9-map-btn:hover {
+  background: rgba(16, 185, 129, 0.26);
+  color: #f8fafc;
+}
+
+.exp9-map-btn.active {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.45), rgba(14, 165, 233, 0.45));
+  border-color: rgba(16, 185, 129, 0.8);
+  color: #ffffff;
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.45);
+}
+
+.exp9-map-btn.loading {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: rgba(245, 158, 11, 0.5);
+  color: #fcd34d;
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.35);
+}
+
+.exp9-map-btn.error {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.55);
+  color: #fca5a5;
+}
+
 .exp9-cp-btn:hover {
   color: #f8fafc;
   background: rgba(255, 255, 255, 0.08);

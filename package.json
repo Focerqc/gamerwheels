@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "convert:maps": "node tools/map-pipeline/pipeline.js",
+    "convert:map": "node tools/map-pipeline/pipeline.js"
   },
   "keywords": [
     "onewheel",

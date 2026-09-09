@@ -86,6 +86,16 @@
             <span class="exp9-cp-num">5</span>
             <span class="exp9-cp-label">Desert Berms</span>
           </button>
+          <div class="exp9-cp-divider" aria-hidden="true"></div>
+          <!-- Community THPS Maps (Loaded from public/assets/maps/*.glb) -->
+          <button type="button" class="exp9-cp-btn exp9-map-btn" data-map="Braille" title="Ride the converted Braille House THPS park (loads assets/maps/Braille.glb)">
+            <span class="exp9-cp-num">🗺️</span>
+            <span class="exp9-cp-label">Braille</span>
+          </button>
+          <button type="button" class="exp9-cp-btn exp9-map-btn" data-map="__MANIFEST__" title="Show all converted community maps (choose from assets/maps)" style="display:none;">
+            <span class="exp9-cp-num">📦</span>
+            <span class="exp9-cp-label">Maps</span>
+          </button>
         </div>
 
         <!-- Top Right: Multiplayer Badge & Action Controls -->
@@ -292,6 +302,7 @@
   </div>
 
   <!-- Game Engines -->
+  <script src="js/mapLoader.js"></script>
   <script src="js/game.js"></script>
   <script src="js/multiplayer.js"></script>
 </body>
