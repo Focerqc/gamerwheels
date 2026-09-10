@@ -377,14 +377,14 @@
       if (Math.abs(localX) > halfW || Math.abs(localZ) > halfLen) continue;
 
       // Small kicker = light hop, larger tabletop = bigger launch.
-      let launchStrength = 4.8;
+      let launchStrength = 5.6;
       if (obstacle.type === 'tabletop') {
-        launchStrength = (obstacle.length || 4.0) > 6 ? 6.6 : 5.8;
+        launchStrength = (obstacle.length || 4.0) > 6 ? 8.6 : 7.4;
       } else if (obstacle.type === 'whoops') {
-        launchStrength = 5.1;
+        launchStrength = 5.8;
       }
 
-      const speedBonus = THREE.MathUtils.clamp(speed / 14.0, 0.2, 1.0) * 0.9;
+      const speedBonus = THREE.MathUtils.clamp(speed / 14.0, 0.2, 1.0) * 1.1;
       p.isAirborne = true;
       p.airtime = 0;
       p.vy = launchStrength + speedBonus;

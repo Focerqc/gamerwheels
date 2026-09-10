@@ -736,10 +736,9 @@
       var extrudeSettings = { depth: width, bevelEnabled: false };
       var geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
 
-      // The track runs along +Z. Keep the feature length on the forward axis and
-      // the width on the lateral axis so the ramp reads as a proper tabletop jump,
-      // not a giant box clipped through the course.
-      geo.rotateY(Math.PI / 2);
+      // The track runs along +Z, so the feature geometry needs to be rotated so its
+      // length follows the track direction instead of the default +X axis.
+      geo.rotateY(-Math.PI / 2);
       geo.translate(-width / 2, 0, -halfLen);
 
       var mat = new THREE.MeshStandardMaterial({
@@ -790,7 +789,7 @@
       var width = props.w || this._trackData.width;
       var halfLen = feat.length / 2;
 
-      // Visual wedge mesh aligned to the track direction instead of a flat box.
+      // Visual wedge mesh aligned with the track direction instead of a flat box.
       var shape = new THREE.Shape();
       shape.moveTo(0, 0);
       shape.lineTo(feat.length, feat.height);
@@ -799,7 +798,7 @@
 
       var extrudeSettings = { depth: width, bevelEnabled: false };
       var geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-      geo.rotateY(Math.PI / 2);
+      geo.rotateY(-Math.PI / 2);
       geo.translate(-width / 2, 0, -halfLen);
 
       var mat = new THREE.MeshStandardMaterial({
