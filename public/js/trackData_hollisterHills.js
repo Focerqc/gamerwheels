@@ -70,8 +70,8 @@
     {
       "type": "kicker",
       "nodeIndex": 26,
-      "length": 3.0,
-      "height": 0.5
+      "length": 2.6,
+      "height": 0.42
     },
     {
       "type": "rftr_feature",
@@ -85,22 +85,22 @@
     },
     {
       "type": "tabletop",
-      "nodeIndex": 33,
-      "length": 8.0,
-      "height": 1.2,
-      "takeoffLen": 2.2,
-      "deckLen": 3.6,
+      "nodeIndex": 34,
+      "length": 7.2,
+      "height": 1.25,
+      "takeoffLen": 1.8,
+      "deckLen": 3.2,
       "landingLen": 2.2
     },
     {
       "type": "rftr_feature",
       "number": 2,
       "name": "Lilly Pad",
-      "nodeIndex": 33,
-      "x": 3.3,
-      "y": 6.32,
-      "z": -47.3,
-      "t": 0.59
+      "nodeIndex": 34,
+      "x": 15.1,
+      "y": 6.6,
+      "z": -55.4,
+      "t": 0.61
     },
     {
       "type": "roller",

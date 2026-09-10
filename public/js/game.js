@@ -353,6 +353,49 @@
     state.trackObstacles.push(obs);
   }
 
+  function applyTrackFeatureLaunches() {
+    const p = state.player;
+    if (p.isAirborne) return;
+
+    const speed = Math.hypot(p.vx, p.vz);
+    if (speed < 1.0) return;
+
+    for (const obstacle of state.trackObstacles) {
+      if (!obstacle || !obstacle.communityMap) continue;
+      if (!['kicker', 'tabletop', 'whoops'].includes(obstacle.type)) continue;
+
+      const rotation = obstacle.rotation || 0;
+      const dx = p.x - obstacle.x;
+      const dz = p.z - obstacle.z;
+      const cos = Math.cos(-rotation);
+      const sin = Math.sin(-rotation);
+      const localX = dx * cos - dz * sin;
+      const localZ = dx * sin + dz * cos;
+
+      const halfLen = ((obstacle.length || 2.0) / 2) + 0.55;
+      const halfW = ((obstacle.width || 3.0) / 2) + 0.55;
+      if (Math.abs(localX) > halfW || Math.abs(localZ) > halfLen) continue;
+
+      // Small kicker = light hop, larger tabletop = bigger launch.
+      let launchStrength = 4.8;
+      if (obstacle.type === 'tabletop') {
+        launchStrength = (obstacle.length || 4.0) > 6 ? 6.6 : 5.8;
+      } else if (obstacle.type === 'whoops') {
+        launchStrength = 5.1;
+      }
+
+      const speedBonus = THREE.MathUtils.clamp(speed / 14.0, 0.2, 1.0) * 0.9;
+      p.isAirborne = true;
+      p.airtime = 0;
+      p.vy = launchStrength + speedBonus;
+      p.y = Math.max(p.y, (obstacle.baseY || p.groundY) + 0.12);
+      p.vx *= 1.02;
+      p.vz *= 1.02;
+      emitDustParticle(p.x, p.y, p.z, -p.vx * 0.35, 1.0, -p.vz * 0.35);
+      return;
+    }
+  }
+
   // ==========================================================================
   // 4. Board Model & Rider Representation
   // ==========================================================================
@@ -1415,6 +1458,9 @@
 
     // 6. Surface Elevation & Grounding
     p.groundY = getSurfaceElevation(p.x, p.z);
+
+    // Feature launch ramps: these are scenic jump surfaces, not solid blockers.
+    applyTrackFeatureLaunches();
 
     // Hop / Jump
     if (state.input.jumpPressed && !p.isAirborne) {
