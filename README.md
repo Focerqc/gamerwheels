@@ -1,143 +1,100 @@
-# GamerWheels .IO 🛹⚡
+# GamerWheels
 
-A real-time multiplayer 2.5D isometric PEV / Onewheel carving, trail, and skate park freestyle game built with Three.js, Node.js, and Socket.io. Designed for instant drop-in .io gameplay and zero-config deployment on **Railway**.
-
----
-
-## Features
-
-- **Realistic 2.5D Onewheel Physics**:
-  - Progressive motor acceleration, regenerative braking, dynamic roll carving tilt, and inertia.
-  - Bunny hops, air pitch (frontflips / backflips), air yaw (180 / 360 / 540 spins), and rodeo combos.
-  - Rail grinding and noseslide balance sweetspot mini-game.
-- **Massive Free-Roam World**:
-  - **Central Town Square**: Funboxes, tabletop jumps, ledges, round & flat rails, quarterpipes, and spine ramps.
-  - **Mega Drop (Thunder Peak)**: 7-meter drop-in tower with high-speed launch kicker and canyon landing.
-  - **Pine Ridge Slopestyle**: Timber ladder bridges, step-up ramps, whale tail, and curved timber wallride.
-  - **Slickrock Motocross**: 16-meter monster tabletop jump, rhythm whoops, and red rock canyon gaps.
-  - **Desert Berms**: High-speed sweeping banked bowls and carving rollers.
-- **Real-Time Multiplayer (.IO Architecture)**:
-  - Instant join with custom rider nickname and rail color selection.
-  - Server tick loop (25Hz) broadcasting player snapshots.
-  - Buttery smooth client-side interpolation (Lerp / Slerp) for zero network jitter.
-  - 3D floating billboard nametags and active trick banners above remote riders.
-  - Live .IO Leaderboard card and global trick announcement ticker.
-  - In-game quick chat and reaction emotes.
-- **Production Ready for Railway**:
-  - Lightweight Express + Socket.io server with container health checks (`/health`).
-  - Automatic WebSocket / HTTPS termination.
+GamerWheels is now focused on a modern asset-first workflow: blockout geometry, raw mesh imports, and a clean path into Unreal or other standard runtime pipelines. The project no longer depends on legacy THPS/THUG map converters, proprietary park formats, or Blender addon tricks for content ingestion.
 
 ---
 
-## THPS Map Importing (Braille & Friends)
+## New Direction
 
-GamerWheels can load converted Tony Hawk's Pro Skater `.prk` park files as playable
-community maps. The conversion pipeline runs Blender headless — see
-[`tools/map-pipeline/README.md`](tools/map-pipeline/README.md) for full details.
+This workspace now emphasizes:
 
-**One-liner:** drop a `.prk` into `maps-in/`, then from the project root:
+- Standard asset sources such as FBX, GLTF, and GLB
+- Clean blockout folders for early layout and gameplay iteration
+- Lightweight authoring flows that bypass old engine-specific parsers
+- Physics and gameplay validation in a modern 3D runtime
+- Reusable content pipelines for real-world production work
 
-```bash
-npm run convert:map -- Braille.PRK
+The goal is to move from brittle format conversion to a straightforward content pipeline:
+
+1. Create blockouts in a standard modeling tool
+2. Export to FBX / GLTF / GLB
+3. Place files in the repo under the content and asset folders
+4. Validate and import directly into the active engine or runtime
+
+---
+
+## Project Layout
+
+```text
+.
+├── assets/
+│   └── models/
+│       └── README.md
+├── content/
+│   └── blockouts/
+│       └── README.md
+├── public/
+│   └── ...game client assets...
+├── scripts/
+│   └── export_blockout.py
+├── server.js
+├── package.json
+├── README.md
+├── render.yaml
+├── railway.json
+└── .gitignore
 ```
 
-Output lands in `public/assets/maps/Braille.glb` and the manifest regenerates, so the
-in-game 🗺️ gallery button appears automatically.
+### Asset folders
 
-### Troubleshooting: Braille won't import
-
-1. **Verify the GLB exists where the game looks** — the frontend fetches
-   `public/assets/maps/<name>.glb`. A manual export to `out/Braille.glb` is **not**
-   visible to the game; copy it into `public/assets/maps/` and re-run the pipeline.
-2. **Re-run conversion manually to see Blender's real error**:
-
-   ```bash
-   "<blender>" -b -P tools/map-pipeline/convert_thps.py -- \
-     "Blender-Addons/io_thps_scene" "maps-in/Braille.PRK" "out/Braille.glb"
-   ```
-
-   Adding this addon path as the first `--` arg is required for the `.prk` import.
-3. **Check the browser console** — `❌ Failed to load map Braille:` tells you whether it
-   was a fetch error (GLB missing / wrong path) or a parse error (bad GLB). Compare file
-   sizes: an 11 MB `Braille.glb` usually parses fine.
-4. **Confirm the manifest lists it** — regenerate `maps-manifest.json` by converting once
-   more successfully.
+- `content/blockouts/` holds raw blockout and layout prototypes.
+- `assets/models/` is reserved for cleaned or runtime-ready imported meshes.
+- `scripts/export_blockout.py` is a template for ingesting standard mesh formats without legacy THPS conversion logic.
 
 ---
 
-## Quick Start (Local Development)
+## Standard import workflow
 
-1. **Install Dependencies**:
-   ```bash
-   npm install
-   ```
+Use standard source files from your DCC tool, such as:
 
-2. **Start the Game Server**:
-   ```bash
-   npm start
-   ```
+- `.fbx`
+- `.gltf`
+- `.glb`
+- `.obj` (optional for testing-only staging)
 
-3. **Open in Browser**:
-   Navigate to [http://localhost:3000](http://localhost:3000). Open multiple tabs to test multiplayer!
+Then place them in `content/blockouts/` or `assets/models/` as appropriate, depending on whether they are early concept geometry or final import candidates.
 
----
-
-## Push to GitHub
-
-To push this standalone repository to your GitHub account:
+Example:
 
 ```bash
-# 1. Initialize git and commit
-git init
-git add .
-git commit -m "Initial commit: GamerWheels standalone .IO multiplayer game"
-
-# 2. Add your GitHub remote (replace with your repo URL)
-git remote add origin https://github.com/Focerqc/gamerwheels.git
-
-# 3. Push to main branch
-git branch -M main
-git push -u origin main
+python scripts/export_blockout.py --source content/blockouts --dest assets/models --extensions .fbx .gltf .glb
 ```
 
----
-
-## Deploy to Render (Web Service) in 60 Seconds
-
-1. On your [Render Dashboard](https://dashboard.render.com), click **+ New** -> **Web Service** (shown on the "Create a new Service" screen).
-2. Connect your **`gamerwheels`** GitHub repository.
-3. Configure settings (or let `render.yaml` configure automatically):
-   - **Environment**: `Node`
-   - **Build Command**: `npm install`
-   - **Start Command**: `node server.js`
-   - **Plan**: `Free`
-   - **Health Check Path**: `/health`
-4. Click **Create Web Service**.
-5. Render will deploy the application and give you a free `onrender.com` HTTPS/WSS URL to share and ride with friends!
+The script is intentionally simple: it scans for valid standard meshes and prepares a clean, portable asset manifest without proprietary THPS conversion behavior.
 
 ---
 
-## Deploy to Railway in 60 Seconds
+## Local development
 
-1. Go to [Railway.app](https://railway.app) and log in.
-2. Click **New Project** -> **Deploy from GitHub repo**.
-3. Select your `gamerwheels` repository.
-4. Railway will automatically detect the `package.json`, install dependencies, run `node server.js`, and generate a live HTTPS/WSS URL (e.g. `https://gamerwheels-production.up.railway.app`).
-5. Share the link with friends to ride together!
+```bash
+npm install
+npm start
+```
+
+Then open the project locally in the browser or runtime target you are validating against.
 
 ---
 
-## Controls
+## Legacy cleanup
 
-| Action | Desktop Keys | Mobile Touch |
-| :--- | :--- | :--- |
-| **Drive & Steer** | <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> | Left Virtual Joystick |
-| **Twist, Flip & Balance** | <kbd>▲</kbd> <kbd>◄</kbd> <kbd>▼</kbd> <kbd>►</kbd> | Right Virtual Joystick |
-| **Hop / Jump** | <kbd>Space</kbd> | HOP Button |
-| **Checkpoints** | <kbd>1</kbd>–<kbd>5</kbd> | Checkpoints Bar |
-| **Reset / Respawn** | <kbd>R</kbd> | Reset Button |
-| **Camera Zoom** | Scroll / <kbd>[</kbd> <kbd>]</kbd> | Zoom Buttons |
-| **Chat** | <kbd>Enter</kbd> | Chat Input / Emotes |
+The repository has been stripped of the old THPS/THUG conversion pipeline, including:
+
+- Blender addon folders
+- THPS map conversion tools
+- old PRK/park conversion assets
+- stale generated GLB export outputs
+
+This project now treats those as permanently retired and unsupported.
 
 ---
 

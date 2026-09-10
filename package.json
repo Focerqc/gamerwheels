@@ -1,22 +1,24 @@
 {
   "name": "gamerwheels",
   "version": "1.0.0",
-  "description": "GamerWheels — 2.5D Isometric PEV / Onewheel Free-Roam Trail Carve & Street Park Multiplayer .IO Game",
+  "description": "GamerWheels — modern asset blockout and physics-first 3D gameplay project for standard mesh imports and Unreal-friendly workflows.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "convert:maps": "node tools/map-pipeline/pipeline.js",
-    "convert:map": "node tools/map-pipeline/pipeline.js"
+    "build:assets": "python scripts/export_blockout.py --help",
+    "check:assets": "python -m py_compile scripts/export_blockout.py"
   },
   "keywords": [
     "onewheel",
     "pev",
+    "unreal",
+    "blockout",
+    "gltf",
+    "fbx",
     "threejs",
-    "socketio",
     "multiplayer",
-    "iogame",
-    "railway"
+    "physics"
   ],
   "author": "Quinn Foster",
   "license": "MIT",
