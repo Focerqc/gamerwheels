@@ -466,6 +466,9 @@
         roughness: 0.92,
         metalness: 0.02,
         side: THREE.DoubleSide,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -2,
       });
 
       this._ribbonMesh = new THREE.Mesh(geo, mat);
@@ -1250,58 +1253,104 @@
     },
 
     /**
-     * Get seamless ground elevation anywhere in the world, anchored to the nearest track point.
-     * Guaranteed to match the track ribbon at the edges and slope naturally outward into the open world.
+     * Get seamless ground elevation anywhere in the world, anchored to the nearest track segment.
+     * Continuously interpolates elevation, tangents, and banking between spline points to eliminate
+     * discrete stepping, bumpiness, and camera/nose jitter.
      */
     getGroundElevationAt: function (worldX, worldZ) {
       if (!this._built || !this._splinePoints || this._splinePoints.length === 0) {
         return 1.0;
       }
 
-      let bestDistSq = Infinity;
-      let bestIdx = 0;
+      const pts = this._splinePoints;
+      const numPts = pts.length;
+      if (numPts === 1) return pts[0].y;
 
-      for (let i = 0; i < this._splinePoints.length; i++) {
-        const sp = this._splinePoints[i];
-        const dx = worldX - sp.x;
-        const dz = worldZ - sp.z;
+      let bestDistSq = Infinity;
+      let bestIdxA = 0;
+      let bestIdxB = 1;
+      let bestU = 0;
+      let bestQX = pts[0].x;
+      let bestQZ = pts[0].z;
+
+      const numSegments = this._isChuteCircuit ? (numPts - 1) : (this._trackData && this._trackData.closed ? numPts : numPts - 1);
+
+      for (let i = 0; i < numSegments; i++) {
+        const nextIdx = (i + 1) % numPts;
+        const ax = pts[i].x, az = pts[i].z;
+        const bx = pts[nextIdx].x, bz = pts[nextIdx].z;
+        const abx = bx - ax, abz = bz - az;
+        const lenSq = abx * abx + abz * abz;
+
+        let u = 0;
+        let qx = ax, qz = az;
+        if (lenSq > 0.0001) {
+          u = ((worldX - ax) * abx + (worldZ - az) * abz) / lenSq;
+          if (u < 0) u = 0;
+          else if (u > 1) u = 1;
+          qx = ax + u * abx;
+          qz = az + u * abz;
+        }
+
+        const dx = worldX - qx;
+        const dz = worldZ - qz;
         const d2 = dx * dx + dz * dz;
         if (d2 < bestDistSq) {
           bestDistSq = d2;
-          bestIdx = i;
+          bestIdxA = i;
+          bestIdxB = nextIdx;
+          bestU = u;
+          bestQX = qx;
+          bestQZ = qz;
         }
       }
 
-      const nearest = this._splinePoints[bestIdx];
-      const dist = Math.sqrt(bestDistSq);
-      const halfW = (nearest.w || (this._trackData && this._trackData.width) || 5.0) / 2.0;
+      const pA = pts[bestIdxA];
+      const pB = pts[bestIdxB];
+      const u = bestU;
 
-      // 1. If on the track ribbon, return track height with banking tilt
+      // Continuously interpolated centerline properties
+      const centerY = pA.y + u * (pB.y - pA.y);
+      const defaultW = (this._trackData && this._trackData.width) || 5.0;
+      const wA = pA.w || defaultW;
+      const wB = pB.w || defaultW;
+      const halfW = (wA + u * (wB - wA)) / 2.0;
+
+      const bankA = pA.bank || 0;
+      const bankB = pB.bank || 0;
+      const bankDeg = bankA + u * (bankB - bankA);
+
+      const dist = Math.sqrt(bestDistSq);
+
+      // 1. If on the track ribbon, return smooth track height with continuous banking tilt
       if (dist <= halfW) {
-        let y = nearest.y;
-        const tangent = this._splineTangents[bestIdx];
-        if (tangent) {
-          const rightX = -tangent.z;
-          const rightZ = tangent.x;
+        let y = centerY;
+        const tA = this._splineTangents[bestIdxA];
+        const tB = this._splineTangents[bestIdxB];
+        if (tA && tB) {
+          const tx = tA.x + u * (tB.x - tA.x);
+          const tz = tA.z + u * (tB.z - tA.z);
+          const rightX = -tz;
+          const rightZ = tx;
           const rightLen = Math.hypot(rightX, rightZ);
           if (rightLen > 0.001) {
             const nrx = rightX / rightLen;
             const nrz = rightZ / rightLen;
-            const lateralDist = (worldX - nearest.x) * nrx + (worldZ - nearest.z) * nrz;
-            const bankRad = (nearest.bank || 0) * Math.PI / 180;
+            const lateralDist = (worldX - bestQX) * nrx + (worldZ - bestQZ) * nrz;
+            const bankRad = bankDeg * Math.PI / 180;
             y += Math.sin(bankRad) * lateralDist;
           }
         }
         return y;
       }
 
-      // 2. Seamless dirt shoulder and rolling open terrain
+      // 2. Seamless dirt shoulder and rolling open terrain smoothly blended
       const offset = dist - halfW;
-      const shoulderDrop = Math.min(0.35, offset * 0.05);
-      const distantDrop = Math.max(0, offset - 5.0) * 0.03;
-      const rollingHills = (Math.sin(worldX * 0.035 + worldZ * 0.028) + Math.cos(worldX * 0.018 - worldZ * 0.022)) * 0.7;
+      const shoulderDrop = Math.min(0.28, offset * 0.04);
+      const distantDrop = Math.max(0, offset - 4.0) * 0.025;
+      const rollingHills = (Math.sin(worldX * 0.035 + worldZ * 0.028) + Math.cos(worldX * 0.018 - worldZ * 0.022)) * 0.45;
 
-      const groundY = nearest.y - shoulderDrop - Math.min(3.5, distantDrop) + (offset > 10 ? rollingHills : 0);
+      const groundY = centerY - shoulderDrop - Math.min(2.5, distantDrop) + (offset > 8 ? rollingHills : 0);
       return Math.max(0.2, groundY);
     },
   };

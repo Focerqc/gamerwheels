@@ -45,6 +45,8 @@
       jumpCharge: 0,
       isPushback: false,
       pushbackTilt: 0,
+      butterTilt: 0,
+      butterTimer: 0,
       isGrinding: false,
       score: 0
     },
@@ -56,7 +58,8 @@
       manualTimer: 0,
       isOrbiting: false,
       lastPointerX: 0,
-      lastPointerY: 0
+      lastPointerY: 0,
+      lookTarget: null
     },
     input: {
       up: false,
@@ -69,6 +72,10 @@
       twistDown: false,
       twistLeft: false,
       twistRight: false,
+      butterNoseLeft: false,
+      butterNoseRight: false,
+      butterTailLeft: false,
+      butterTailRight: false,
       joystickActive: false,
       joystickVector: { x: 0, y: 0 }
     },
@@ -281,9 +288,14 @@
         colors.push(colNear.r, colNear.g, colNear.b);
       }
 
-      // Slightly tuck the terrain under the ribbon by 0.06m directly under track to prevent z-fighting
-      const isUnderRibbon = dist <= 2.6;
-      pos.setY(i, isUnderRibbon ? rawY - 0.06 : rawY);
+      // Depress the terrain cleanly under the track ribbon by 0.22m with smooth shoulder bevel to prevent z-fighting
+      let depression = 0;
+      if (dist <= 3.8) {
+        depression = 0.22;
+      } else if (dist < 7.5) {
+        depression = 0.22 * (1.0 - (dist - 3.8) / 3.7);
+      }
+      pos.setY(i, rawY - depression);
     }
 
     geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
@@ -509,14 +521,28 @@
     bumpR.position.set(0, TIRE_RADIUS - 0.01, -0.34);
     group.add(bumpR);
 
-    // Drop Shadow
-    const shadowGeo = new THREE.PlaneGeometry(0.52, 0.96);
+    // Soft Radial Contact Drop Shadow (flat oval lying on ground)
+    const shadowCanvas = document.createElement('canvas');
+    shadowCanvas.width = 128;
+    shadowCanvas.height = 128;
+    const sctx = shadowCanvas.getContext('2d');
+    const sGrad = sctx.createRadialGradient(64, 64, 8, 64, 64, 60);
+    sGrad.addColorStop(0, 'rgba(8, 6, 4, 0.60)');
+    sGrad.addColorStop(0.45, 'rgba(12, 10, 6, 0.28)');
+    sGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    sctx.fillStyle = sGrad;
+    sctx.fillRect(0, 0, 128, 128);
+
+    const shadowTex = new THREE.CanvasTexture(shadowCanvas);
+    const shadowGeo = new THREE.PlaneGeometry(0.50, 0.88);
     shadowGeo.rotateX(-Math.PI / 2);
     const shadowMat = new THREE.MeshBasicMaterial({
-      color: 0x020617,
+      map: shadowTex,
       transparent: true,
-      opacity: 0.45,
-      depthWrite: false
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1
     });
     const shadow = new THREE.Mesh(shadowGeo, shadowMat);
 
@@ -699,65 +725,65 @@
     const p = state.player;
     const now = performance.now();
 
-    // 1. Check Staging Gate (Node 0/1)
+    // 1. Check Staging / Start Gate (Start Chute Node 0)
     if (gates.startChute) {
       const dStart = Math.hypot(p.x - gates.startChute.x, p.z - gates.startChute.z);
-      if (dStart < (gates.startChute.radius || 9.0) && trackSession.state === 'unprimed') {
-        trackSession.state = 'primed';
-        if (trackLapStatus) {
-          trackLapStatus.textContent = 'STAGE READY';
-          trackLapStatus.className = 'exp9-track-hud-pill';
+      if (dStart < (gates.startChute.radius || 9.0)) {
+        if (trackSession.state === 'unprimed' || trackSession.state === 'finished') {
+          trackSession.state = 'primed';
+          if (trackLapStatus) {
+            trackLapStatus.textContent = 'STAGE READY';
+            trackLapStatus.className = 'exp9-track-hud-pill';
+          }
+          showTrickToast('🏁 STAGED AT START CHUTE — DROP IN TO START RUN');
         }
-        showTrickToast('🏁 STAGING READY — ROLL DOWN CHUTE TO START TIMING');
+      } else if (trackSession.state === 'primed' && dStart >= 7.0 && p.speed > 1.2) {
+        // Player dropped into the chute and started moving!
+        trackSession.state = 'racing';
+        trackSession.lap = 1;
+        trackSession.lapStartTime = now;
+        trackSession.ghostActive = true;
+        trackSession.ghostElapsed = 0;
+
+        if (trackSession.ghostEntity) trackSession.ghostEntity.visible = true;
+        if (trackLapStatus) {
+          trackLapStatus.textContent = 'RACING';
+          trackLapStatus.className = 'exp9-track-hud-pill racing';
+        }
+        showTrickToast('⏱️ GREEN FLAG! RUN STARTED! GO! 🏁');
       }
     }
 
-    // 2. Check Timing / Finish Gate (Node 5)
+    // 2. Check Finish Gate (Node 56 at loop exit)
     if (gates.lapFinish) {
       const dFinish = Math.hypot(p.x - gates.lapFinish.x, p.z - gates.lapFinish.z);
-      const canTriggerFinish = (now - trackSession.lastFinishCrossingTime) > 12000; // 12s debounce
+      const canTriggerFinish = (now - trackSession.lastFinishCrossingTime) > 8000; // 8s debounce
 
-      if (dFinish < (gates.lapFinish.radius || 9.0) && canTriggerFinish) {
-        if (trackSession.state === 'primed') {
-          // Launch Lap 1!
-          trackSession.state = 'racing';
-          trackSession.lap = 1;
-          trackSession.lapStartTime = now;
-          trackSession.lastFinishCrossingTime = now;
-          trackSession.ghostActive = true;
-          trackSession.ghostElapsed = 0;
-
-          if (trackSession.ghostEntity) trackSession.ghostEntity.visible = true;
-          if (trackLapStatus) {
-            trackLapStatus.textContent = 'LAP 1';
-            trackLapStatus.className = 'exp9-track-hud-pill racing';
-          }
-          showTrickToast('⏱️ TIMING GATE CROSSED! GHOST RACER RELEASED! 🏁');
-        } else if (trackSession.state === 'racing') {
-          // Lap Complete!
+      if (dFinish < (gates.lapFinish.radius || 8.5) && canTriggerFinish) {
+        if (trackSession.state === 'racing') {
+          // Race Run Complete!
           const lapTime = (now - trackSession.lapStartTime) / 1000;
           trackSession.lastLapTime = lapTime;
           trackSession.lastFinishCrossingTime = now;
-          trackSession.lapStartTime = now;
-          trackSession.ghostElapsed = 0;
+          trackSession.state = 'finished';
+          trackSession.ghostActive = false;
 
-          const ghostTarget = (trackData.ghostData && trackData.ghostData.duration) || 135.01;
+          const ghostTarget = (trackData.ghostData && trackData.ghostData.duration) || 125.01;
           const diff = lapTime - ghostTarget;
 
           if (diff < 0) {
-            showTrickToast(`🏆 NEW RECORD! BEAT NICO BY ${Math.abs(diff).toFixed(2)}s! 🏁`);
+            showTrickToast(`🏆 NEW RECORD! ${formatRaceTime(lapTime)} (Beat Nico by ${Math.abs(diff).toFixed(2)}s!) 🏁`);
           } else {
-            showTrickToast(`🏁 LAP ${trackSession.lap} FINISHED: ${formatRaceTime(lapTime)} (+${diff.toFixed(2)}s vs Nico)`);
+            showTrickToast(`🏁 FINISH! Official Time: ${formatRaceTime(lapTime)} (+${diff.toFixed(2)}s vs Nico)`);
           }
 
           if (!trackSession.bestLapTime || lapTime < trackSession.bestLapTime) {
             trackSession.bestLapTime = lapTime;
           }
 
-          trackSession.lap++;
           if (trackLapStatus) {
-            trackLapStatus.textContent = `LAP ${trackSession.lap}`;
-            trackLapStatus.className = 'exp9-track-hud-pill racing';
+            trackLapStatus.textContent = 'FINISHED';
+            trackLapStatus.className = 'exp9-track-hud-pill';
           }
         }
       }
@@ -1020,16 +1046,71 @@
       if (e.code === 'BracketLeft' || e.code === 'Minus') { adjustZoom(+1.5); return; }
       if (e.code === 'BracketRight' || e.code === 'Equal') { adjustZoom(-1.5); return; }
 
+      // Drive Controls: Both WASD and Arrow Keys drive the board
       switch (e.code) {
-        case 'KeyW': state.input.up = true; break;
-        case 'KeyS': state.input.down = true; break;
-        case 'KeyA': state.input.left = true; break;
-        case 'KeyD': state.input.right = true; break;
+        case 'KeyW':
+        case 'ArrowUp':
+          state.input.up = true;
+          break;
+        case 'KeyS':
+        case 'ArrowDown':
+          state.input.down = true;
+          break;
+        case 'KeyA':
+        case 'ArrowLeft':
+          state.input.left = true;
+          break;
+        case 'KeyD':
+        case 'ArrowRight':
+          state.input.right = true;
+          break;
 
-        case 'ArrowUp': state.input.twistUp = true; break;
-        case 'ArrowDown': state.input.twistDown = true; break;
-        case 'ArrowLeft': state.input.twistLeft = true; break;
-        case 'ArrowRight': state.input.twistRight = true; break;
+        // Numpad Controls: Nose & Tail Butters + Aerial Tricks
+        // 7: Nose Butter Left
+        case 'Numpad7':
+          state.input.butterNoseLeft = true;
+          state.input.twistUp = true;
+          state.input.twistLeft = true;
+          break;
+        // 9: Nose Butter Right
+        case 'Numpad9':
+          state.input.butterNoseRight = true;
+          state.input.twistUp = true;
+          state.input.twistRight = true;
+          break;
+        // 1: Tail Butter Left
+        case 'Numpad1':
+          state.input.butterTailLeft = true;
+          state.input.twistDown = true;
+          state.input.twistLeft = true;
+          break;
+        // 3: Tail Butter Right
+        case 'Numpad3':
+          state.input.butterTailRight = true;
+          state.input.twistDown = true;
+          state.input.twistRight = true;
+          break;
+
+        // 8: Nose Tilt / Lean Forward / Frontflip
+        case 'Numpad8':
+          state.input.twistUp = true;
+          break;
+        // 2: Tail Tilt / Lean Back / Backflip
+        case 'Numpad2':
+          state.input.twistDown = true;
+          break;
+        // 4: Twist / Spin Left
+        case 'Numpad4':
+          state.input.twistLeft = true;
+          break;
+        // 6: Twist / Spin Right
+        case 'Numpad6':
+          state.input.twistRight = true;
+          break;
+        // 5: Quick Respawn
+        case 'Numpad5':
+          respawnPlayer();
+          break;
 
         case 'Space':
           if (!state.input.jump) state.input.jumpPressed = true;
@@ -1043,15 +1124,56 @@
 
     window.addEventListener('keyup', (e) => {
       switch (e.code) {
-        case 'KeyW': state.input.up = false; break;
-        case 'KeyS': state.input.down = false; break;
-        case 'KeyA': state.input.left = false; break;
-        case 'KeyD': state.input.right = false; break;
+        case 'KeyW':
+        case 'ArrowUp':
+          state.input.up = false;
+          break;
+        case 'KeyS':
+        case 'ArrowDown':
+          state.input.down = false;
+          break;
+        case 'KeyA':
+        case 'ArrowLeft':
+          state.input.left = false;
+          break;
+        case 'KeyD':
+        case 'ArrowRight':
+          state.input.right = false;
+          break;
 
-        case 'ArrowUp': state.input.twistUp = false; break;
-        case 'ArrowDown': state.input.twistDown = false; break;
-        case 'ArrowLeft': state.input.twistLeft = false; break;
-        case 'ArrowRight': state.input.twistRight = false; break;
+        case 'Numpad7':
+          state.input.butterNoseLeft = false;
+          state.input.twistUp = false;
+          state.input.twistLeft = false;
+          break;
+        case 'Numpad9':
+          state.input.butterNoseRight = false;
+          state.input.twistUp = false;
+          state.input.twistRight = false;
+          break;
+        case 'Numpad1':
+          state.input.butterTailLeft = false;
+          state.input.twistDown = false;
+          state.input.twistLeft = false;
+          break;
+        case 'Numpad3':
+          state.input.butterTailRight = false;
+          state.input.twistDown = false;
+          state.input.twistRight = false;
+          break;
+
+        case 'Numpad8':
+          state.input.twistUp = false;
+          break;
+        case 'Numpad2':
+          state.input.twistDown = false;
+          break;
+        case 'Numpad4':
+          state.input.twistLeft = false;
+          break;
+        case 'Numpad6':
+          state.input.twistRight = false;
+          break;
 
         case 'Space':
           state.input.jump = false;
@@ -1236,16 +1358,83 @@
         emitDustParticle(p.x, p.y, p.z, -p.vx * 0.3, 0.8, -p.vz * 0.3);
       }
     } else {
-      // Smoothly snap/follow ground
-      p.y = THREE.MathUtils.lerp(p.y, p.groundY, dt * 25.0);
+      // 1. Dual-probe smoothed ground slope pitch to prevent nose vibrating
+      const hFront1 = getSurfaceElevation(p.x + fwdX * 0.35, p.z + fwdZ * 0.35);
+      const hRear1 = getSurfaceElevation(p.x - fwdX * 0.35, p.z - fwdZ * 0.35);
+      const hFront2 = getSurfaceElevation(p.x + fwdX * 0.70, p.z + fwdZ * 0.70);
+      const hRear2 = getSurfaceElevation(p.x - fwdX * 0.70, p.z - fwdZ * 0.70);
+      const pitch1 = Math.atan2(hFront1 - hRear1, 0.70);
+      const pitch2 = Math.atan2(hFront2 - hRear2, 1.40);
+      const terrainPitch = (pitch1 * 0.6) + (pitch2 * 0.4);
 
-      // Pitch follows ground slope + pushback
-      const epsP = 0.45;
-      const hFront = getSurfaceElevation(p.x + fwdX * epsP, p.z + fwdZ * epsP);
-      const hRear = getSurfaceElevation(p.x - fwdX * epsP, p.z - fwdZ * epsP);
-      const terrainPitch = Math.atan2(hFront - hRear, epsP * 2);
+      // 2. Butter & Remote Tilt Inputs
+      let butterPitch = 0;
+      if (state.input.butterNoseLeft || (state.input.twistUp && state.input.twistLeft)) {
+        butterPitch = 0.20; // Nose down
+        p.heading += 4.2 * dt;
+        p.roll = THREE.MathUtils.lerp(p.roll, 0.22, dt * 10);
+        if (!p.butterTimer || p.butterTimer <= 0) {
+          showTrickToast('NOSE BUTTER! 🧈');
+          p.butterTimer = 1.2;
+        }
+        emitDustParticle(p.x + fwdX * 0.35, p.y, p.z + fwdZ * 0.35, -p.vx * 0.4, 0.4, -p.vz * 0.4, 0xd4af37);
+      } else if (state.input.butterNoseRight || (state.input.twistUp && state.input.twistRight)) {
+        butterPitch = 0.20; // Nose down
+        p.heading -= 4.2 * dt;
+        p.roll = THREE.MathUtils.lerp(p.roll, -0.22, dt * 10);
+        if (!p.butterTimer || p.butterTimer <= 0) {
+          showTrickToast('NOSE BUTTER! 🧈');
+          p.butterTimer = 1.2;
+        }
+        emitDustParticle(p.x + fwdX * 0.35, p.y, p.z + fwdZ * 0.35, -p.vx * 0.4, 0.4, -p.vz * 0.4, 0xd4af37);
+      } else if (state.input.butterTailLeft || (state.input.twistDown && state.input.twistLeft)) {
+        butterPitch = -0.22; // Tail down, nose up
+        p.heading += 4.2 * dt;
+        p.roll = THREE.MathUtils.lerp(p.roll, 0.22, dt * 10);
+        if (!p.butterTimer || p.butterTimer <= 0) {
+          showTrickToast('TAIL BUTTER! 🧈');
+          p.butterTimer = 1.2;
+        }
+        emitDustParticle(p.x - fwdX * 0.35, p.y, p.z - fwdZ * 0.35, -p.vx * 0.4, 0.4, -p.vz * 0.4, 0xd4af37);
+      } else if (state.input.butterTailRight || (state.input.twistDown && state.input.twistRight)) {
+        butterPitch = -0.22; // Tail down, nose up
+        p.heading -= 4.2 * dt;
+        p.roll = THREE.MathUtils.lerp(p.roll, -0.22, dt * 10);
+        if (!p.butterTimer || p.butterTimer <= 0) {
+          showTrickToast('TAIL BUTTER! 🧈');
+          p.butterTimer = 1.2;
+        }
+        emitDustParticle(p.x - fwdX * 0.35, p.y, p.z - fwdZ * 0.35, -p.vx * 0.4, 0.4, -p.vz * 0.4, 0xd4af37);
+      } else if (state.input.twistUp) {
+        butterPitch = 0.16;
+      } else if (state.input.twistDown) {
+        butterPitch = -0.16;
+      } else if (state.input.twistLeft) {
+        p.heading += 3.8 * dt;
+        p.roll = THREE.MathUtils.lerp(p.roll, 0.18, dt * 8);
+      } else if (state.input.twistRight) {
+        p.heading -= 3.8 * dt;
+        p.roll = THREE.MathUtils.lerp(p.roll, -0.18, dt * 8);
+      }
 
-      p.pitch = THREE.MathUtils.lerp(p.pitch, terrainPitch + p.pushbackTilt, dt * 14.0);
+      if (p.butterTimer > 0) p.butterTimer -= dt;
+
+      p.butterTilt = THREE.MathUtils.lerp(p.butterTilt || 0, butterPitch, dt * 12.0);
+      const targetPitch = terrainPitch + p.pushbackTilt + p.butterTilt;
+      p.pitch = THREE.MathUtils.lerp(p.pitch, targetPitch, dt * 10.0);
+
+      // 3. Multi-point Bumper Clearance: Ensure neither nose nor tail clips below local ground
+      const bumperDist = 0.38;
+      const hNose = getSurfaceElevation(p.x + fwdX * bumperDist, p.z + fwdZ * bumperDist);
+      const hTail = getSurfaceElevation(p.x - fwdX * bumperDist, p.z - fwdZ * bumperDist);
+      const noseDeltaY = -Math.sin(p.pitch) * bumperDist;
+      const tailDeltaY = Math.sin(p.pitch) * bumperDist;
+      const minCenterForNose = hNose - noseDeltaY + 0.04;
+      const minCenterForTail = hTail - tailDeltaY + 0.04;
+      const targetGround = Math.max(p.groundY, minCenterForNose, minCenterForTail);
+
+      // Smooth suspension snap to ground
+      p.y = THREE.MathUtils.lerp(p.y, targetGround, dt * 20.0);
 
       // Tire dust while moving
       if (p.speed > 3.0 && Math.random() < 0.35) {
@@ -1262,10 +1451,10 @@
       wheelMesh.rotateX((vFwd / TIRE_RADIUS) * dt);
     }
 
-    // Drop shadow projection
+    // Soft flat drop shadow lying on ground (rotated flat, not upright!)
     if (boardShadow) {
-      boardShadow.position.set(p.x, p.groundY + 0.02, p.z);
-      boardShadow.rotation.set(-Math.PI / 2, 0, p.heading);
+      boardShadow.position.set(p.x, p.groundY + 0.015, p.z);
+      boardShadow.rotation.set(0, p.heading, 0);
     }
   }
 
@@ -1293,11 +1482,19 @@
     const targetCamY = p.y + 0.85 + state.camera.distance * Math.sin(state.camera.pitch);
     const targetCamZ = p.z + hDist * Math.cos(state.camera.yaw);
 
-    camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetCamX, dt * 12);
-    camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetCamY, dt * 12);
-    camera.position.z = THREE.MathUtils.lerp(camera.position.z, targetCamZ, dt * 12);
+    camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetCamX, dt * 9);
+    camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetCamY, dt * 9);
+    camera.position.z = THREE.MathUtils.lerp(camera.position.z, targetCamZ, dt * 9);
 
-    camera.lookAt(p.x, p.y + 0.85, p.z);
+    // Smooth camera lookAt point to eliminate jerky head-shaking
+    if (!state.camera.lookTarget) {
+      state.camera.lookTarget = new THREE.Vector3(p.x, p.y + 0.85, p.z);
+    } else {
+      state.camera.lookTarget.x = THREE.MathUtils.lerp(state.camera.lookTarget.x, p.x, dt * 12);
+      state.camera.lookTarget.y = THREE.MathUtils.lerp(state.camera.lookTarget.y, p.y + 0.85, dt * 12);
+      state.camera.lookTarget.z = THREE.MathUtils.lerp(state.camera.lookTarget.z, p.z, dt * 12);
+    }
+    camera.lookAt(state.camera.lookTarget);
 
     // Sun follows player for infinite smooth shadow coverage
     if (sunLight) {
