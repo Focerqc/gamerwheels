@@ -68,9 +68,15 @@
       "t": 0.95
     },
     {
+      "type": "kicker",
+      "nodeIndex": 26,
+      "length": 3.0,
+      "height": 0.5
+    },
+    {
       "type": "rftr_feature",
       "number": 1,
-      "name": "Feature 1",
+      "name": "Snakebite",
       "nodeIndex": 26,
       "x": -13.4,
       "y": 6.63,
@@ -78,9 +84,18 @@
       "t": 0.46
     },
     {
+      "type": "tabletop",
+      "nodeIndex": 33,
+      "length": 8.0,
+      "height": 1.2,
+      "takeoffLen": 2.2,
+      "deckLen": 3.6,
+      "landingLen": 2.2
+    },
+    {
       "type": "rftr_feature",
       "number": 2,
-      "name": "Feature 2",
+      "name": "Lilly Pad",
       "nodeIndex": 33,
       "x": 3.3,
       "y": 6.32,
@@ -88,9 +103,16 @@
       "t": 0.59
     },
     {
+      "type": "roller",
+      "nodeIndex": 45,
+      "length": 9.0,
+      "height": 0.45,
+      "count": 5
+    },
+    {
       "type": "rftr_feature",
       "number": 3,
-      "name": "Feature 3",
+      "name": "Pipe Dreams",
       "nodeIndex": 45,
       "x": 37.4,
       "y": 4.25,

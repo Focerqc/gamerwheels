@@ -1076,6 +1076,24 @@
       numMesh2.rotation.y = Math.PI;
       markerGroup.add(numMesh2);
 
+      // Right-side post & disc (mirrored)
+      var postR = new THREE.Mesh(postGeo, postMat);
+      postR.position.set(-sideOffset, 1.6, 0);
+      markerGroup.add(postR);
+
+      var discR = new THREE.Mesh(discGeo, discMat);
+      discR.position.set(-sideOffset, 3.0, 0);
+      markerGroup.add(discR);
+
+      var numMesh3 = new THREE.Mesh(numGeo, numMat);
+      numMesh3.position.set(-sideOffset, 3.0, 0.035);
+      markerGroup.add(numMesh3);
+
+      var numMesh4 = new THREE.Mesh(numGeo, numMat);
+      numMesh4.position.set(-sideOffset, 3.0, -0.035);
+      numMesh4.rotation.y = Math.PI;
+      markerGroup.add(numMesh4);
+
       this._trackGroup.add(markerGroup);
       this._featureMeshes.push(markerGroup);
     },
