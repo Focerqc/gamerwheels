@@ -42,9 +42,9 @@
           <div class="exp9-brand-card">
             <div class="exp9-brand-badge">
               <span class="pulse-dot"></span>
-              <span class="exp9-brand-terrain" id="hudTerrainVal">Central Plaza</span>
+              <span class="exp9-brand-terrain" id="hudTerrainVal">Hollister Hills</span>
             </div>
-            <div class="exp9-brand-title">GamerWheels</div>
+            <div class="exp9-brand-title">GamerWheels RFTR</div>
           </div>
 
           <div class="exp9-speedo-card">
@@ -55,47 +55,33 @@
             </div>
           </div>
 
-          <!-- Compass / Town Pointer -->
-          <div class="exp9-compass-card" id="compassCard" title="Points toward Town Square center">
+          <!-- Compass / Gate Pointer -->
+          <div class="exp9-compass-card" id="compassCard" title="Points toward Timing Gate (Node 5)">
             <svg class="exp9-compass-arrow" id="compassArrow" viewBox="0 0 24 24" width="20" height="20">
-              <polygon points="12,2 17,20 12,16 7,20" fill="#6366f1" />
+              <polygon points="12,2 17,20 12,16 7,20" fill="#00e5ff" />
             </svg>
             <span class="exp9-compass-text" id="compassDist">0m</span>
           </div>
         </div>
 
-        <!-- Top Center: Checkpoints Quick Bar -->
-        <div class="exp9-checkpoints-bar" id="checkpointsBar">
-          <button type="button" class="exp9-cp-btn active" data-cp="0" title="Central Plaza (Key: 1)">
-            <span class="exp9-cp-num">1</span>
-            <span class="exp9-cp-label">Plaza</span>
-          </button>
-          <button type="button" class="exp9-cp-btn" data-cp="1" title="Mega Drop & Giant Jump (Key: 2)">
-            <span class="exp9-cp-num">2</span>
-            <span class="exp9-cp-label">Mega Drop</span>
-          </button>
-          <button type="button" class="exp9-cp-btn" data-cp="2" title="Pine Ridge Slopestyle Timber Trail (Key: 3)">
-            <span class="exp9-cp-num">3</span>
-            <span class="exp9-cp-label">Slopestyle</span>
-          </button>
-          <button type="button" class="exp9-cp-btn" data-cp="3" title="Slickrock Motocross Canyon Course (Key: 4)">
-            <span class="exp9-cp-num">4</span>
-            <span class="exp9-cp-label">Motocross</span>
-          </button>
-          <button type="button" class="exp9-cp-btn" data-cp="4" title="Desert Berms (Key: 5)">
-            <span class="exp9-cp-num">5</span>
-            <span class="exp9-cp-label">Desert Berms</span>
-          </button>
-          <div class="exp9-cp-divider" aria-hidden="true"></div>
-          <!-- Community THPS Maps (Loaded from public/assets/maps/*.glb) -->
-          <button type="button" class="exp9-cp-btn exp9-map-btn" data-map="Braille" title="Ride the converted Braille House THPS park (loads assets/maps/Braille.glb)">
-            <span class="exp9-cp-num">🗺️</span>
-            <span class="exp9-cp-label">Braille</span>
-          </button>
-          <button type="button" class="exp9-cp-btn exp9-map-btn" data-map="__MANIFEST__" title="Show all converted community maps (choose from assets/maps)" style="display:none;">
-            <span class="exp9-cp-num">📦</span>
-            <span class="exp9-cp-label">Maps</span>
-          </button>
+        <!-- Top Center: Track Racing HUD (Active for RFTR Hollister Hills) -->
+        <div class="exp9-track-racing-hud" id="trackRacingHud">
+          <div class="exp9-track-hud-pill" id="trackLapStatus">STAGE READY</div>
+          <div class="exp9-track-hud-main">
+            <div class="exp9-track-hud-timer-block">
+              <span class="exp9-track-hud-label">LAP TIME</span>
+              <span class="exp9-track-hud-timer" id="trackLapTimer">00:00.00</span>
+            </div>
+            <div class="exp9-track-hud-split-block">
+              <span class="exp9-track-hud-label">SPLIT VS NICO</span>
+              <span class="exp9-track-hud-split neutral" id="trackLapSplit">--.--</span>
+            </div>
+            <div class="exp9-track-hud-target-block">
+              <span class="exp9-track-hud-label">TARGET GHOST</span>
+              <span class="exp9-track-hud-target" id="trackGhostTarget">02:15.01</span>
+            </div>
+          </div>
+          <div class="exp9-track-hud-reset-hint">[R] Restart Chute</div>
         </div>
 
         <!-- Top Right: Multiplayer Badge & Action Controls -->
@@ -173,7 +159,13 @@
             </button>
           </div>
 
-          <button type="button" class="exp9-hud-btn" id="btnRespawn" title="Respawn at Town Square (Key: R)">
+          <button type="button" class="exp9-hud-btn" id="btnOpenTrackStudio" title="Open RFTR Spline & Elevation Studio">
+            <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
+            </svg>
+            <span>Studio</span>
+          </button>
+          <button type="button" class="exp9-hud-btn" id="btnRespawn" title="Restart Chute (Key: R)">
             <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
@@ -201,7 +193,7 @@
       <!-- Global Trick Ticker Banner (Top Center) -->
       <div class="exp9-global-ticker" id="trickTicker">
         <span class="exp9-ticker-icon">⚡</span>
-        <span class="exp9-ticker-text" id="tickerText">Quinn landed Mega Drop Jump! (+1,000 pts)</span>
+        <span class="exp9-ticker-text" id="tickerText">Welcome to Hollister Hills RFTR! Roll to Timing Gate to race Nico.</span>
       </div>
 
       <!-- Center Float: Local Trick / Action Toast -->
@@ -265,8 +257,276 @@
     </div>
   </div>
 
-  <!-- Join & Board Customization Modal (.IO Drop-in) -->
-  <div class="exp9-join-modal-overlay" id="joinModal">
+  <!-- Dev Screen Modal (Hidden for direct play; accessible via Studio button) -->
+  <div class="exp9-dev-modal-overlay" id="devScreenModal" style="display: none;">
+    <div class="exp9-dev-card">
+      <div class="exp9-join-brand">
+        <div class="exp9-join-badge">🛠️ Developer Mode</div>
+        <div class="exp9-join-title">GamerWheels Dev Tools</div>
+      </div>
+      <button type="button" class="exp9-btn-ride" id="btnPlayGame">
+        PLAY GAME
+      </button>
+      <button type="button" class="exp9-btn-ride" id="btnDesignTrack" style="margin-top: 15px; background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);">
+        DESIGN RFTR TRACK
+      </button>
+    </div>
+  </div>
+
+  <!-- 2D Track Editor Container -->
+  <div class="exp9-track-editor-container" id="trackEditorContainer" style="display: none;">
+    <!-- Top Studio Bar -->
+    <header class="editor-header">
+      <div class="editor-brand">
+        <span class="editor-logo-icon">➰</span>
+        <div>
+          <h1 class="editor-title">RFTR Style Spline Studio</h1>
+          <span class="editor-subtitle">Hollister Hills Track Designer</span>
+        </div>
+      </div>
+
+      <div class="editor-toolbar">
+        <div class="editor-btn-group">
+          <button type="button" class="editor-tool-btn active" id="btnToolDraw" title="Click along satellite path to add spline points (Hotkey: P)">
+            <span class="btn-icon">✏️</span> Draw Spline
+          </button>
+          <button type="button" class="editor-tool-btn" id="btnToolSelect" title="Select and drag nodes to adjust curve (Hotkey: V)">
+            <span class="btn-icon">👆</span> Move Nodes
+          </button>
+          <button type="button" class="editor-tool-btn" id="btnToolInsert" title="Click directly on spline to insert a node">
+            <span class="btn-icon">➕</span> Insert Node
+          </button>
+        </div>
+
+        <div class="editor-divider"></div>
+
+        <div class="editor-btn-group">
+          <button type="button" class="editor-action-btn" id="btnToggleLoop" title="Toggle closed loop circuit">
+            <span class="btn-icon">🔁</span> <span id="lblLoopState">Loop: Closed</span>
+          </button>
+          <button type="button" class="editor-action-btn" id="btnConnectLoopNode" title="Select which node the track loops back into (e.g. Node #6 for tracks with a separate start chute)">
+            <span class="btn-icon">🔗</span> Loop to: <span id="lblLoopTargetNode">Node #1</span>
+          </button>
+          <button type="button" class="editor-action-btn" id="btnUndo" title="Undo last action (Ctrl+Z)">
+            <span class="btn-icon">↩️</span> Undo
+          </button>
+          <button type="button" class="editor-action-btn" id="btnRedo" title="Redo action (Ctrl+Y)">
+            <span class="btn-icon">↪️</span> Redo
+          </button>
+          <button type="button" class="editor-action-btn danger" id="btnClearAll" title="Clear all nodes and start blank">
+            <span class="btn-icon">🗑️</span> Clear All
+          </button>
+          <button type="button" class="editor-action-btn" id="btnResetView" title="Center and fit map view">
+            <span class="btn-icon">🎯</span> Fit View
+          </button>
+        </div>
+      </div>
+
+      <div class="editor-header-actions">
+        <button type="button" class="editor-action-btn success" id="btnOpenExport" title="Export track data as JSON file or copy to clipboard">
+          <span class="btn-icon">💾</span> Export JSON
+        </button>
+        <button type="button" class="editor-action-btn secondary" id="btnOpenImport" title="Import track data from JSON file or clipboard">
+          <span class="btn-icon">📂</span> Import JSON
+        </button>
+        <button type="button" class="editor-action-btn primary" id="btnExportPlaytest" title="Load into 3D game engine and ride!">
+          <span class="btn-icon">🎮</span> Playtest
+        </button>
+        <button type="button" class="editor-action-btn close" id="btnExitEditor" title="Return to Main Menu">
+          ✕
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Studio Workspace -->
+    <div class="editor-main-workspace">
+      <!-- Left Controls Sidebar -->
+      <aside class="editor-sidebar" id="editorSidebar">
+        <!-- Loop & Circuit Merge Settings -->
+        <div class="editor-panel" id="loopConfigPanel">
+          <h3 class="panel-title">🔁 Circuit & Loop Merge</h3>
+          <p class="tool-desc">If the start chute is separate from the lap circuit, choose which node the end loops into:</p>
+          <div class="input-field-group">
+            <label for="selectLoopTargetNode">Connect End of Track To:</label>
+            <div class="flex-input">
+              <select id="selectLoopTargetNode" class="exp9-name-input" style="flex: 1; padding: 6px 10px; font-size: 0.85rem;">
+                <option value="1">Node #1 (Full Closed Circuit)</option>
+              </select>
+              <button type="button" id="btnPickLoopNode" class="editor-mini-btn" title="Click any node on the canvas to set as merge target">👆 Pick</button>
+            </div>
+          </div>
+          <div id="mergeNotice" style="font-size: 0.8rem; color: #38bdf8; margin-top: 6px; font-weight: 500;">
+            Loop Type: Full closed circuit (Node #1)
+          </div>
+        </div>
+
+        <!-- Node Inspector -->
+        <div class="editor-panel" id="nodeInspectorPanel">
+          <h3 class="panel-title">📍 Selected Node</h3>
+          <div id="noNodeSelectedNotice" class="panel-empty-text">Click a node to inspect & edit elevation</div>
+          <div id="nodeSelectedForm" style="display: none;">
+            <div class="panel-row">
+              <span class="label">Node Index:</span>
+              <span class="value" id="inspectNodeIndex">#0</span>
+            </div>
+            <div class="panel-row">
+              <span class="label">World (X, Z):</span>
+              <span class="value" id="inspectNodeCoords">0.0m, 0.0m</span>
+            </div>
+            <div class="input-field-group">
+              <label for="inspectNodeElevation">Elevation (Y meters):</label>
+              <div class="flex-input">
+                <input type="number" step="0.5" id="inspectNodeElevation" class="exp9-name-input" value="0.0" />
+                <button type="button" id="btnUpdateElevation" class="editor-mini-btn">Set</button>
+              </div>
+            </div>
+            <div class="input-field-group">
+              <label for="inspectNodeBank">Banking (Degrees):</label>
+              <div class="flex-input">
+                <input type="number" step="1" id="inspectNodeBank" class="exp9-name-input" value="0" placeholder="e.g. 15 or -15" />
+                <button type="button" id="btnUpdateBank" class="editor-mini-btn">Set</button>
+              </div>
+            </div>
+            <button type="button" id="btnDeleteSelectedNode" class="editor-btn-delete-node">Delete Node (Del)</button>
+          </div>
+        </div>
+
+        <!-- Grade Interpolation Tool -->
+        <div class="editor-panel" id="elevationTool">
+          <h3 class="panel-title">📈 Grade Interpolator</h3>
+          <p class="tool-desc">Shift+Click two nodes to select a range and interpolate elevation smoothly.</p>
+          <div class="elevation-input-group">
+            <label for="elevationDelta">Elevation Delta (m):</label>
+            <input type="number" step="0.5" id="elevationDelta" class="exp9-name-input" placeholder="e.g. +6 or -4" />
+            <button type="button" id="btnApplyElevation" class="editor-primary-btn" style="margin-top: 6px;">Smooth Interpolate</button>
+          </div>
+        </div>
+
+        <!-- Track Features Palette -->
+        <div class="editor-panel">
+          <h3 class="panel-title">🚩 Track Features</h3>
+          <p class="tool-desc">Drag onto the track spline to attach features:</p>
+          <div class="features-palette">
+            <div class="editor-token" draggable="true" data-type="start_chute">
+              <span class="token-icon">🏁</span> Start Gate (Chute)
+            </div>
+            <div class="editor-token" draggable="true" data-type="finish_line">
+              <span class="token-icon">🏁</span> Finish Line (Lap)
+            </div>
+            <div class="editor-token" draggable="true" data-type="kicker">
+              <span class="token-icon">🔺</span> Kicker Ramp
+            </div>
+            <div class="editor-token" draggable="true" data-type="tabletop">
+              <span class="token-icon">🟧</span> Tabletop Jump
+            </div>
+            <div class="editor-token" draggable="true" data-type="berm">
+              <span class="token-icon">🌊</span> Banked Berm
+            </div>
+            <div class="editor-token" draggable="true" data-type="drop">
+              <span class="token-icon">🔻</span> Drop Feature
+            </div>
+          </div>
+        </div>
+
+        <!-- Track Visual Settings -->
+        <div class="editor-panel">
+          <h3 class="panel-title">⚙️ Track Settings</h3>
+          <div class="input-field-group">
+            <label for="inputTrackWidth">Default Width: <span id="lblTrackWidth">5.0m</span></label>
+            <input type="range" id="inputTrackWidth" min="2" max="12" step="0.5" value="5.0" style="width: 100%; accent-color: #00ffff;" />
+          </div>
+          <div class="checkbox-row" style="margin-top: 8px;">
+            <label>
+              <input type="checkbox" id="chkShowRibbon" checked /> Show Track Ribbon Width
+            </label>
+          </div>
+          <div class="checkbox-row">
+            <label>
+              <input type="checkbox" id="chkShowLabels" checked /> Show Elevation Labels
+            </label>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Canvas Area with HUD & Overlays -->
+      <div class="editor-canvas-wrapper" id="editorCanvasWrapper">
+        <canvas id="trackEditorCanvas"></canvas>
+
+        <!-- Floating HUD Pill -->
+        <div class="editor-canvas-hud">
+          <div class="hud-item"><span class="hud-label">Nodes:</span> <span class="hud-val" id="hudNodeCount">0</span></div>
+          <div class="hud-divider"></div>
+          <div class="hud-item"><span class="hud-label">Length:</span> <span class="hud-val" id="hudLength">0.0m</span></div>
+          <div class="hud-divider"></div>
+          <div class="hud-item"><span class="hud-label">Loop:</span> <span class="hud-val" id="hudLoopStatus">Open</span></div>
+          <div class="hud-divider"></div>
+          <div class="hud-item"><span class="hud-label">Zoom:</span> <span class="hud-val" id="hudZoom">100%</span></div>
+        </div>
+
+        <!-- Floating Navigation Tip Bar -->
+        <div class="editor-canvas-tips">
+          <span>💡 <strong>Click</strong> to place spline points • <strong>Drag</strong> to adjust • <strong>Right-click</strong> node to delete • <strong>Scroll</strong> to zoom • <strong>Space+Drag / Right-drag</strong> to pan</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Export Modal -->
+  <div class="editor-modal-overlay" id="editorExportModal" style="display: none;">
+    <div class="editor-modal-card">
+      <div class="editor-modal-header">
+        <div>
+          <h3>Export Track Outline JSON</h3>
+          <p class="tool-desc">Provide this data to Antigravity or save it locally to update the track outline.</p>
+        </div>
+        <button type="button" class="editor-modal-close" id="btnCloseExportModal">✕</button>
+      </div>
+      <div class="editor-modal-body">
+        <textarea id="txtExportJSON" class="editor-json-textarea" readonly></textarea>
+      </div>
+      <div class="editor-modal-footer">
+        <button type="button" class="editor-action-btn secondary" id="btnCopyExportJSON">
+          📋 Copy to Clipboard
+        </button>
+        <button type="button" class="editor-action-btn success" id="btnDownloadExportJSON">
+          ⬇️ Download track_outline.json
+        </button>
+        <button type="button" class="editor-action-btn" id="btnCloseExportModal2">
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import Modal -->
+  <div class="editor-modal-overlay" id="editorImportModal" style="display: none;">
+    <div class="editor-modal-card">
+      <div class="editor-modal-header">
+        <div>
+          <h3>Import Track Outline JSON</h3>
+          <p class="tool-desc">Upload a track JSON file or paste exported JSON data below to load the spline.</p>
+        </div>
+        <button type="button" class="editor-modal-close" id="btnCloseImportModal">✕</button>
+      </div>
+      <div class="editor-modal-body">
+        <div class="file-drop-area" id="fileDropArea">
+          <input type="file" id="importFileInput" accept=".json,application/json" style="display: none;" />
+          <button type="button" class="editor-primary-btn" id="btnChooseFile">📂 Choose .json File</button>
+          <span style="color: #94a3b8; font-size: 0.85rem; margin-top: 6px;">or paste JSON text below:</span>
+        </div>
+        <textarea id="txtImportJSON" class="editor-json-textarea" placeholder="Paste trackData JSON here..."></textarea>
+      </div>
+      <div class="editor-modal-footer">
+        <button type="button" class="editor-action-btn" id="btnCloseImportModal2">Cancel</button>
+        <button type="button" class="editor-action-btn success" id="btnConfirmImport">
+          🚀 Load Spline Track
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Join & Board Customization Modal (.IO Drop-in, hidden by default for instant start) -->
+  <div class="exp9-join-modal-overlay hidden" id="joinModal" style="display: none;">
     <div class="exp9-join-card">
       <div class="exp9-join-brand">
         <div class="exp9-join-badge">⚡ Real-time Multiplayer PEV Game</div>
@@ -302,7 +562,9 @@
   </div>
 
   <!-- Game Engines -->
-  <script src="js/mapLoader.js"></script>
+  <script src="js/trackBuilder.js"></script>
+  <script src="js/trackData_hollisterHills.js"></script>
+  <script src="js/trackEditor.js"></script>
   <script src="js/game.js"></script>
   <script src="js/multiplayer.js"></script>
 </body>

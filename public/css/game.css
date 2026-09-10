@@ -1728,3 +1728,651 @@ body.exp9-standalone-page .exp9-hud-layer {
     display: none;
   }
 }
+
+/* ========================================================================= */
+/* Dev Screen & 2D Track Editor Styles */
+/* ========================================================================= */
+
+.exp9-dev-modal-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(10, 15, 29, 0.95);
+  backdrop-filter: blur(20px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.exp9-dev-card {
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 24px;
+  padding: 40px;
+  width: 400px;
+  text-align: center;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+/* ==========================================================================
+   RFTR Style Spline Studio (2D Track Designer)
+   ========================================================================== */
+
+.exp9-track-editor-container {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: #080d1a;
+  z-index: 10001; /* Above dev screen */
+  display: flex;
+  flex-direction: column;
+  color: #f1f5f9;
+  font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  user-select: none;
+  overflow: hidden;
+}
+
+/* Studio Header */
+.editor-header {
+  height: 64px;
+  background: rgba(15, 23, 42, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  gap: 16px;
+  z-index: 10;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.editor-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.editor-logo-icon {
+  font-size: 1.8rem;
+  color: #00ffff;
+  filter: drop-shadow(0 0 8px rgba(0, 255, 255, 0.5));
+}
+
+.editor-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin: 0;
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor-subtitle {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Studio Toolbar */
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.editor-btn-group {
+  display: flex;
+  align-items: center;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 3px;
+}
+
+.editor-tool-btn, .editor-action-btn {
+  background: transparent;
+  border: none;
+  color: #cbd5e1;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+}
+
+.editor-tool-btn:hover, .editor-action-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.editor-tool-btn.active {
+  background: linear-gradient(135deg, #00ffff 0%, #0284c7 100%);
+  color: #041226;
+  font-weight: 700;
+  box-shadow: 0 0 12px rgba(0, 255, 255, 0.4);
+}
+
+.editor-action-btn.primary {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.3);
+}
+.editor-action-btn.primary:hover {
+  filter: brightness(1.15);
+}
+
+.editor-action-btn.success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.3);
+}
+.editor-action-btn.success:hover {
+  filter: brightness(1.15);
+}
+
+.editor-action-btn.secondary {
+  background: rgba(51, 65, 85, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #e2e8f0;
+}
+
+.editor-action-btn.danger:hover {
+  background: rgba(239, 35, 60, 0.2);
+  color: #ff6b6b;
+  border-color: rgba(239, 35, 60, 0.4);
+}
+
+.editor-action-btn.close {
+  padding: 8px 12px;
+  background: rgba(239, 35, 60, 0.15);
+  color: #ff6b6b;
+  font-size: 1rem;
+}
+.editor-action-btn.close:hover {
+  background: #ef233c;
+  color: #fff;
+}
+
+.editor-divider {
+  width: 1px;
+  height: 26px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.editor-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Workspace Layout */
+.editor-main-workspace {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Left Sidebar */
+.editor-sidebar {
+  width: 330px;
+  background: rgba(15, 23, 42, 0.96);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  box-shadow: 6px 0 25px rgba(0, 0, 0, 0.3);
+  z-index: 5;
+}
+
+.editor-panel {
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.panel-title {
+  color: #f8fafc;
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0 0 10px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.panel-empty-text {
+  font-size: 0.82rem;
+  color: #64748b;
+  font-style: italic;
+  padding: 8px 0;
+}
+
+.panel-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+}
+
+.panel-row .label {
+  color: #94a3b8;
+}
+
+.panel-row .value {
+  color: #38bdf8;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+}
+
+.input-field-group {
+  margin-bottom: 10px;
+}
+
+.input-field-group label {
+  display: block;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.flex-input {
+  display: flex;
+  gap: 6px;
+}
+
+.flex-input input {
+  flex: 1;
+}
+
+.editor-mini-btn {
+  background: #334155;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #e2e8f0;
+  border-radius: 8px;
+  padding: 0 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.editor-mini-btn:hover {
+  background: #00ffff;
+  color: #041226;
+}
+
+.editor-btn-delete-node {
+  width: 100%;
+  background: rgba(239, 35, 60, 0.15);
+  border: 1px solid rgba(239, 35, 60, 0.3);
+  color: #ff6b6b;
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 4px;
+  transition: all 0.15s;
+}
+.editor-btn-delete-node:hover {
+  background: #ef233c;
+  color: #fff;
+}
+
+.editor-primary-btn {
+  width: 100%;
+  background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+  border: none;
+  color: #fff;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.editor-primary-btn:hover {
+  filter: brightness(1.15);
+}
+
+.features-palette {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.editor-token {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #cbd5e1;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.15s;
+}
+.editor-token:hover {
+  background: rgba(51, 65, 85, 0.9);
+  border-color: #00ffff;
+  color: #fff;
+}
+
+.checkbox-row label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: #cbd5e1;
+  cursor: pointer;
+}
+
+/* Canvas Area */
+.editor-canvas-wrapper {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #0b1120;
+}
+
+#trackEditorCanvas {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+}
+
+/* Canvas Floating HUD */
+.editor-canvas-hud {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  z-index: 6;
+}
+
+.hud-item {
+  font-size: 0.82rem;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.hud-label {
+  color: #94a3b8;
+}
+
+.hud-val {
+  color: #00ffff;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+}
+
+.hud-divider {
+  width: 1px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Canvas Floating Tips */
+.editor-canvas-tips {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 8px 18px;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  pointer-events: none;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  z-index: 6;
+  white-space: nowrap;
+}
+
+.editor-canvas-tips strong {
+  color: #38bdf8;
+}
+
+/* Modals */
+.editor-modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(3, 7, 18, 0.8);
+  backdrop-filter: blur(8px);
+  z-index: 20000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.editor-modal-card {
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  width: 600px;
+  max-width: 90vw;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.editor-modal-header {
+  padding: 18px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.editor-modal-header h3 {
+  margin: 0 0 4px 0;
+  font-size: 1.15rem;
+  color: #f8fafc;
+}
+
+.editor-modal-close {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 4px;
+}
+.editor-modal-close:hover {
+  color: #fff;
+}
+
+.editor-modal-body {
+  padding: 20px 24px;
+}
+
+.editor-json-textarea {
+  width: 100%;
+  height: 260px;
+  background: #020617;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: #38bdf8;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  padding: 12px;
+  box-sizing: border-box;
+  resize: vertical;
+  outline: none;
+}
+.editor-json-textarea:focus {
+  border-color: #00ffff;
+}
+
+.editor-modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.file-drop-area {
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ==========================================================================
+   Experience 9: Track Mode & Ghost Racing HUD
+   ========================================================================== */
+.exp9-track-racing-hud {
+  position: absolute;
+  top: 76px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 18px;
+  background: rgba(10, 14, 23, 0.88);
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 9999px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 20px rgba(0, 229, 255, 0.15);
+  z-index: 40;
+  pointer-events: none;
+  font-family: var(--font-sans);
+  animation: hudSlideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes hudSlideDown {
+  from { opacity: 0; transform: translate(-50%, -10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.exp9-track-hud-pill {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: rgba(255, 102, 0, 0.2);
+  color: #ff8800;
+  border: 1px solid rgba(255, 102, 0, 0.45);
+}
+.exp9-track-hud-pill.racing {
+  background: rgba(0, 229, 255, 0.2);
+  color: #00e5ff;
+  border-color: rgba(0, 229, 255, 0.5);
+  animation: pulseGlow 1.5s infinite alternate;
+}
+.exp9-track-hud-pill.finished {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+  border-color: rgba(34, 197, 94, 0.5);
+}
+
+@keyframes pulseGlow {
+  from { box-shadow: 0 0 4px rgba(0, 229, 255, 0.2); }
+  to { box-shadow: 0 0 14px rgba(0, 229, 255, 0.5); }
+}
+
+.exp9-track-hud-main {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.exp9-track-hud-timer-block,
+.exp9-track-hud-split-block,
+.exp9-track-hud-target-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.exp9-track-hud-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #8892b0;
+  margin-bottom: 1px;
+}
+
+.exp9-track-hud-timer {
+  font-family: var(--font-mono);
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.04em;
+  min-width: 92px;
+  text-align: center;
+}
+
+.exp9-track-hud-split {
+  font-family: var(--font-mono);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  min-width: 70px;
+  text-align: center;
+}
+.exp9-track-hud-split.ahead {
+  color: #22c55e;
+}
+.exp9-track-hud-split.behind {
+  color: #ef4444;
+}
+.exp9-track-hud-split.neutral {
+  color: #94a3b8;
+}
+
+.exp9-track-hud-target {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #00e5ff;
+}
+
+.exp9-track-hud-reset-hint {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #64748b;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  padding-left: 12px;
+}
+
+
