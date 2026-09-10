@@ -34,6 +34,14 @@
     selectedNodes: new Set(),
     hoveredSplineInsert: null, // { worldX, worldZ, insertIdx }
     isPickingLoopTarget: false,
+
+    // Feature Dragging & Reference Map
+    isDraggingFeature: false,
+    dragFeatureIndex: -1,
+    hoveredFeatureIndex: -1,
+    selectedFeatureIndex: -1,
+    refImg: null,
+    showReferenceMap: false,
     
     // Track Definition
     trackData: {
@@ -84,15 +92,37 @@
       });
     }
 
+    window.openTrackStudio = function () {
+      const cont = document.getElementById('trackEditorContainer');
+      if (cont) {
+        cont.style.display = 'flex';
+        initEditor();
+      }
+    };
+
+    window.closeTrackStudio = function () {
+      const cont = document.getElementById('trackEditorContainer');
+      if (cont) cont.style.display = 'none';
+    };
+
+    window.toggleTrackStudio = function () {
+      const cont = document.getElementById('trackEditorContainer');
+      if (cont) {
+        const isOpen = (cont.style.display === 'flex');
+        if (isOpen) {
+          window.closeTrackStudio();
+        } else {
+          window.openTrackStudio();
+        }
+      }
+    };
+
     const btnOpenTrackStudio = document.getElementById('btnOpenTrackStudio');
     if (btnOpenTrackStudio) {
-      btnOpenTrackStudio.addEventListener('click', () => {
-        const cont = document.getElementById('trackEditorContainer');
-        if (cont) {
-          const isOpen = cont.style.display === 'flex';
-          cont.style.display = isOpen ? 'none' : 'flex';
-          if (!isOpen) initEditor();
-        }
+      btnOpenTrackStudio.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        window.toggleTrackStudio();
       });
     }
 
@@ -249,13 +279,34 @@
       window.addEventListener('resize', resize);
       resize();
 
-      // Load Satellite BG Image
+      // Load Clean Satellite BG Image
       editorState.img = new Image();
       editorState.img.src = 'images/rftr_img.png';
       editorState.img.onload = () => {
         resetView();
         draw();
       };
+
+      // Load Marked Reference Map Image (Pins & Race Path from image.png)
+      editorState.refImg = new Image();
+      editorState.refImg.src = 'images/rftr_marked_map.png';
+      editorState.refImg.onload = () => {
+        draw();
+      };
+
+      // Setup Reference Map Toggle Button
+      const btnToggleRefMap = document.getElementById('btnToggleRefMap');
+      const lblRefMap = document.getElementById('lblRefMap');
+      if (btnToggleRefMap) {
+        btnToggleRefMap.onclick = () => {
+          editorState.showReferenceMap = !editorState.showReferenceMap;
+          if (lblRefMap) {
+            lblRefMap.textContent = editorState.showReferenceMap ? 'Ref Map: ON' : 'Ref Map: Off';
+          }
+          btnToggleRefMap.classList.toggle('active', editorState.showReferenceMap);
+          draw();
+        };
+      }
 
       // Check localStorage for saved draft first
       try {
@@ -276,6 +327,24 @@
           window.TRACK_DATA_HOLLISTER && window.TRACK_DATA_HOLLISTER.nodes && window.TRACK_DATA_HOLLISTER.nodes.length > 0) {
         editorState.trackData = JSON.parse(JSON.stringify(window.TRACK_DATA_HOLLISTER));
       }
+
+      // Ensure numbered RFTR features from TRACK_DATA_HOLLISTER are loaded
+      if (window.TRACK_DATA_HOLLISTER && window.TRACK_DATA_HOLLISTER.features) {
+        if (!editorState.trackData.features || editorState.trackData.features.length === 0) {
+          editorState.trackData.features = JSON.parse(JSON.stringify(window.TRACK_DATA_HOLLISTER.features));
+        } else {
+          // Merge in any missing numbered features
+          window.TRACK_DATA_HOLLISTER.features.forEach(feat => {
+            if (feat.number !== undefined) {
+              const exists = editorState.trackData.features.some(f => f.number === feat.number);
+              if (!exists) {
+                editorState.trackData.features.push(JSON.parse(JSON.stringify(feat)));
+              }
+            }
+          });
+        }
+      }
+      updateNumberedFeaturesUI();
 
       setupCanvasEvents(canvas);
 
@@ -303,6 +372,124 @@
   // =========================================================================
   // Canvas Mouse & Gesture Interaction
   // =========================================================================
+
+  function findFeatureAtScreen(screenX, screenY) {
+    const features = editorState.trackData.features || [];
+    const nodes = editorState.trackData.nodes;
+    if (!nodes || nodes.length === 0) return -1;
+
+    for (let i = 0; i < features.length; i++) {
+      const f = features[i];
+      let wx, wz;
+      if (f.x !== undefined && f.z !== undefined) {
+        wx = f.x;
+        wz = f.z;
+      } else if (f.nodeIndex !== undefined && nodes[f.nodeIndex]) {
+        wx = nodes[f.nodeIndex].x;
+        wz = nodes[f.nodeIndex].z;
+      } else if (f.t !== undefined) {
+        const idx = Math.floor(f.t * nodes.length) % nodes.length;
+        wx = nodes[idx].x;
+        wz = nodes[idx].z;
+      } else {
+        continue;
+      }
+
+      const { screenX: sx, screenY: sy } = worldToScreen(wx, wz);
+      // Test distance to pin center
+      const dist = Math.hypot(screenX - sx, screenY - (sy - 14));
+      if (dist <= 22) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  function updateNumberedFeaturesUI() {
+    const listEl = document.getElementById('numberedFeaturesList');
+    if (!listEl) return;
+
+    const features = editorState.trackData.features || [];
+    const numbered = features.filter(f => f.number !== undefined);
+
+    if (numbered.length === 0) {
+      listEl.innerHTML = '<div style="font-size: 0.8rem; color: #64748b;">No numbered features on track.</div>';
+      return;
+    }
+
+    listEl.innerHTML = '';
+    numbered.sort((a, b) => a.number - b.number).forEach(f => {
+      const idx = features.indexOf(f);
+      const isSelected = (editorState.selectedFeatureIndex === idx);
+
+      const card = document.createElement('div');
+      card.className = 'numbered-feature-card' + (isSelected ? ' active' : '');
+
+      const badge = document.createElement('div');
+      badge.className = 'feature-num-badge';
+      badge.textContent = f.number;
+      card.appendChild(badge);
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'feature-name-edit';
+      input.value = f.name || ('Feature ' + f.number);
+      input.placeholder = 'Name feature...';
+      input.addEventListener('input', (e) => {
+        f.name = e.target.value;
+        syncToGlobalTrackData();
+        draw();
+      });
+      card.appendChild(input);
+
+      const tag = document.createElement('span');
+      tag.className = 'feature-node-tag';
+      tag.textContent = 'Node #' + ((f.nodeIndex !== undefined ? f.nodeIndex : 0) + 1);
+      card.appendChild(tag);
+
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'feature-del-btn';
+      delBtn.title = 'Delete feature';
+      delBtn.textContent = '🗑️';
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        pushUndoState();
+        editorState.trackData.features.splice(idx, 1);
+        // Renumber remaining rftr_feature entries sequentially
+        let numCounter = 1;
+        editorState.trackData.features.forEach(feat => {
+          if (feat.number !== undefined || feat.type === 'rftr_feature') {
+            const oldDefaultName = 'Feature ' + feat.number;
+            feat.number = numCounter;
+            if (!feat.name || feat.name.startsWith('Feature ')) {
+              feat.name = 'Feature ' + numCounter;
+            }
+            numCounter++;
+          }
+        });
+        if (editorState.selectedFeatureIndex === idx) {
+          editorState.selectedFeatureIndex = -1;
+        } else if (editorState.selectedFeatureIndex > idx) {
+          editorState.selectedFeatureIndex--;
+        }
+        syncToGlobalTrackData();
+        updateNumberedFeaturesUI();
+        draw();
+      });
+      card.appendChild(delBtn);
+
+      card.addEventListener('click', (e) => {
+        if (e.target === input || e.target === delBtn) return;
+        editorState.selectedFeatureIndex = idx;
+        editorState.selectedNodeIndex = -1;
+        updateNumberedFeaturesUI();
+        draw();
+      });
+
+      listEl.appendChild(card);
+    });
+  }
 
   function setupCanvasEvents(canvas) {
     // Wheel Zoom
@@ -378,6 +565,20 @@
 
       // Left Click Handling
       if (e.button === 0) {
+        // 0. Check if clicked on a Feature Pin (Numbered or Gate) -> Drag Feature
+        const hitFeature = findFeatureAtScreen(mouseX, mouseY);
+        if (hitFeature !== -1) {
+          editorState.isDraggingFeature = true;
+          editorState.dragFeatureIndex = hitFeature;
+          editorState.selectedFeatureIndex = hitFeature;
+          editorState.selectedNodeIndex = -1;
+          editorState.selectedNodes.clear();
+          pushHistory();
+          updateNumberedFeaturesUI();
+          draw();
+          return;
+        }
+
         // 1. Clicked on an existing node
         if (hitNode !== -1) {
           if (e.shiftKey) {
@@ -487,6 +688,34 @@
         return;
       }
 
+      // Handle Dragging Feature Pin along track
+      if (editorState.isDraggingFeature && editorState.dragFeatureIndex !== -1) {
+        const { worldX, worldZ } = screenToWorld(mouseX, mouseY);
+        const nodes = editorState.trackData.nodes;
+        if (nodes && nodes.length > 0) {
+          let minDist = Infinity;
+          let minIdx = 0;
+          for (let i = 0; i < nodes.length; i++) {
+            const d = Math.hypot(nodes[i].x - worldX, nodes[i].z - worldZ);
+            if (d < minDist) {
+              minDist = d;
+              minIdx = i;
+            }
+          }
+          const f = editorState.trackData.features[editorState.dragFeatureIndex];
+          if (f) {
+            f.nodeIndex = minIdx;
+            f.x = nodes[minIdx].x;
+            f.z = nodes[minIdx].z;
+            f.y = nodes[minIdx].y !== undefined ? nodes[minIdx].y : 1.0;
+            f.t = Math.round((minIdx / nodes.length) * 100) / 100;
+            updateNumberedFeaturesUI();
+            draw();
+          }
+        }
+        return;
+      }
+
       // Handle Dragging Node
       if (editorState.isDraggingNode && editorState.dragNodeIndex !== -1) {
         const { worldX, worldZ } = screenToWorld(mouseX, mouseY);
@@ -502,15 +731,30 @@
       }
 
       // Hover Detection
+      const hitFeat = findFeatureAtScreen(mouseX, mouseY);
+      if (hitFeat !== editorState.hoveredFeatureIndex) {
+        editorState.hoveredFeatureIndex = hitFeat;
+        draw();
+      }
+
       const hitNode = findNodeAtScreen(mouseX, mouseY);
       if (hitNode !== editorState.hoveredNodeIndex) {
         editorState.hoveredNodeIndex = hitNode;
-        if (editorState.isPickingLoopTarget) {
-          canvas.style.cursor = hitNode !== -1 ? 'pointer' : 'crosshair';
-        } else {
-          canvas.style.cursor = hitNode !== -1 ? 'pointer' : (editorState.currentTool === 'draw' ? 'crosshair' : 'default');
-        }
         draw();
+      }
+
+      if (hitFeat !== -1) {
+        canvas.style.cursor = 'grab';
+      } else if (hitNode !== -1) {
+        canvas.style.cursor = 'pointer';
+      } else if (editorState.isPickingLoopTarget) {
+        canvas.style.cursor = 'crosshair';
+      } else if (editorState.currentTool === 'draw') {
+        canvas.style.cursor = 'crosshair';
+      } else if (editorState.currentTool === 'insert') {
+        canvas.style.cursor = 'cell';
+      } else {
+        canvas.style.cursor = 'default';
       }
 
       // Insert Mode Spline Hover Projection
@@ -526,6 +770,11 @@
       if (editorState.isPanning) {
         editorState.isPanning = false;
         canvas.style.cursor = editorState.currentTool === 'draw' ? 'crosshair' : 'default';
+      }
+      if (editorState.isDraggingFeature) {
+        editorState.isDraggingFeature = false;
+        editorState.dragFeatureIndex = -1;
+        syncToGlobalTrackData();
       }
       editorState.isDraggingNode = false;
       editorState.dragNodeIndex = -1;
@@ -1080,17 +1329,21 @@
 
     ctx.clearRect(0, 0, editorState.width, editorState.height);
 
-    // 1. Draw Satellite Map Background
-    if (editorState.img && editorState.img.complete) {
-      const imgW = editorState.img.width;
-      const imgH = editorState.img.height;
+    // 1. Draw Satellite Map Background (Clean or Marked Reference Map from image.png)
+    const activeImg = (editorState.showReferenceMap && editorState.refImg && editorState.refImg.complete)
+      ? editorState.refImg
+      : editorState.img;
+
+    if (activeImg && activeImg.complete) {
+      const imgW = activeImg.width;
+      const imgH = activeImg.height;
       const drawW = imgW * 1.5 * (editorState.scale / 4.0);
       const drawH = imgH * 1.5 * (editorState.scale / 4.0);
 
       ctx.save();
-      ctx.globalAlpha = 0.85;
+      ctx.globalAlpha = editorState.showReferenceMap ? 0.95 : 0.85;
       ctx.drawImage(
-        editorState.img,
+        activeImg,
         editorState.offsetX - drawW / 2,
         editorState.offsetY - drawH / 2,
         drawW,
@@ -1216,34 +1469,110 @@
       }
     }
 
-    // 6. Draw Features
+    // 6. Draw Features & Numbered RFTR Pins
     const features = editorState.trackData.features || [];
     for (let i = 0; i < features.length; i++) {
       const f = features[i];
-      const idx = Math.floor(f.t * nodes.length) % nodes.length;
-      if (nodes[idx]) {
-        const { screenX, screenY } = worldToScreen(nodes[idx].x, nodes[idx].z);
+      let wx, wz;
+      if (f.x !== undefined && f.z !== undefined) {
+        wx = f.x;
+        wz = f.z;
+      } else if (f.nodeIndex !== undefined && nodes[f.nodeIndex]) {
+        wx = nodes[f.nodeIndex].x;
+        wz = nodes[f.nodeIndex].z;
+      } else if (f.t !== undefined) {
+        const idx = Math.floor(f.t * nodes.length) % nodes.length;
+        wx = nodes[idx].x;
+        wz = nodes[idx].z;
+      } else {
+        continue;
+      }
 
+      const { screenX, screenY } = worldToScreen(wx, wz);
+      const isSelected = (editorState.selectedFeatureIndex === i);
+      const isHovered = (editorState.hoveredFeatureIndex === i);
+      const isDragging = (editorState.isDraggingFeature && editorState.dragFeatureIndex === i);
+
+      if (f.number !== undefined || f.type === 'rftr_feature') {
+        // High-vis Numbered Blue Feature Pin matching RFTR image.png
+        ctx.save();
+
+        // Glow halo if selected / hovered / dragging
+        if (isSelected || isHovered || isDragging) {
+          ctx.beginPath();
+          ctx.arc(screenX, screenY - 14, 22, 0, Math.PI * 2);
+          ctx.fillStyle = isSelected ? 'rgba(0, 255, 255, 0.4)' : 'rgba(255, 255, 255, 0.3)';
+          ctx.fill();
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = isSelected ? '#00ffff' : '#ffffff';
+          ctx.stroke();
+        }
+
+        // Pointer triangle extending down to track ribbon
         ctx.beginPath();
-        ctx.rect(screenX - 10, screenY - 10, 20, 20);
+        ctx.moveTo(screenX - 7, screenY - 7);
+        ctx.lineTo(screenX, screenY + 2);
+        ctx.lineTo(screenX + 7, screenY - 7);
+        ctx.closePath();
+        ctx.fillStyle = '#0284c7';
+        ctx.fill();
 
-        if (f.type === 'start_chute' || f.type === 'start_finish') {
-          ctx.fillStyle = '#ffffff';
-          ctx.strokeStyle = '#000000';
-        } else if (f.type === 'finish_line') {
+        // Circular Badge Disc
+        ctx.beginPath();
+        ctx.arc(screenX, screenY - 14, 15, 0, Math.PI * 2);
+        ctx.fillStyle = '#0284c7';
+        ctx.fill();
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = isSelected ? '#00ffff' : '#ffffff';
+        ctx.stroke();
+
+        // Bold white number text
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 15px "Space Grotesk", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(f.number !== undefined ? String(f.number) : 'F', screenX, screenY - 13);
+
+        // Feature Name Capsule Label (Above Pin)
+        const featName = (f.name || ('Feature ' + (f.number || (i + 1)))).toUpperCase();
+        ctx.font = 'bold 10px "Space Grotesk", sans-serif';
+        const textW = ctx.measureText(featName).width;
+        const pillW = textW + 14;
+        const pillH = 18;
+        const pillX = screenX - pillW / 2;
+        const pillY = screenY - 42;
+
+        ctx.fillStyle = isSelected ? 'rgba(2, 132, 199, 0.95)' : 'rgba(15, 23, 42, 0.88)';
+        ctx.beginPath();
+        if (ctx.roundRect) {
+          ctx.roundRect(pillX, pillY, pillW, pillH, 4);
+        } else {
+          ctx.rect(pillX, pillY, pillW, pillH);
+        }
+        ctx.fill();
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = isSelected ? '#00ffff' : 'rgba(255, 255, 255, 0.25)';
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(featName, screenX, pillY + 9);
+
+        ctx.restore();
+      } else {
+        // Other feature gates (start chute, finish line, kickers)
+        ctx.beginPath();
+        ctx.rect(screenX - 12, screenY - 12, 24, 24);
+
+        if (f.type.includes('start')) {
+          ctx.fillStyle = '#10b981';
+          ctx.strokeStyle = '#ffffff';
+        } else if (f.type.includes('finish')) {
           ctx.fillStyle = '#f59e0b';
-          ctx.strokeStyle = '#000000';
-        } else if (f.type === 'tabletop') {
-          ctx.fillStyle = 'rgba(255, 136, 0, 0.8)';
-          ctx.strokeStyle = '#ff8800';
-        } else if (f.type === 'kicker') {
-          ctx.fillStyle = '#ec4899';
           ctx.strokeStyle = '#ffffff';
-        } else if (f.type === 'berm') {
-          ctx.fillStyle = '#06b6d4';
-          ctx.strokeStyle = '#ffffff';
-        } else if (f.type === 'drop') {
-          ctx.fillStyle = '#ef233c';
+        } else {
+          ctx.fillStyle = '#8b5cf6';
           ctx.strokeStyle = '#ffffff';
         }
 
@@ -1251,9 +1580,10 @@
         ctx.fill();
         ctx.stroke();
 
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 9px Space Grotesk, sans-serif';
-        ctx.fillText(f.type.replace('_', ' ').toUpperCase(), screenX + 13, screenY + 4);
+        ctx.textAlign = 'left';
+        ctx.fillText((f.name || f.type).toUpperCase(), screenX + 16, screenY + 4);
       }
     }
   }
@@ -1449,6 +1779,9 @@
       alert(`Failed to parse JSON: ${err.message}`);
     }
   }
+
+  window.initEditor = initEditor;
+  window.updateNumberedFeaturesUI = updateNumberedFeaturesUI;
 
   function syncToGlobalTrackData() {
     window.TRACK_DATA_HOLLISTER = JSON.parse(JSON.stringify(editorState.trackData));

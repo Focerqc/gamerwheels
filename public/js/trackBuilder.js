@@ -40,6 +40,8 @@
     _trackGroup: null,
     _gates: null,
     _circuitStartIndex: 0,
+    _dropGate: null,
+    _audioCtx: null,
 
     // -----------------------------------------------------------------------
     // Public API
@@ -183,6 +185,38 @@
     },
 
     /**
+     * Trigger the start drop gate to snap down flat to the ground.
+     */
+    triggerDropGate: function () {
+      if (!this._dropGate) return;
+      this._dropGate.triggerDrop();
+    },
+
+    /**
+     * Reset the start drop gate to upright locked position.
+     */
+    resetDropGate: function () {
+      if (!this._dropGate) return;
+      this._dropGate.resetGate();
+    },
+
+    /**
+     * Get drop gate state ('up' | 'dropping' | 'down' | 'resetting').
+     */
+    getDropGateState: function () {
+      return this._dropGate ? this._dropGate.state : 'up';
+    },
+
+    /**
+     * Update drop gate animation and auto-trigger proximity check.
+     * Drops automatically when whoever drives through, and resets itself in 10 seconds.
+     */
+    updateDropGate: function (dt, player) {
+      if (!this._dropGate) return;
+      this._dropGate.update(dt, player);
+    },
+
+    /**
      * Dispose all track geometry and references.
      */
     dispose: function () {
@@ -217,6 +251,7 @@
       this._trackGroup = null;
       this._gates = null;
       this._circuitStartIndex = 0;
+      this._dropGate = null;
     },
 
     // -----------------------------------------------------------------------
@@ -625,6 +660,9 @@
         }
 
         switch (feat.type) {
+          case 'rftr_feature':
+            this._buildRFTRFeatureMarker(feat, pos, tangent, rotation);
+            break;
           case 'tabletop':
             this._buildTabletop(feat, pos, tangent, rotation, registerFn);
             break;
@@ -980,9 +1018,72 @@
       this._featureMeshes.push(mesh);
     },
 
+    _buildRFTRFeatureMarker: function (feat, pos, tangent, rotation) {
+      var markerGroup = new THREE.Group();
+      markerGroup.position.set(pos.x, pos.y, pos.z);
+      markerGroup.rotation.y = rotation;
+
+      // Track verge lateral offset: place marker on the side of track
+      var sideOffset = 4.0;
+      var postGeo = new THREE.CylinderGeometry(0.04, 0.04, 3.2, 8);
+      var postMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.5, metalness: 0.8 });
+      var post = new THREE.Mesh(postGeo, postMat);
+      post.position.set(sideOffset, 1.6, 0);
+      markerGroup.add(post);
+
+      // Blue numbered badge disc
+      var discGeo = new THREE.CylinderGeometry(0.48, 0.48, 0.06, 24);
+      discGeo.rotateX(Math.PI / 2);
+      var discMat = new THREE.MeshStandardMaterial({
+        color: 0x0284c7,
+        roughness: 0.3,
+        metalness: 0.6,
+        emissive: 0x0369a1,
+        emissiveIntensity: 0.4
+      });
+      var disc = new THREE.Mesh(discGeo, discMat);
+      disc.position.set(sideOffset, 3.0, 0);
+      markerGroup.add(disc);
+
+      // Canvas for feature number & label
+      var canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 256;
+      var ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#0284c7';
+      ctx.beginPath();
+      ctx.arc(128, 128, 120, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.lineWidth = 12;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 120px "Segoe UI", Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(feat.number !== undefined ? String(feat.number) : 'F', 128, 128);
+
+      var numTex = new THREE.CanvasTexture(canvas);
+      var numGeo = new THREE.PlaneGeometry(0.8, 0.8);
+      var numMat = new THREE.MeshBasicMaterial({ map: numTex, transparent: true });
+      var numMesh1 = new THREE.Mesh(numGeo, numMat);
+      numMesh1.position.set(sideOffset, 3.0, 0.035);
+      markerGroup.add(numMesh1);
+
+      var numMesh2 = new THREE.Mesh(numGeo, numMat);
+      numMesh2.position.set(sideOffset, 3.0, -0.035);
+      numMesh2.rotation.y = Math.PI;
+      markerGroup.add(numMesh2);
+
+      this._trackGroup.add(markerGroup);
+      this._featureMeshes.push(markerGroup);
+    },
+
     _buildStartChuteGate: function (feat, pos, tangent, rotation) {
+      var self = this;
       var width = (feat.width || this._trackData.width || 5.0) + 1.2;
-      var gateHeight = 4.2;
+      var gateHeight = 4.4;
       var halfW = width / 2;
 
       var gateGroup = new THREE.Group();
@@ -990,122 +1091,151 @@
       gateGroup.rotation.y = rotation;
 
       var postMat = new THREE.MeshStandardMaterial({
-        color: 0x222225,
-        roughness: 0.4,
+        color: 0x24272c,
+        roughness: 0.45,
         metalness: 0.8,
       });
 
-      var accentMat = new THREE.MeshStandardMaterial({
+      var orangeAccentMat = new THREE.MeshStandardMaterial({
         color: 0xff6600,
         emissive: 0xff3300,
-        emissiveIntensity: 0.6,
-        roughness: 0.3,
+        emissiveIntensity: 0.5,
+        roughness: 0.35,
         metalness: 0.5,
       });
 
-      // Left post
-      var postGeo = new THREE.BoxGeometry(0.35, gateHeight, 0.35);
+      // Left tower post
+      var postGeo = new THREE.BoxGeometry(0.4, gateHeight, 0.4);
       var leftPost = new THREE.Mesh(postGeo, postMat);
       leftPost.position.set(-halfW, gateHeight / 2, 0);
       leftPost.castShadow = true;
       gateGroup.add(leftPost);
 
-      // Right post
+      // Right tower post
       var rightPost = new THREE.Mesh(postGeo, postMat);
       rightPost.position.set(halfW, gateHeight / 2, 0);
       rightPost.castShadow = true;
       gateGroup.add(rightPost);
 
+      // Concrete footing pads
+      var padGeo = new THREE.BoxGeometry(0.8, 0.25, 0.8);
+      var padMat = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.9 });
+      var leftPad = new THREE.Mesh(padGeo, padMat);
+      leftPad.position.set(-halfW, 0.125, 0);
+      gateGroup.add(leftPad);
+
+      var rightPad = new THREE.Mesh(padGeo, padMat);
+      rightPad.position.set(halfW, 0.125, 0);
+      gateGroup.add(rightPad);
+
       // Crossbar truss
-      var crossGeo = new THREE.BoxGeometry(width + 0.4, 0.45, 0.45);
+      var crossGeo = new THREE.BoxGeometry(width + 0.6, 0.45, 0.45);
       var crossBar = new THREE.Mesh(crossGeo, postMat);
       crossBar.position.set(0, gateHeight - 0.25, 0);
       crossBar.castShadow = true;
       gateGroup.add(crossBar);
 
-      // Overhead Signboard Canvas Texture
+      // Overhead Signboard Canvas Texture (High-res 1024x128)
       var canvas = document.createElement('canvas');
-      canvas.width = 512;
+      canvas.width = 1024;
       canvas.height = 128;
       var ctx = canvas.getContext('2d');
 
-      // Sign background
-      ctx.fillStyle = '#0f1115';
-      ctx.fillRect(0, 0, 512, 128);
+      // Dark carbon background
+      ctx.fillStyle = '#0d1014';
+      ctx.fillRect(0, 0, 1024, 128);
 
       // Border glow
       ctx.strokeStyle = '#ff6600';
-      ctx.lineWidth = 8;
-      ctx.strokeRect(6, 6, 500, 116);
+      ctx.lineWidth = 10;
+      ctx.strokeRect(8, 8, 1008, 112);
 
       // Chevrons on sides
       ctx.fillStyle = '#ff8800';
-      for (var ci = 0; ci < 3; ci++) {
-        var cx1 = 25 + ci * 22;
+      for (var ci = 0; ci < 4; ci++) {
+        var cx1 = 30 + ci * 28;
         ctx.beginPath();
-        ctx.moveTo(cx1, 25);
-        ctx.lineTo(cx1 + 14, 64);
-        ctx.lineTo(cx1, 103);
-        ctx.lineTo(cx1 + 8, 103);
-        ctx.lineTo(cx1 + 22, 64);
-        ctx.lineTo(cx1 + 8, 25);
+        ctx.moveTo(cx1, 24);
+        ctx.lineTo(cx1 + 18, 64);
+        ctx.lineTo(cx1, 104);
+        ctx.lineTo(cx1 + 10, 104);
+        ctx.lineTo(cx1 + 28, 64);
+        ctx.lineTo(cx1 + 10, 24);
         ctx.fill();
 
-        var cx2 = 487 - ci * 22;
+        var cx2 = 994 - ci * 28;
         ctx.beginPath();
-        ctx.moveTo(cx2, 25);
-        ctx.lineTo(cx2 - 14, 64);
-        ctx.lineTo(cx2, 103);
-        ctx.lineTo(cx2 - 8, 103);
-        ctx.lineTo(cx2 - 22, 64);
-        ctx.lineTo(cx2 - 8, 25);
+        ctx.moveTo(cx2, 24);
+        ctx.lineTo(cx2 - 18, 64);
+        ctx.lineTo(cx2, 104);
+        ctx.lineTo(cx2 - 10, 104);
+        ctx.lineTo(cx2 - 28, 64);
+        ctx.lineTo(cx2 - 10, 24);
         ctx.fill();
       }
 
-      // Text
+      // Title & Subtext
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 36px "Segoe UI", Arial, sans-serif';
+      ctx.font = 'bold 44px "Segoe UI", Arial, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('STAGE / START CHUTE', 256, 52);
+      ctx.fillText('HOLLISTER HILLS RFTR — MASS START', 512, 48);
 
-      ctx.fillStyle = '#ff8800';
-      ctx.font = 'bold 18px "Segoe UI", Arial, sans-serif';
-      ctx.fillText('ROLL FORWARD TO LAP TIMING GATE', 256, 92);
+      ctx.fillStyle = '#00ff66';
+      ctx.font = 'bold 22px "Segoe UI", Arial, sans-serif';
+      ctx.fillText('AUTOMATIC DROP GATE • DRIVE THROUGH TO DROP (10s RESET)', 512, 92);
 
       var signTex = new THREE.CanvasTexture(canvas);
-      var signGeo = new THREE.PlaneGeometry(width * 0.85, 0.95);
-      var signMat = new THREE.MeshBasicMaterial({
-        map: signTex,
-        side: THREE.DoubleSide,
-      });
-      var signMesh = new THREE.Mesh(signGeo, signMat);
-      signMesh.position.set(0, gateHeight - 0.75, 0);
-      gateGroup.add(signMesh);
+      var signGeo = new THREE.PlaneGeometry(Math.min(width * 0.8, 16.0), 1.05);
+      // Front side facing approaching staged riders (-Z)
+      var signMatFront = new THREE.MeshBasicMaterial({ map: signTex, side: THREE.FrontSide });
+      var signMeshFront = new THREE.Mesh(signGeo, signMatFront);
+      signMeshFront.position.set(0, gateHeight - 0.78, -0.02);
+      signMeshFront.rotation.y = Math.PI; // Face staged riders without mirroring!
+      gateGroup.add(signMeshFront);
 
-      // Staging lights on crossbar
-      var lightColors = [0xff2222, 0xffaa00, 0x00ff66];
-      for (var li = 0; li < 3; li++) {
-        var lightGeo = new THREE.SphereGeometry(0.12, 12, 12);
+      // Back side facing track chute exit (+Z)
+      var signTexBack = new THREE.CanvasTexture(canvas);
+      var signMatBack = new THREE.MeshBasicMaterial({ map: signTexBack, side: THREE.FrontSide });
+      var signMeshBack = new THREE.Mesh(signGeo, signMatBack);
+      signMeshBack.position.set(0, gateHeight - 0.78, 0.02);
+      gateGroup.add(signMeshBack);
+
+      // Staging lights on crossbar (Red, Amber, Green)
+      var stagingLights = { red: [], amber: [], green: [] };
+      var lightConfigs = [
+        { type: 'red', x: -1.8, color: 0xff1111 },
+        { type: 'red', x: -1.2, color: 0xff1111 },
+        { type: 'amber', x: -0.6, color: 0xffaa00 },
+        { type: 'amber', x: 0.6, color: 0xffaa00 },
+        { type: 'green', x: 1.2, color: 0x00ff44 },
+        { type: 'green', x: 1.8, color: 0x00ff44 },
+      ];
+
+      lightConfigs.forEach(function (cfg) {
+        var lightGeo = new THREE.SphereGeometry(0.14, 12, 12);
         var lightMat = new THREE.MeshStandardMaterial({
-          color: lightColors[li],
-          emissive: lightColors[li],
-          emissiveIntensity: 0.8,
+          color: cfg.color,
+          emissive: (cfg.type === 'red') ? 0xff0000 : 0x111111,
+          emissiveIntensity: (cfg.type === 'red') ? 1.2 : 0.1,
+          roughness: 0.2,
+          metalness: 0.5,
         });
         var lightMesh = new THREE.Mesh(lightGeo, lightMat);
-        lightMesh.position.set(-0.6 + li * 0.6, gateHeight + 0.1, 0);
+        lightMesh.position.set(cfg.x, gateHeight + 0.12, 0);
         gateGroup.add(lightMesh);
-      }
+        stagingLights[cfg.type].push(lightMesh);
+      });
 
-      // Ground staging line decal
+      // Ground staging line decal (Behind gate line at z = -0.8)
       var groundCanvas = document.createElement('canvas');
-      groundCanvas.width = 256;
+      groundCanvas.width = 512;
       groundCanvas.height = 64;
       var gCtx = groundCanvas.getContext('2d');
       gCtx.fillStyle = '#ff6600';
-      gCtx.fillRect(0, 0, 256, 64);
+      gCtx.fillRect(0, 0, 512, 64);
       gCtx.fillStyle = '#111111';
-      for (var s = 0; s < 8; s++) {
+      for (var s = 0; s < 16; s++) {
         gCtx.fillRect(s * 32, 0, 16, 64);
       }
       var groundTex = new THREE.CanvasTexture(groundCanvas);
@@ -1118,8 +1248,122 @@
         side: THREE.DoubleSide,
       });
       var groundDecal = new THREE.Mesh(groundGeo, groundMat);
-      groundDecal.position.set(0, 0.04, 0);
+      groundDecal.position.set(0, 0.04, -0.8);
       gateGroup.add(groundDecal);
+
+      // ======================================================================
+      // Motocross / RFTR Mechanical Drop Gate Mechanism
+      // ======================================================================
+      // 1. Continuous ground pivot shaft across the start line
+      var shaftGeo = new THREE.CylinderGeometry(0.045, 0.045, width - 0.6, 12);
+      shaftGeo.rotateZ(Math.PI / 2);
+      var shaftMat = new THREE.MeshStandardMaterial({
+        color: 0x1f2024,
+        roughness: 0.6,
+        metalness: 0.8,
+      });
+      var shaftMesh = new THREE.Mesh(shaftGeo, shaftMat);
+      shaftMesh.position.set(0, 0.08, 0);
+      gateGroup.add(shaftMesh);
+
+      // Ground mounting brackets every 1.4m
+      var baseGeo = new THREE.BoxGeometry(0.12, 0.08, 0.45);
+      for (var bi = -halfW + 0.8; bi <= halfW - 0.8; bi += 1.4) {
+        var bMesh = new THREE.Mesh(baseGeo, shaftMat);
+        bMesh.position.set(bi, 0.04, 0);
+        gateGroup.add(bMesh);
+      }
+
+      // Hydraulic release actuator cylinders on both side posts
+      var actuatorGeo = new THREE.CylinderGeometry(0.07, 0.07, 0.85, 12);
+      var actuatorMat = new THREE.MeshStandardMaterial({
+        color: 0xdd6611, // Industrial safety orange
+        roughness: 0.35,
+        metalness: 0.7,
+      });
+      var rodGeo = new THREE.CylinderGeometry(0.035, 0.035, 0.7, 12);
+      var rodMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, metalness: 0.95, roughness: 0.1 });
+
+      [-halfW + 0.28, halfW - 0.28].forEach(function (actuatorX) {
+        var actMesh = new THREE.Mesh(actuatorGeo, actuatorMat);
+        actMesh.position.set(actuatorX, 0.52, -0.15);
+        actMesh.rotation.x = Math.PI / 5;
+        gateGroup.add(actMesh);
+
+        var rodMesh = new THREE.Mesh(rodGeo, rodMat);
+        rodMesh.position.set(actuatorX, 0.25, -0.05);
+        rodMesh.rotation.x = Math.PI / 5;
+        gateGroup.add(rodMesh);
+      });
+
+      // 2. Rotating Drop Gate Paddle Group (hinged at y = 0.08, z = 0)
+      var dropPivotGroup = new THREE.Group();
+      dropPivotGroup.position.set(0, 0.08, 0);
+
+      // Track green powdercoat tubular steel matching reference photos
+      var paddleMat = new THREE.MeshStandardMaterial({
+        color: 0x3d6635, // Motocross track green
+        roughness: 0.45,
+        metalness: 0.65,
+      });
+
+      var numBays = 14; // 14 side-by-side rider gate slots across the 20m start line
+      var bayWidth = (width - 1.8) / numBays;
+      var paddleW = bayWidth * 0.75;
+      var armLen = 0.52;
+
+      // Geometries shared across bays for efficiency
+      var armGeo = new THREE.CylinderGeometry(0.024, 0.024, armLen, 8);
+      armGeo.rotateX(Math.PI / 2); // extend along Z when rotation.x = 0
+
+      var crossGeo = new THREE.CylinderGeometry(0.026, 0.026, paddleW + 0.04, 8);
+      crossGeo.rotateZ(Math.PI / 2); // extend along X
+
+      var cornerGeo = new THREE.SphereGeometry(0.03, 8, 8);
+
+      for (var i = 0; i < numBays; i++) {
+        var centerX = -halfW + 0.9 + (i + 0.5) * bayWidth;
+
+        // Left arm of paddle
+        var leftArm = new THREE.Mesh(armGeo, paddleMat);
+        leftArm.position.set(centerX - paddleW / 2, 0.025, armLen / 2);
+        leftArm.castShadow = true;
+        dropPivotGroup.add(leftArm);
+
+        // Right arm of paddle
+        var rightArm = new THREE.Mesh(armGeo, paddleMat);
+        rightArm.position.set(centerX + paddleW / 2, 0.025, armLen / 2);
+        rightArm.castShadow = true;
+        dropPivotGroup.add(rightArm);
+
+        // Top barrier crossbar (where board rests)
+        var topBar = new THREE.Mesh(crossGeo, paddleMat);
+        topBar.position.set(centerX, 0.03, armLen);
+        topBar.castShadow = true;
+        dropPivotGroup.add(topBar);
+
+        // Corner curved joints
+        var cornerL = new THREE.Mesh(cornerGeo, paddleMat);
+        cornerL.position.set(centerX - paddleW / 2, 0.03, armLen);
+        dropPivotGroup.add(cornerL);
+
+        var cornerR = new THREE.Mesh(cornerGeo, paddleMat);
+        cornerR.position.set(centerX + paddleW / 2, 0.03, armLen);
+        dropPivotGroup.add(cornerR);
+
+        // Lower reinforcement cross-brace
+        var braceGeo = new THREE.CylinderGeometry(0.016, 0.016, paddleW, 8);
+        braceGeo.rotateZ(Math.PI / 2);
+        var lowerBrace = new THREE.Mesh(braceGeo, paddleMat);
+        lowerBrace.position.set(centerX, 0.02, armLen * 0.4);
+        dropPivotGroup.add(lowerBrace);
+      }
+
+      // Initial state: Upright / Locked (~ -48 degrees tilted towards staged riders)
+      var UPRIGHT_ANGLE = -Math.PI * 0.27;
+      var DROPPED_ANGLE = 0.01;
+      dropPivotGroup.rotation.x = UPRIGHT_ANGLE;
+      gateGroup.add(dropPivotGroup);
 
       gateGroup.name = 'Gate_StartChute';
       this._trackGroup.add(gateGroup);
@@ -1134,6 +1378,197 @@
         width: width,
         radius: width * 0.9,
       };
+
+      // 3. Drop Gate Controller
+      this._dropGate = {
+        gateGroup: gateGroup,
+        pivotGroup: dropPivotGroup,
+        lights: stagingLights,
+        state: 'up', // 'up' | 'dropping' | 'down' | 'resetting'
+        angle: UPRIGHT_ANGLE,
+        upAngle: UPRIGHT_ANGLE,
+        downAngle: DROPPED_ANGLE,
+        timer: 0,
+        gatePos: { x: pos.x, y: pos.y, z: pos.z, heading: rotation, width: width },
+
+        triggerDrop: function () {
+          if (this.state === 'down' || this.state === 'dropping') return;
+          this.state = 'dropping';
+          self._playDropSound();
+          self._setGateLights('green');
+        },
+
+        resetGate: function () {
+          if (this.state === 'up' || this.state === 'resetting') return;
+          this.state = 'resetting';
+          self._setGateLights('amber');
+        },
+
+        update: function (dt, player) {
+          // Automatic drive-through detection
+          if (player && this.state === 'up') {
+            var dx = player.x - this.gatePos.x;
+            var dz = player.z - this.gatePos.z;
+            var dist = Math.hypot(dx, dz);
+
+            if (dist < this.gatePos.width * 0.7) {
+              var h = this.gatePos.heading;
+              var sinH = Math.sin(h);
+              var cosH = Math.cos(h);
+              // Local X is lateral across gate, local Z is forward through gate
+              var localX = dx * cosH - dz * sinH;
+              var localZ = dx * sinH + dz * cosH;
+
+              // Only trigger if moving forward through the gate line
+              // localZ: -1.2m (at gate threshold) to +2.5m (passed gate), with forward speed (> 0.7 m/s)
+              var isDrivingThrough = (player.speed > 0.7) && (localZ >= -1.2 && localZ <= 2.5);
+
+              if (Math.abs(localX) <= this.gatePos.width * 0.52 && isDrivingThrough) {
+                this.triggerDrop();
+                if (window.GamerWheels && window.GamerWheels.showTrickToast) {
+                  window.GamerWheels.showTrickToast('🟢 START GATE DROPPED! (10s RESET)');
+                }
+              }
+            }
+          }
+
+          // State Machine
+          if (this.state === 'dropping') {
+            this.angle = THREE.MathUtils.lerp(this.angle, this.downAngle, Math.min(1.0, dt * 26.0));
+            if (Math.abs(this.angle - this.downAngle) < 0.015) {
+              this.angle = this.downAngle;
+              this.state = 'down';
+              this.timer = 10.0; // Auto-resets in 10 seconds!
+              self._setGateLights('green');
+            }
+          } else if (this.state === 'down') {
+            this.timer -= dt;
+            if (this.timer <= 0) {
+              this.resetGate();
+            }
+          } else if (this.state === 'resetting') {
+            this.angle = THREE.MathUtils.lerp(this.angle, this.upAngle, Math.min(1.0, dt * 3.8));
+            self._setGateLights('amber');
+            if (Math.abs(this.angle - this.upAngle) < 0.015) {
+              this.angle = this.upAngle;
+              this.state = 'up';
+              self._setGateLights('red');
+              self._playResetLatchSound();
+              if (window.GamerWheels && window.GamerWheels.showTrickToast) {
+                window.GamerWheels.showTrickToast('🔒 START GATE LOCKED & READY');
+              }
+            }
+          }
+
+          this.pivotGroup.rotation.x = this.angle;
+        }
+      };
+    },
+
+    _setGateLights: function (mode) {
+      if (!this._dropGate || !this._dropGate.lights) return;
+      var lights = this._dropGate.lights;
+      var redOn = (mode === 'red');
+      var greenOn = (mode === 'green');
+      var amberOn = (mode === 'amber');
+
+      if (lights.red) {
+        lights.red.forEach(function (m) {
+          m.material.emissive.setHex(redOn ? 0xff0000 : 0x220000);
+          m.material.emissiveIntensity = redOn ? 1.2 : 0.1;
+        });
+      }
+      if (lights.amber) {
+        lights.amber.forEach(function (m) {
+          m.material.emissive.setHex(amberOn ? 0xffaa00 : 0x221500);
+          m.material.emissiveIntensity = amberOn ? 1.2 : 0.1;
+        });
+      }
+      if (lights.green) {
+        lights.green.forEach(function (m) {
+          m.material.emissive.setHex(greenOn ? 0x00ff44 : 0x002208);
+          m.material.emissiveIntensity = greenOn ? 1.4 : 0.1;
+        });
+      }
+    },
+
+    _playDropSound: function () {
+      try {
+        var AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        if (!this._audioCtx) this._audioCtx = new AudioCtx();
+        if (this._audioCtx.state === 'suspended') this._audioCtx.resume();
+        var ctx = this._audioCtx;
+        var now = ctx.currentTime;
+
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(850, now);
+        osc.frequency.exponentialRampToValueAtTime(140, now + 0.07);
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.07);
+
+        setTimeout(function () {
+          try {
+            if (!ctx) return;
+            var t2 = ctx.currentTime;
+            var osc2 = ctx.createOscillator();
+            var gain2 = ctx.createGain();
+            osc2.type = 'sine';
+            osc2.frequency.setValueAtTime(120, t2);
+            osc2.frequency.exponentialRampToValueAtTime(36, t2 + 0.2);
+            gain2.gain.setValueAtTime(0.55, t2);
+            gain2.gain.exponentialRampToValueAtTime(0.001, t2 + 0.2);
+            osc2.connect(gain2);
+            gain2.connect(ctx.destination);
+            osc2.start(t2);
+            osc2.stop(t2 + 0.2);
+
+            var bufferSize = Math.floor(ctx.sampleRate * 0.12);
+            var buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            var data = buffer.getChannelData(0);
+            for (var i = 0; i < bufferSize; i++) {
+              data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.03));
+            }
+            var noise = ctx.createBufferSource();
+            noise.buffer = buffer;
+            var noiseGain = ctx.createGain();
+            noiseGain.gain.setValueAtTime(0.35, t2);
+            noiseGain.gain.exponentialRampToValueAtTime(0.001, t2 + 0.12);
+            noise.connect(noiseGain);
+            noiseGain.connect(ctx.destination);
+            noise.start(t2);
+          } catch (e) {}
+        }, 100);
+      } catch (e) {}
+    },
+
+    _playResetLatchSound: function () {
+      try {
+        var AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        if (!this._audioCtx) this._audioCtx = new AudioCtx();
+        if (this._audioCtx.state === 'suspended') this._audioCtx.resume();
+        var ctx = this._audioCtx;
+        var now = ctx.currentTime;
+
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(320, now);
+        osc.frequency.setValueAtTime(600, now + 0.04);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.09);
+      } catch (e) {}
     },
 
     _buildFinishLineGate: function (feat, pos, tangent, rotation) {

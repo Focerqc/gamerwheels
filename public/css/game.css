@@ -2376,3 +2376,95 @@ body.exp9-standalone-page .exp9-hud-layer {
 }
 
 
+
+/* Numbered Features Studio Panel */
+.numbered-features-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.numbered-feature-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  transition: all 0.18s ease;
+}
+
+.numbered-feature-card:hover {
+  background: rgba(30, 41, 59, 0.85);
+  border-color: rgba(2, 132, 199, 0.4);
+}
+
+.numbered-feature-card.active {
+  background: rgba(2, 132, 199, 0.2);
+  border-color: #00ffff;
+  box-shadow: 0 0 12px rgba(0, 255, 255, 0.2);
+}
+
+.feature-num-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #0284c7;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  flex-shrink: 0;
+  border: 1.5px solid #ffffff;
+}
+
+.feature-del-btn {
+  background: transparent;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.feature-del-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
+  color: #f87171;
+}
+
+.feature-name-edit {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  padding: 5px 8px;
+  color: #f8fafc;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.feature-name-edit:focus {
+  border-color: #00ffff;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.feature-node-tag {
+  font-size: 0.72rem;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  white-space: nowrap;
+}

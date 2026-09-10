@@ -318,6 +318,9 @@
           <button type="button" class="editor-action-btn" id="btnResetView" title="Center and fit map view">
             <span class="btn-icon">🎯</span> Fit View
           </button>
+          <button type="button" class="editor-action-btn" id="btnToggleRefMap" title="Toggle marked RFTR reference map overlay (pins & race path)">
+            <span class="btn-icon">🗺️</span> <span id="lblRefMap">Ref Map: Off</span>
+          </button>
         </div>
       </div>
 
@@ -398,6 +401,17 @@
             <label for="elevationDelta">Elevation Delta (m):</label>
             <input type="number" step="0.5" id="elevationDelta" class="exp9-name-input" placeholder="e.g. +6 or -4" />
             <button type="button" id="btnApplyElevation" class="editor-primary-btn" style="margin-top: 6px;">Smooth Interpolate</button>
+          </div>
+        </div>
+
+        <!-- Numbered Features Panel -->
+        <div class="editor-panel" id="numberedFeaturesPanel">
+          <h3 class="panel-title">📍 RFTR Numbered Features</h3>
+          <p class="tool-desc" style="font-size: 0.78rem; color: #94a3b8; margin-bottom: 8px;">
+            Drag pins on track to adjust spots. Name each feature below:
+          </p>
+          <div id="numberedFeaturesList" class="numbered-features-list">
+            <!-- Dynamically populated -->
           </div>
         </div>
 

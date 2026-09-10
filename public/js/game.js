@@ -52,9 +52,9 @@
     },
     camera: {
       yaw: -1.716 + Math.PI,
-      pitch: 0.32,
-      distance: 3.4,
-      targetDistance: 3.4,
+      pitch: 0.26,
+      distance: 4.2,
+      targetDistance: 4.2,
       manualTimer: 0,
       isOrbiting: false,
       lastPointerX: 0,
@@ -146,18 +146,6 @@
     if (btnFullscreen) btnFullscreen.addEventListener('click', toggleFullscreen);
     if (btnZoomIn) btnZoomIn.addEventListener('click', () => adjustZoom(-1.5));
     if (btnZoomOut) btnZoomOut.addEventListener('click', () => adjustZoom(+1.5));
-
-    if (btnOpenTrackStudio) {
-      btnOpenTrackStudio.addEventListener('click', () => {
-        const cont = document.getElementById('trackEditorContainer');
-        if (cont) {
-          const isOpen = cont.style.display === 'flex';
-          cont.style.display = isOpen ? 'none' : 'flex';
-          if (!isOpen && window.initEditor) window.initEditor();
-        }
-      });
-    }
-
     if (hudTerrainVal) hudTerrainVal.textContent = 'Hollister Hills RFTR';
   }
 
@@ -718,17 +706,23 @@
   function updateTrackModeSession(dt) {
     if (!window.TrackBuilder) return;
 
+    const p = state.player;
+
+    // Update drop gate animation and auto-drop trigger
+    if (window.TrackBuilder.updateDropGate) {
+      window.TrackBuilder.updateDropGate(dt, p);
+    }
+
     const trackData = trackSession.activeTrackData || window.TRACK_DATA_HOLLISTER;
     if (!trackData) return;
 
     const gates = window.TrackBuilder.getGates ? window.TrackBuilder.getGates() : {};
-    const p = state.player;
     const now = performance.now();
 
     // 1. Check Staging / Start Gate (Start Chute Node 0)
     if (gates.startChute) {
       const dStart = Math.hypot(p.x - gates.startChute.x, p.z - gates.startChute.z);
-      if (dStart < (gates.startChute.radius || 9.0)) {
+      if (dStart < (gates.startChute.radius || 16.0)) {
         if (trackSession.state === 'unprimed' || trackSession.state === 'finished') {
           trackSession.state = 'primed';
           if (trackLapStatus) {
@@ -737,20 +731,35 @@
           }
           showTrickToast('🏁 STAGED AT START CHUTE — DROP IN TO START RUN');
         }
-      } else if (trackSession.state === 'primed' && dStart >= 7.0 && p.speed > 1.2) {
-        // Player dropped into the chute and started moving!
-        trackSession.state = 'racing';
-        trackSession.lap = 1;
-        trackSession.lapStartTime = now;
-        trackSession.ghostActive = true;
-        trackSession.ghostElapsed = 0;
+      }
 
-        if (trackSession.ghostEntity) trackSession.ghostEntity.visible = true;
-        if (trackLapStatus) {
-          trackLapStatus.textContent = 'RACING';
-          trackLapStatus.className = 'exp9-track-hud-pill racing';
+      // Check if player drives forward across the gate threshold
+      if (trackSession.state === 'primed' && p.speed > 0.7) {
+        const heading = gates.startChute.heading || -1.716;
+        const dx = p.x - gates.startChute.x;
+        const dz = p.z - gates.startChute.z;
+        const localZ = dx * Math.sin(heading) + dz * Math.cos(heading);
+
+        // localZ >= -0.8 means rider has driven up to / across the gate line!
+        if (localZ >= -0.8) {
+          trackSession.state = 'racing';
+          trackSession.lap = 1;
+          trackSession.lapStartTime = now;
+          trackSession.ghostActive = true;
+          trackSession.ghostElapsed = 0;
+
+          // Trigger drop gate immediately
+          if (window.TrackBuilder && window.TrackBuilder.triggerDropGate) {
+            window.TrackBuilder.triggerDropGate();
+          }
+
+          if (trackSession.ghostEntity) trackSession.ghostEntity.visible = true;
+          if (trackLapStatus) {
+            trackLapStatus.textContent = 'RACING';
+            trackLapStatus.className = 'exp9-track-hud-pill racing';
+          }
+          showTrickToast('⏱️ GREEN FLAG! RUN STARTED! GO! 🏁');
         }
-        showTrickToast('⏱️ GREEN FLAG! RUN STARTED! GO! 🏁');
       }
     }
 
@@ -768,7 +777,7 @@
           trackSession.state = 'finished';
           trackSession.ghostActive = false;
 
-          const ghostTarget = (trackData.ghostData && trackData.ghostData.duration) || 125.01;
+          const ghostTarget = (trackData.ghostData && trackData.ghostData.duration) || 132.01;
           const diff = lapTime - ghostTarget;
 
           if (diff < 0) {
@@ -839,7 +848,23 @@
       trackSession.ghostEntity = createGhostRacerMesh();
       scene.add(trackSession.ghostEntity);
     }
-    trackSession.ghostEntity.visible = false;
+
+    // Position ghost at Start Chute staging line next to the player in adjacent gate bay
+    if (trackData && trackData.ghostData && trackData.ghostData.samples && trackData.ghostData.samples.length > 0) {
+      const heading = -1.716;
+      const perp = heading + Math.PI / 2;
+      const lateralOffset = 2.2;
+      // Staged 4.5m behind gate beside the player
+      trackSession.ghostEntity.position.set(
+        164.5 + Math.sin(perp) * lateralOffset,
+        1.2,
+        -68.4 + Math.cos(perp) * lateralOffset
+      );
+      trackSession.ghostEntity.rotation.y = heading;
+      trackSession.ghostEntity.visible = true;
+    } else {
+      trackSession.ghostEntity.visible = false;
+    }
 
     if (trackRacingHud) {
       trackRacingHud.style.display = 'flex';
@@ -867,8 +892,24 @@
     trackSession.ghostActive = false;
     trackSession.ghostElapsed = 0;
 
-    if (trackSession.ghostEntity) {
+    const trackData = trackSession.activeTrackData || window.TRACK_DATA_HOLLISTER;
+    if (trackSession.ghostEntity && trackData && trackData.ghostData && trackData.ghostData.samples && trackData.ghostData.samples.length > 0) {
+      const heading = -1.716;
+      const perp = heading + Math.PI / 2;
+      const lateralOffset = 2.2;
+      trackSession.ghostEntity.position.set(
+        164.5 + Math.sin(perp) * lateralOffset,
+        1.2,
+        -68.4 + Math.cos(perp) * lateralOffset
+      );
+      trackSession.ghostEntity.rotation.y = heading;
+      trackSession.ghostEntity.visible = true;
+    } else if (trackSession.ghostEntity) {
       trackSession.ghostEntity.visible = false;
+    }
+
+    if (window.TrackBuilder && window.TrackBuilder.resetDropGate) {
+      window.TrackBuilder.resetDropGate();
     }
 
     if (trackLapStatus) {
@@ -958,14 +999,19 @@
   function snapCamera() {
     const p = state.player;
     state.camera.yaw = p.heading + Math.PI;
-    state.camera.pitch = 0.32;
+    state.camera.pitch = 0.26;
     state.camera.manualTimer = 0;
+    state.camera.distance = 4.2;
+    state.camera.targetDistance = 4.2;
 
     const hDist = state.camera.distance * Math.cos(state.camera.pitch);
     camera.position.x = p.x + hDist * Math.sin(state.camera.yaw);
-    camera.position.y = p.y + 0.85 + state.camera.distance * Math.sin(state.camera.pitch);
+    camera.position.y = p.y + 0.65 + state.camera.distance * Math.sin(state.camera.pitch);
     camera.position.z = p.z + hDist * Math.cos(state.camera.yaw);
-    camera.lookAt(p.x, p.y + 0.85, p.z);
+    camera.lookAt(p.x, p.y + 0.35, p.z);
+    if (state.camera.lookTarget) {
+      state.camera.lookTarget.set(p.x, p.y + 0.35, p.z);
+    }
   }
 
   // ==========================================================================
@@ -1200,7 +1246,7 @@
 
         state.camera.yaw -= dx * 0.005;
         state.camera.pitch = THREE.MathUtils.clamp(state.camera.pitch + dy * 0.005, 0.05, 1.25);
-        state.camera.manualTimer = 3.5;
+        state.camera.manualTimer = 1.0;
       }
     });
 
@@ -1285,8 +1331,13 @@
         }
       }
     } else {
-      // Natural rolling coasting friction
-      vFwd = THREE.MathUtils.lerp(vFwd, 0, dt * 0.05);
+      // Stationary active motor hold (prevents rolling backwards on slopes when stopped!)
+      if (Math.abs(vFwd) < 0.6) {
+        vFwd = THREE.MathUtils.lerp(vFwd, 0, dt * 20.0);
+      } else {
+        // Natural rolling coasting friction
+        vFwd = THREE.MathUtils.lerp(vFwd, 0, dt * 0.85);
+      }
       p.roll = THREE.MathUtils.lerp(p.roll, 0, dt * 8);
     }
 
@@ -1302,10 +1353,13 @@
       const slopeZ = (hN - hS) / (epsG * 2);
 
       const slopeFwd = slopeX * fwdX + slopeZ * fwdZ;
-      vFwd += slopeFwd * GRAVITY * 0.85 * dt;
+      // Only apply slope roll if moving or accelerating (Onewheel electronic motor holds when parked)
+      if (inputMag > 0.05 || Math.abs(vFwd) >= 0.4) {
+        vFwd += slopeFwd * GRAVITY * 0.85 * dt;
+      }
 
       // Lateral tyre grip (prevents sliding like ice on banked dirt)
-      vLat = THREE.MathUtils.lerp(vLat, 0, dt * 12.0);
+      vLat = THREE.MathUtils.lerp(vLat, 0, dt * 14.0);
     }
 
     // 4. Pushback Warning Tilt
@@ -1463,36 +1517,45 @@
   // ==========================================================================
   function updateCamera(dt) {
     const p = state.player;
+    const isDriving = (p.speed > 0.6) || (Math.hypot(state.input.right ? 1 : (state.input.left ? -1 : 0), state.input.up ? 1 : (state.input.down ? -1 : 0)) > 0.1);
 
-    if (state.camera.manualTimer > 0) {
+    // If driving or manual timer expired, auto-track behind board
+    if (isDriving) {
+      state.camera.manualTimer = Math.max(0, state.camera.manualTimer - dt * 5.0);
+    } else if (state.camera.manualTimer > 0) {
       state.camera.manualTimer -= dt;
-    } else {
+    }
+
+    if (state.camera.manualTimer <= 0) {
       // Auto-align camera behind board travel heading
       let targetYaw = p.heading + Math.PI;
       let diff = targetYaw - state.camera.yaw;
       while (diff < -Math.PI) diff += Math.PI * 2;
       while (diff > Math.PI) diff -= Math.PI * 2;
-      state.camera.yaw += diff * Math.min(1.0, dt * 3.8);
+      state.camera.yaw += diff * Math.min(1.0, dt * (isDriving ? 4.8 : 2.8));
+
+      // Also gently return pitch to default comfortable riding angle (0.26 rad)
+      state.camera.pitch = THREE.MathUtils.lerp(state.camera.pitch, 0.26, dt * 2.8);
     }
 
     state.camera.distance = THREE.MathUtils.lerp(state.camera.distance, state.camera.targetDistance, dt * 8);
 
     const hDist = state.camera.distance * Math.cos(state.camera.pitch);
     const targetCamX = p.x + hDist * Math.sin(state.camera.yaw);
-    const targetCamY = p.y + 0.85 + state.camera.distance * Math.sin(state.camera.pitch);
+    const targetCamY = p.y + 0.65 + state.camera.distance * Math.sin(state.camera.pitch);
     const targetCamZ = p.z + hDist * Math.cos(state.camera.yaw);
 
-    camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetCamX, dt * 9);
-    camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetCamY, dt * 9);
-    camera.position.z = THREE.MathUtils.lerp(camera.position.z, targetCamZ, dt * 9);
+    camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetCamX, dt * 10);
+    camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetCamY, dt * 10);
+    camera.position.z = THREE.MathUtils.lerp(camera.position.z, targetCamZ, dt * 10);
 
-    // Smooth camera lookAt point to eliminate jerky head-shaking
+    // Look at board & rider stance (y + 0.35m) — keeps board perfectly framed in view!
     if (!state.camera.lookTarget) {
-      state.camera.lookTarget = new THREE.Vector3(p.x, p.y + 0.85, p.z);
+      state.camera.lookTarget = new THREE.Vector3(p.x, p.y + 0.35, p.z);
     } else {
-      state.camera.lookTarget.x = THREE.MathUtils.lerp(state.camera.lookTarget.x, p.x, dt * 12);
-      state.camera.lookTarget.y = THREE.MathUtils.lerp(state.camera.lookTarget.y, p.y + 0.85, dt * 12);
-      state.camera.lookTarget.z = THREE.MathUtils.lerp(state.camera.lookTarget.z, p.z, dt * 12);
+      state.camera.lookTarget.x = THREE.MathUtils.lerp(state.camera.lookTarget.x, p.x, dt * 14);
+      state.camera.lookTarget.y = THREE.MathUtils.lerp(state.camera.lookTarget.y, p.y + 0.35, dt * 14);
+      state.camera.lookTarget.z = THREE.MathUtils.lerp(state.camera.lookTarget.z, p.z, dt * 14);
     }
     camera.lookAt(state.camera.lookTarget);
 
