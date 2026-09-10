@@ -717,7 +717,7 @@
 
     _buildTabletop: function (feat, pos, tangent, rotation, registerFn) {
       var halfLen = feat.length / 2;
-      var props = this._interpolateNodeProps(feat.t, this._trackData);
+      var props = feat.t !== undefined ? this._interpolateNodeProps(feat.t, this._trackData) : {};
       var width = props.w || this._trackData.width;
 
       // Visual mesh — a simple box-like shape
@@ -751,7 +751,7 @@
       mesh.rotation.y = rotation;
       mesh.castShadow = true;
       mesh.receiveShadow = true;
-      mesh.name = 'Feature_Tabletop_' + feat.t.toFixed(2);
+      mesh.name = 'Feature_Tabletop_' + (feat.t !== undefined ? feat.t.toFixed(2) : (feat.nodeIndex || '0'));
 
       this._trackGroup.add(mesh);
       this._featureMeshes.push(mesh);
@@ -784,7 +784,7 @@
     },
 
     _buildKicker: function (feat, pos, tangent, rotation, registerFn) {
-      var props = this._interpolateNodeProps(feat.t, this._trackData);
+      var props = feat.t !== undefined ? this._interpolateNodeProps(feat.t, this._trackData) : {};
       var width = props.w || this._trackData.width;
       var halfLen = feat.length / 2;
 
@@ -811,7 +811,7 @@
       mesh.rotation.y = rotation;
       mesh.castShadow = true;
       mesh.receiveShadow = true;
-      mesh.name = 'Feature_Kicker_' + feat.t.toFixed(2);
+      mesh.name = 'Feature_Kicker_' + (feat.t !== undefined ? feat.t.toFixed(2) : (feat.nodeIndex || '0'));
 
       this._trackGroup.add(mesh);
       this._featureMeshes.push(mesh);
@@ -831,7 +831,7 @@
     },
 
     _buildRollers: function (feat, pos, tangent, rotation, registerFn) {
-      var props = this._interpolateNodeProps(feat.t, this._trackData);
+      var props = feat.t !== undefined ? this._interpolateNodeProps(feat.t, this._trackData) : {};
       var width = props.w || this._trackData.width;
       var count = feat.count || 4;
 
@@ -886,7 +886,7 @@
     },
 
     _buildDrop: function (feat, pos, tangent, rotation, registerFn) {
-      var props = this._interpolateNodeProps(feat.t, this._trackData);
+      var props = feat.t !== undefined ? this._interpolateNodeProps(feat.t, this._trackData) : {};
       var width = props.w || this._trackData.width;
       var halfLen = feat.length / 2;
 
@@ -932,14 +932,14 @@
       mesh.rotation.y = rotation;
       mesh.castShadow = true;
       mesh.receiveShadow = true;
-      mesh.name = 'Feature_Drop_' + feat.t.toFixed(2);
+      mesh.name = 'Feature_Drop_' + (feat.t !== undefined ? feat.t.toFixed(2) : (feat.nodeIndex || '0'));
 
       this._trackGroup.add(mesh);
       this._featureMeshes.push(mesh);
     },
 
     _buildBerm: function (feat, pos, tangent, rotation, registerFn) {
-      var props = this._interpolateNodeProps(feat.t, this._trackData);
+      var props = feat.t !== undefined ? this._interpolateNodeProps(feat.t, this._trackData) : {};
       var width = props.w || this._trackData.width;
       var bankAngle = feat.bankAngle || 20;
       var radius = feat.length / (2 * Math.sin(Math.PI / 6)); // Approximate
