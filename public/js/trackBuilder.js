@@ -1578,7 +1578,7 @@
 
       var gateGroup = new THREE.Group();
       gateGroup.position.set(pos.x, pos.y, pos.z);
-      gateGroup.rotation.y = rotation;
+      gateGroup.rotation.y = rotation + Math.PI / 2;
 
       var trussMat = new THREE.MeshStandardMaterial({
         color: 0x181a1f,

@@ -222,6 +222,12 @@
     document.getElementById('importFileInput').addEventListener('change', handleFileInput);
     document.getElementById('btnConfirmImport').addEventListener('click', confirmImportJSON);
 
+    // Sidebar Numbered Feature Add Button
+    const btnAddNum = document.getElementById('btnAddNumberedFeature');
+    if (btnAddNum) {
+      btnAddNum.addEventListener('click', () => addNumberedFeature());
+    }
+
     // Sidebar Token Drag & Drop
     const tokens = document.querySelectorAll('.editor-token');
     tokens.forEach(token => {
@@ -328,22 +334,21 @@
         editorState.trackData = JSON.parse(JSON.stringify(window.TRACK_DATA_HOLLISTER));
       }
 
-      // Ensure numbered RFTR features from TRACK_DATA_HOLLISTER are loaded
-      if (window.TRACK_DATA_HOLLISTER && window.TRACK_DATA_HOLLISTER.features) {
-        if (!editorState.trackData.features || editorState.trackData.features.length === 0) {
-          editorState.trackData.features = JSON.parse(JSON.stringify(window.TRACK_DATA_HOLLISTER.features));
-        } else {
-          // Merge in any missing numbered features
-          window.TRACK_DATA_HOLLISTER.features.forEach(feat => {
-            if (feat.number !== undefined) {
-              const exists = editorState.trackData.features.some(f => f.number === feat.number);
-              if (!exists) {
-                editorState.trackData.features.push(JSON.parse(JSON.stringify(feat)));
-              }
-            }
-          });
-        }
+      // Purge obsolete features (tabletop, kicker, berm, drop, and dummy feature 4 at node 0)
+      if (editorState.trackData.features) {
+        editorState.trackData.features = editorState.trackData.features.filter(f => 
+          f.type !== 'tabletop' && f.type !== 'kicker' && f.type !== 'berm' && f.type !== 'drop' &&
+          !(f.type === 'rftr_feature' && f.number === 4 && (f.nodeIndex === 0 || f.t === 0))
+        );
       }
+
+      // If no features loaded, initialize from window.TRACK_DATA_HOLLISTER
+      if ((!editorState.trackData.features || editorState.trackData.features.length === 0) &&
+          window.TRACK_DATA_HOLLISTER && window.TRACK_DATA_HOLLISTER.features) {
+        editorState.trackData.features = JSON.parse(JSON.stringify(window.TRACK_DATA_HOLLISTER.features));
+      }
+
+      saveDraft();
       updateNumberedFeaturesUI();
 
       setupCanvasEvents(canvas);
@@ -396,13 +401,76 @@
       }
 
       const { screenX: sx, screenY: sy } = worldToScreen(wx, wz);
-      // Test distance to pin center
-      const dist = Math.hypot(screenX - sx, screenY - (sy - 14));
-      if (dist <= 22) {
+      // Test distance to pin center (sy - 14) and gate box (sy)
+      const distPin = Math.hypot(screenX - sx, screenY - (sy - 14));
+      const distGate = Math.hypot(screenX - sx, screenY - sy);
+      if (distPin <= 22 || distGate <= 20) {
         return i;
       }
     }
     return -1;
+  }
+
+  function deleteFeatureAtIndex(idx) {
+    if (!editorState.trackData.features || idx < 0 || idx >= editorState.trackData.features.length) return;
+    pushHistory();
+    editorState.trackData.features.splice(idx, 1);
+    // Renumber remaining rftr_feature entries sequentially
+    let numCounter = 1;
+    editorState.trackData.features.forEach(feat => {
+      if (feat.number !== undefined || feat.type === 'rftr_feature') {
+        const oldDefaultName = 'Feature ' + feat.number;
+        feat.number = numCounter;
+        if (!feat.name || feat.name === oldDefaultName || feat.name.startsWith('Feature ')) {
+          feat.name = 'Feature ' + numCounter;
+        }
+        numCounter++;
+      }
+    });
+    if (editorState.selectedFeatureIndex === idx) {
+      editorState.selectedFeatureIndex = -1;
+    } else if (editorState.selectedFeatureIndex > idx) {
+      editorState.selectedFeatureIndex--;
+    }
+    syncToGlobalTrackData();
+    saveDraft();
+    updateNumberedFeaturesUI();
+    draw();
+  }
+
+  function addNumberedFeature(targetNodeIdx) {
+    const nodes = editorState.trackData.nodes;
+    if (!nodes || nodes.length === 0) return;
+    pushHistory();
+    const numbered = editorState.trackData.features.filter(f => f.number !== undefined || f.type === 'rftr_feature');
+    const nextNum = numbered.length + 1;
+    let nodeIdx = 0;
+    if (targetNodeIdx !== undefined) {
+      nodeIdx = targetNodeIdx;
+    } else if (editorState.selectedNodeIndex !== -1) {
+      nodeIdx = editorState.selectedNodeIndex;
+    } else {
+      nodeIdx = Math.min(nodes.length - 1, Math.floor((nextNum * nodes.length) / 5));
+    }
+    const targetNode = nodes[nodeIdx];
+    const newFeat = {
+      type: 'rftr_feature',
+      number: nextNum,
+      name: 'Feature ' + nextNum,
+      nodeIndex: nodeIdx,
+      x: targetNode.x,
+      y: targetNode.y !== undefined ? targetNode.y : 1.0,
+      z: targetNode.z,
+      t: Math.round((nodeIdx / nodes.length) * 100) / 100
+    };
+    editorState.trackData.features.push(newFeat);
+    editorState.selectedFeatureIndex = editorState.trackData.features.length - 1;
+    editorState.selectedNodeIndex = -1;
+    editorState.selectedNodes.clear();
+    syncToGlobalTrackData();
+    saveDraft();
+    updateNumberedFeaturesUI();
+    draw();
   }
 
   function updateNumberedFeaturesUI() {
@@ -410,15 +478,15 @@
     if (!listEl) return;
 
     const features = editorState.trackData.features || [];
-    const numbered = features.filter(f => f.number !== undefined);
+    const numbered = features.filter(f => f.number !== undefined || f.type === 'rftr_feature');
 
     if (numbered.length === 0) {
-      listEl.innerHTML = '<div style="font-size: 0.8rem; color: #64748b;">No numbered features on track.</div>';
+      listEl.innerHTML = '<div style="font-size: 0.8rem; color: #64748b; padding: 6px 0;">No numbered features on track. Click "+ Add Numbered Feature" below.</div>';
       return;
     }
 
     listEl.innerHTML = '';
-    numbered.sort((a, b) => a.number - b.number).forEach(f => {
+    numbered.sort((a, b) => (a.number || 0) - (b.number || 0)).forEach(f => {
       const idx = features.indexOf(f);
       const isSelected = (editorState.selectedFeatureIndex === idx);
 
@@ -427,13 +495,13 @@
 
       const badge = document.createElement('div');
       badge.className = 'feature-num-badge';
-      badge.textContent = f.number;
+      badge.textContent = f.number !== undefined ? f.number : '?';
       card.appendChild(badge);
 
       const input = document.createElement('input');
       input.type = 'text';
       input.className = 'feature-name-edit';
-      input.value = f.name || ('Feature ' + f.number);
+      input.value = f.name || ('Feature ' + (f.number || ''));
       input.placeholder = 'Name feature...';
       input.addEventListener('input', (e) => {
         f.name = e.target.value;
@@ -454,28 +522,10 @@
       delBtn.textContent = '🗑️';
       delBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        pushUndoState();
-        editorState.trackData.features.splice(idx, 1);
-        // Renumber remaining rftr_feature entries sequentially
-        let numCounter = 1;
-        editorState.trackData.features.forEach(feat => {
-          if (feat.number !== undefined || feat.type === 'rftr_feature') {
-            const oldDefaultName = 'Feature ' + feat.number;
-            feat.number = numCounter;
-            if (!feat.name || feat.name.startsWith('Feature ')) {
-              feat.name = 'Feature ' + numCounter;
-            }
-            numCounter++;
-          }
-        });
-        if (editorState.selectedFeatureIndex === idx) {
-          editorState.selectedFeatureIndex = -1;
-        } else if (editorState.selectedFeatureIndex > idx) {
-          editorState.selectedFeatureIndex--;
+        const currentIdx = editorState.trackData.features.indexOf(f);
+        if (currentIdx !== -1) {
+          deleteFeatureAtIndex(currentIdx);
         }
-        syncToGlobalTrackData();
-        updateNumberedFeaturesUI();
-        draw();
       });
       card.appendChild(delBtn);
 
@@ -483,6 +533,7 @@
         if (e.target === input || e.target === delBtn) return;
         editorState.selectedFeatureIndex = idx;
         editorState.selectedNodeIndex = -1;
+        editorState.selectedNodes.clear();
         updateNumberedFeaturesUI();
         draw();
       });
@@ -521,12 +572,13 @@
       const mouseY = e.clientY - rect.top;
       const { worldX, worldZ } = screenToWorld(mouseX, mouseY);
 
-      // Pan with middle click, right click (when not on a node), or Space+left click
+      // Pan with middle click, right click (when not on a node or feature), or Space+left click
       const isRightClick = e.button === 2;
       const isMiddleClick = e.button === 1;
       const hitNode = findNodeAtScreen(mouseX, mouseY);
+      const hitFeature = findFeatureAtScreen(mouseX, mouseY);
 
-      if (isMiddleClick || (isRightClick && hitNode === -1) || (editorState.isSpacePressed && e.button === 0)) {
+      if (isMiddleClick || (isRightClick && hitNode === -1 && hitFeature === -1) || (editorState.isSpacePressed && e.button === 0)) {
         editorState.isPanning = true;
         editorState.panStartX = mouseX - editorState.offsetX;
         editorState.panStartY = mouseY - editorState.offsetY;
@@ -543,6 +595,12 @@
         if (btnHeader) btnHeader.classList.remove('active');
         if (btnSidebar) btnSidebar.style.background = '';
         setTool(editorState.currentTool);
+        return;
+      }
+
+      // Right Click on a Feature -> Delete Feature
+      if (isRightClick && hitFeature !== -1) {
+        deleteFeatureAtIndex(hitFeature);
         return;
       }
 
@@ -581,6 +639,8 @@
 
         // 1. Clicked on an existing node
         if (hitNode !== -1) {
+          editorState.selectedFeatureIndex = -1;
+          updateNumberedFeaturesUI();
           if (e.shiftKey) {
             // Shift + click for range selection
             if (editorState.selectedNodes.size > 0) {
@@ -669,6 +729,8 @@
         // 4. Clicked empty space in Select mode -> Deselect
         editorState.selectedNodeIndex = -1;
         editorState.selectedNodes.clear();
+        editorState.selectedFeatureIndex = -1;
+        updateNumberedFeaturesUI();
         updateInspector();
         draw();
       }
@@ -794,7 +856,11 @@
     } else if (e.key === 'i' || e.key === 'I') {
       setTool('insert');
     } else if (e.key === 'Delete' || e.key === 'Backspace') {
-      deleteSelectedNode();
+      if (editorState.selectedFeatureIndex !== -1) {
+        deleteFeatureAtIndex(editorState.selectedFeatureIndex);
+      } else if (editorState.selectedNodeIndex !== -1) {
+        deleteSelectedNode();
+      }
     } else if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
       if (e.shiftKey) redo();
       else undo();
@@ -1636,13 +1702,55 @@
     }
 
     pushHistory();
-    editorState.trackData.features.push({
-      type: type,
-      t: Math.round((minIdx / nodes.length) * 100) / 100,
-      length: type === 'tabletop' ? 6.0 : (type.includes('start') || type.includes('finish') ? 4.0 : 3.0),
-      height: type === 'tabletop' ? 1.5 : (type === 'kicker' ? 2.0 : 0)
-    });
-
+    const targetNode = nodes[minIdx];
+    if (type === 'start_chute' || type === 'start_chute_gate') {
+      let existing = editorState.trackData.features.find(f => f.type && f.type.includes('start'));
+      if (existing) {
+        existing.nodeIndex = minIdx;
+        existing.x = targetNode.x;
+        existing.y = targetNode.y !== undefined ? targetNode.y : 1.0;
+        existing.z = targetNode.z;
+        existing.heading = -1.716;
+        existing.width = 20;
+      } else {
+        editorState.trackData.features.push({
+          type: 'start_chute_gate',
+          name: 'Start Chute Staging Gate',
+          nodeIndex: minIdx,
+          x: targetNode.x,
+          y: targetNode.y !== undefined ? targetNode.y : 1.0,
+          z: targetNode.z,
+          heading: -1.716,
+          width: 20
+        });
+      }
+    } else if (type === 'finish_line' || type === 'finish_timing_gate') {
+      let existing = editorState.trackData.features.find(f => f.type && f.type.includes('finish'));
+      if (existing) {
+        existing.nodeIndex = minIdx;
+        existing.x = targetNode.x;
+        existing.y = targetNode.y !== undefined ? targetNode.y : 3.0;
+        existing.z = targetNode.z;
+        existing.heading = 1.406;
+        existing.width = 6.5;
+        existing.t = Math.round((minIdx / nodes.length) * 100) / 100;
+      } else {
+        editorState.trackData.features.push({
+          type: 'finish_timing_gate',
+          name: 'Lap Finish & Timing Gate',
+          nodeIndex: minIdx,
+          x: targetNode.x,
+          y: targetNode.y !== undefined ? targetNode.y : 3.0,
+          z: targetNode.z,
+          heading: 1.406,
+          width: 6.5,
+          t: Math.round((minIdx / nodes.length) * 100) / 100
+        });
+      }
+    }
+    syncToGlobalTrackData();
+    saveDraft();
+    updateNumberedFeaturesUI();
     draw();
   }
 

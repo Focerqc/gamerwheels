@@ -12,19 +12,20 @@
   global.TRACK_DATA_HOLLISTER = {
   "name": "Hollister Hills RFTR",
   "version": "2.0",
+  "exportedAt": "2026-09-10T22:54:36.456Z",
   "closed": true,
   "loopTargetNode": 5,
   "isChuteCircuit": true,
   "width": 5,
   "surfaceMaterial": "dirt",
-  "totalLengthMeters": 891.4683832013119,
-  "chuteLengthMeters": 95.22892070187223,
-  "circuitLengthMeters": 796.2394624994397,
+  "totalLengthMeters": 900.0961670766008,
+  "chuteLengthMeters": 95.15012152738679,
+  "circuitLengthMeters": 804.946045549214,
   "spawn": {
-    "x": 164.5,
-    "y": 1.2,
-    "z": -68.4,
-    "heading": -1.716
+    "x": 160,
+    "y": 2,
+    "z": -69.1,
+    "heading": 0
   },
   "gates": {
     "startChute": {
@@ -36,10 +37,10 @@
       "radius": 14
     },
     "lapFinish": {
-      "nodeIndex": 56,
-      "x": 99.2,
-      "y": 3,
-      "z": -108.1,
+      "nodeIndex": 54,
+      "x": 84.4,
+      "y": 3.2,
+      "z": -95.1,
       "heading": 1.406,
       "radius": 8
     }
@@ -58,39 +59,49 @@
     {
       "type": "finish_timing_gate",
       "name": "Lap Finish & Timing Gate",
-      "nodeIndex": 56,
-      "x": 99.2,
-      "y": 3,
-      "z": -108.1,
+      "nodeIndex": 54,
+      "x": 84.4,
+      "y": 3.2,
+      "z": -95.1,
       "heading": 1.406,
-      "width": 6.5
+      "width": 6.5,
+      "t": 0.95
     },
     {
       "type": "rftr_feature",
       "number": 1,
       "name": "Feature 1",
-      "nodeIndex": 24,
-      "x": -9.4,
-      "y": 6.25,
-      "z": -119.4
+      "nodeIndex": 26,
+      "x": -13.4,
+      "y": 6.63,
+      "z": -100.8,
+      "t": 0.46
     },
     {
       "type": "rftr_feature",
       "number": 2,
       "name": "Feature 2",
-      "nodeIndex": 32,
-      "x": -38,
-      "y": 5.4,
-      "z": -50.3
+      "nodeIndex": 33,
+      "x": 3.3,
+      "y": 6.32,
+      "z": -47.3,
+      "t": 0.59
     },
     {
       "type": "rftr_feature",
       "number": 3,
       "name": "Feature 3",
-      "nodeIndex": 35,
-      "x": 15.1,
-      "y": 6.6,
-      "z": -55.4
+      "nodeIndex": 45,
+      "x": 37.4,
+      "y": 4.25,
+      "z": -72,
+      "t": 0.79
+    }
+  ],
+  "checkpoints": [
+    {
+      "name": "Start Gate",
+      "t": 0
     }
   ],
   "nodes": [
@@ -116,9 +127,9 @@
       "w": 12
     },
     {
-      "x": 96,
+      "x": 97.8,
       "y": 2.26,
-      "z": -96.6,
+      "z": -99.7,
       "bank": 0,
       "w": 8
     },
@@ -250,15 +261,15 @@
       "bank": 0
     },
     {
-      "x": -13.4,
+      "x": -15.5,
       "y": 6.42,
-      "z": -110.9,
+      "z": -114.3,
       "bank": 0
     },
     {
       "x": -13.4,
       "y": 6.63,
-      "z": -101.7,
+      "z": -100.8,
       "bank": 0
     },
     {
@@ -304,9 +315,9 @@
       "bank": 0
     },
     {
-      "x": 3.7,
+      "x": 3.3,
       "y": 6.32,
-      "z": -48,
+      "z": -47.3,
       "bank": 0
     },
     {
@@ -376,21 +387,21 @@
       "bank": 0
     },
     {
+      "x": 29,
+      "y": 4.22,
+      "z": -78.4,
+      "bank": 0
+    },
+    {
       "x": 31.1,
       "y": 4.22,
-      "z": -77.7,
+      "z": -83.7,
       "bank": 0
     },
     {
-      "x": 31.7,
+      "x": 39.1,
       "y": 4.22,
-      "z": -82.3,
-      "bank": 0
-    },
-    {
-      "x": 37.4,
-      "y": 4.22,
-      "z": -83.2,
+      "z": -81.9,
       "bank": 0
     },
     {

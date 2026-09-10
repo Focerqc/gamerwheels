@@ -136,6 +136,36 @@
                   <span>Right Stick ▲/▼ Tilt</span>
                 </div>
               </div>
+
+              <div class="exp9-controls-divider"></div>
+
+              <div class="exp9-controls-legend">
+                <div class="exp9-legend-title">⌨️ Keyboard</div>
+                <div class="exp9-legend-row">
+                  <span class="exp9-badge-tag"><kbd>WASD</kbd> / <kbd>Arrows</kbd></span>
+                  <span>Drive</span>
+                </div>
+                <div class="exp9-legend-row">
+                  <span class="exp9-badge-tag"><kbd>Space</kbd> / <kbd>Num 5</kbd></span>
+                  <span>Hop / Jump</span>
+                </div>
+                <div class="exp9-legend-row">
+                  <span class="exp9-badge-tag"><kbd>Num 7 9 1 3</kbd></span>
+                  <span>Butters</span>
+                </div>
+                <div class="exp9-legend-row">
+                  <span class="exp9-badge-tag"><kbd>Num 8 2 4 6</kbd></span>
+                  <span>Tilt / Spin</span>
+                </div>
+                <div class="exp9-legend-row">
+                  <span class="exp9-badge-tag"><kbd>Scroll</kbd></span>
+                  <span>Zoom</span>
+                </div>
+                <div class="exp9-legend-row">
+                  <span class="exp9-badge-tag"><kbd>R</kbd></span>
+                  <span>Reset / Respawn</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -244,14 +274,7 @@
         </button>
       </div>
 
-      <!-- Quick Controls Hint Legend (Desktop) -->
-      <div class="exp9-desktop-controls-hint">
-        <span><kbd>WASD</kbd> / <kbd>Arrows</kbd> Drive</span>
-        <span><kbd>Numpad 7 9 1 3</kbd> Butters</span>
-        <span><kbd>Space</kbd> Hop</span>
-        <span><kbd>Scroll</kbd> Zoom</span>
-        <span><kbd>R</kbd> Reset</span>
-      </div>
+
 
     </div>
   </div>
@@ -413,30 +436,21 @@
           <div id="numberedFeaturesList" class="numbered-features-list">
             <!-- Dynamically populated -->
           </div>
+          <button type="button" id="btnAddNumberedFeature" class="editor-btn secondary" style="width: 100%; margin-top: 8px; font-size: 0.8rem; justify-content: center;">
+            ➕ Add Numbered Feature
+          </button>
         </div>
 
         <!-- Track Features Palette -->
         <div class="editor-panel">
           <h3 class="panel-title">🚩 Track Features</h3>
-          <p class="tool-desc">Drag onto the track spline to attach features:</p>
+          <p class="tool-desc">Drag onto the track spline to attach gates:</p>
           <div class="features-palette">
             <div class="editor-token" draggable="true" data-type="start_chute">
               <span class="token-icon">🏁</span> Start Gate (Chute)
             </div>
             <div class="editor-token" draggable="true" data-type="finish_line">
               <span class="token-icon">🏁</span> Finish Line (Lap)
-            </div>
-            <div class="editor-token" draggable="true" data-type="kicker">
-              <span class="token-icon">🔺</span> Kicker Ramp
-            </div>
-            <div class="editor-token" draggable="true" data-type="tabletop">
-              <span class="token-icon">🟧</span> Tabletop Jump
-            </div>
-            <div class="editor-token" draggable="true" data-type="berm">
-              <span class="token-icon">🌊</span> Banked Berm
-            </div>
-            <div class="editor-token" draggable="true" data-type="drop">
-              <span class="token-icon">🔻</span> Drop Feature
             </div>
           </div>
         </div>

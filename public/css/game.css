@@ -951,33 +951,17 @@ body {
 }
 
 /* Desktop Controls Helper Legend */
-.exp9-desktop-controls-hint {
-  position: absolute;
-  bottom: 1.25rem;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 1.25rem;
-  padding: 0.45rem 1rem;
-  background: rgba(15, 23, 42, 0.75);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: var(--radius-full);
-  font-size: 0.78rem;
-  color: #94a3b8;
-  pointer-events: none;
-}
-
-.exp9-desktop-controls-hint kbd {
+/* kbd keys inside the Controls dropdown legend */
+.exp9-controls-legend kbd {
   display: inline-block;
-  padding: 0.12rem 0.38rem;
+  padding: 0.1rem 0.35rem;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   color: #f1f5f9;
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 4px;
-  margin: 0 0.15rem;
+  margin: 0 0.1rem;
 }
 
 /* Collapsible Game Info Accordion */
@@ -1168,9 +1152,7 @@ body {
 
 /* Touchscreen & Tablet Device Ergonomics (iPad & Mobile) */
 @media (pointer: coarse) {
-  .exp9-desktop-controls-hint {
-    display: none !important;
-  }
+
   .exp9-joystick-zone {
     bottom: max(4.0rem, calc(2.8rem + env(safe-area-inset-bottom)));
     left: max(2.4rem, calc(1.8rem + env(safe-area-inset-left)));
@@ -1193,9 +1175,7 @@ body {
   .exp9-viewport-container {
     height: 540px;
   }
-  .exp9-desktop-controls-hint {
-    display: none;
-  }
+
   .exp9-brand-card {
     height: 72px;
     padding: 0.35rem 0.65rem;

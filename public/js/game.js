@@ -95,6 +95,8 @@
     ghostEntity: null,
     ghostActive: false,
     ghostElapsed: 0,
+    ghostLapCount: 0,
+    ghostStartTime: 0,
     activeTrackData: null
   };
 
@@ -747,6 +749,8 @@
           trackSession.lapStartTime = now;
           trackSession.ghostActive = true;
           trackSession.ghostElapsed = 0;
+          trackSession.ghostLapCount = 0;
+          trackSession.ghostStartTime = now;
 
           // Trigger drop gate immediately
           if (window.TrackBuilder && window.TrackBuilder.triggerDropGate) {
@@ -804,30 +808,54 @@
       trackSession.lapElapsed = elapsed;
       if (trackLapTimer) trackLapTimer.textContent = formatRaceTime(elapsed);
 
-      // 4. Update Ghost Replay Entity
+      // Split delta vs ghost
+      const ghostData = trackData.ghostData;
+      if (ghostData && ghostData.samples && ghostData.samples.length > 1) {
+        updateSplitDelta(p, elapsed, ghostData);
+      }
+    }
+
+    // 4. Ghost Replay Entity — runs on its own clock, independent of player race state
+    if (trackSession.ghostStartTime > 0) {
       const ghostData = trackData.ghostData;
       if (ghostData && ghostData.samples && ghostData.samples.length > 1 && trackSession.ghostEntity) {
-        trackSession.ghostElapsed = elapsed;
         const duration = ghostData.duration || 135.01;
+        const ghostElapsed = (now - trackSession.ghostStartTime) / 1000;
+        const ghostLapElapsed = ghostElapsed % duration;
+        const currentGhostLap = Math.floor(ghostElapsed / duration);
+        const MAX_GHOST_LAPS = 3;
 
-        if (elapsed <= duration) {
-          const sample = sampleGhostAtTime(ghostData.samples, elapsed);
+        if (currentGhostLap < MAX_GHOST_LAPS) {
+          // Still within 3 laps — animate normally
+          const sample = sampleGhostAtTime(ghostData.samples, ghostLapElapsed);
           if (sample) {
             trackSession.ghostEntity.visible = true;
             trackSession.ghostEntity.position.x = sample.x;
             trackSession.ghostEntity.position.z = sample.z;
-
-            // Height matches track ribbon surface
             const surfY = window.TrackBuilder.getSurfaceAt(sample.x, sample.z);
             trackSession.ghostEntity.position.y = surfY !== null ? surfY : sample.y;
             trackSession.ghostEntity.rotation.y = sample.heading;
           }
         } else {
-          trackSession.ghostEntity.visible = false;
+          // 3 laps done — park at start gate briefly, then begin a fresh 3-lap cycle
+          const respawnDelay = 2.5;
+          const timeSinceEnd = ghostElapsed - MAX_GHOST_LAPS * duration;
+          if (timeSinceEnd >= respawnDelay) {
+            // Reset clock for next 3-lap cycle
+            trackSession.ghostStartTime = now - (timeSinceEnd - respawnDelay) * 1000;
+          } else {
+            // Show ghost parked at the start position during the respawn pause
+            const firstSample = ghostData.samples[0];
+            if (firstSample) {
+              trackSession.ghostEntity.visible = true;
+              trackSession.ghostEntity.position.x = firstSample.x;
+              trackSession.ghostEntity.position.z = firstSample.z;
+              const surfY = window.TrackBuilder.getSurfaceAt(firstSample.x, firstSample.z);
+              trackSession.ghostEntity.position.y = surfY !== null ? surfY : firstSample.y;
+              trackSession.ghostEntity.rotation.y = firstSample.heading;
+            }
+          }
         }
-
-        // 5. Calculate Real-time Split Delta
-        updateSplitDelta(p, elapsed, ghostData);
       }
     }
   }
@@ -843,6 +871,8 @@
     trackSession.lastFinishCrossingTime = 0;
     trackSession.ghostActive = false;
     trackSession.ghostElapsed = 0;
+    trackSession.ghostLapCount = 0;
+    trackSession.ghostStartTime = 0;
 
     if (!trackSession.ghostEntity) {
       trackSession.ghostEntity = createGhostRacerMesh();
@@ -1153,9 +1183,10 @@
         case 'Numpad6':
           state.input.twistRight = true;
           break;
-        // 5: Quick Respawn
+        // 5: Jump
         case 'Numpad5':
-          respawnPlayer();
+          if (!state.input.jump) state.input.jumpPressed = true;
+          state.input.jump = true;
           break;
 
         case 'Space':
@@ -1221,6 +1252,7 @@
           state.input.twistRight = false;
           break;
 
+        case 'Numpad5':
         case 'Space':
           state.input.jump = false;
           state.input.jumpPressed = false;
@@ -1425,37 +1457,29 @@
       let butterPitch = 0;
       if (state.input.butterNoseLeft || (state.input.twistUp && state.input.twistLeft)) {
         butterPitch = 0.20; // Nose down
-        p.heading += 4.2 * dt;
-        p.roll = THREE.MathUtils.lerp(p.roll, 0.22, dt * 10);
         if (!p.butterTimer || p.butterTimer <= 0) {
-          showTrickToast('NOSE BUTTER! 🧈');
+          showTrickToast('NOSE BUTTER LEFT! 🧈');
           p.butterTimer = 1.2;
         }
         emitDustParticle(p.x + fwdX * 0.35, p.y, p.z + fwdZ * 0.35, -p.vx * 0.4, 0.4, -p.vz * 0.4, 0xd4af37);
       } else if (state.input.butterNoseRight || (state.input.twistUp && state.input.twistRight)) {
         butterPitch = 0.20; // Nose down
-        p.heading -= 4.2 * dt;
-        p.roll = THREE.MathUtils.lerp(p.roll, -0.22, dt * 10);
         if (!p.butterTimer || p.butterTimer <= 0) {
-          showTrickToast('NOSE BUTTER! 🧈');
+          showTrickToast('NOSE BUTTER RIGHT! 🧈');
           p.butterTimer = 1.2;
         }
         emitDustParticle(p.x + fwdX * 0.35, p.y, p.z + fwdZ * 0.35, -p.vx * 0.4, 0.4, -p.vz * 0.4, 0xd4af37);
       } else if (state.input.butterTailLeft || (state.input.twistDown && state.input.twistLeft)) {
         butterPitch = -0.22; // Tail down, nose up
-        p.heading += 4.2 * dt;
-        p.roll = THREE.MathUtils.lerp(p.roll, 0.22, dt * 10);
         if (!p.butterTimer || p.butterTimer <= 0) {
-          showTrickToast('TAIL BUTTER! 🧈');
+          showTrickToast('TAIL BUTTER LEFT! 🧈');
           p.butterTimer = 1.2;
         }
         emitDustParticle(p.x - fwdX * 0.35, p.y, p.z - fwdZ * 0.35, -p.vx * 0.4, 0.4, -p.vz * 0.4, 0xd4af37);
       } else if (state.input.butterTailRight || (state.input.twistDown && state.input.twistRight)) {
         butterPitch = -0.22; // Tail down, nose up
-        p.heading -= 4.2 * dt;
-        p.roll = THREE.MathUtils.lerp(p.roll, -0.22, dt * 10);
         if (!p.butterTimer || p.butterTimer <= 0) {
-          showTrickToast('TAIL BUTTER! 🧈');
+          showTrickToast('TAIL BUTTER RIGHT! 🧈');
           p.butterTimer = 1.2;
         }
         emitDustParticle(p.x - fwdX * 0.35, p.y, p.z - fwdZ * 0.35, -p.vx * 0.4, 0.4, -p.vz * 0.4, 0xd4af37);
