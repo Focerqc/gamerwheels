@@ -209,43 +209,92 @@
   }
 
   // ==========================================================================
-  // 3. Hollister Hills Free-Roam Outdoor Terrain
+  // 3. Hollister Hills Seamless Free-Roam Outdoor Terrain
   // ==========================================================================
-  function getOutdoorTerrainElevation(x, z) {
-    // Topography naturally tuned to cradle the Hollister Hills track:
-    // Track bounds: X in [-20, 200], Z in [-220, 20], heights Y in [1.0m, 20.0m].
-    // North/West crest around (60..120, -150..-80).
-    const dRidge = Math.hypot(x - 90, z - (-110));
-    const ridgeH = Math.max(0, 16.0 - dRidge * 0.12);
+  let sceneryGroup = null;
 
-    const wave1 = Math.sin(x * 0.022 + z * 0.018) * 3.2;
-    const wave2 = Math.cos(x * 0.045 - z * 0.032) * 1.5;
-    const slope = Math.max(0, -z * 0.038);
-
-    const raw = ridgeH * 0.65 + wave1 + wave2 + slope;
-    return Math.max(0.4, raw);
+  // Unified Surface Elevation (Track Ribbon + Free Roam Dirt Terrain)
+  function getSurfaceElevation(x, z) {
+    if (window.TrackBuilder && typeof window.TrackBuilder.getGroundElevationAt === 'function') {
+      return window.TrackBuilder.getGroundElevationAt(x, z);
+    }
+    return 1.0;
   }
 
   function createOutdoorTerrain() {
-    // 600m x 600m expansive terrain plane centered on track
+    if (terrainMesh) {
+      scene.remove(terrainMesh);
+      if (terrainMesh.geometry) terrainMesh.geometry.dispose();
+      if (terrainMesh.material) terrainMesh.material.dispose();
+      terrainMesh = null;
+    }
+
+    // Centered around track center (X: ~48, Z: ~-72)
+    // 650m x 650m expansive terrain with 130x130 quads (5m per quad)
     const geo = new THREE.PlaneGeometry(650, 650, 130, 130);
     geo.rotateX(-Math.PI / 2);
 
     const pos = geo.attributes.position;
+    const colors = [];
+    const colNear = new THREE.Color(0xa0522d); // Warm packed dirt / clay near track
+    const colMid = new THREE.Color(0x96734e);  // California dry earth
+    const colFar = new THREE.Color(0x6b5c3b);  // Distant olive/golden chaparral
+
+    const sps = (window.TrackBuilder && window.TrackBuilder._splinePoints) ? window.TrackBuilder._splinePoints : null;
+
     for (let i = 0; i < pos.count; i++) {
-      const px = pos.getX(i) + 90;
-      const pz = pos.getZ(i) - 90;
+      const px = pos.getX(i) + 48;
+      const pz = pos.getZ(i) - 72;
       pos.setX(i, px);
       pos.setZ(i, pz);
-      pos.setY(i, getOutdoorTerrainElevation(px, pz) - 0.25);
+
+      const rawY = getSurfaceElevation(px, pz);
+
+      let dist = Infinity;
+      if (sps && sps.length > 0) {
+        let minDistSq = Infinity;
+        for (let j = 0; j < sps.length; j += 2) {
+          const dx = px - sps[j].x;
+          const dz = pz - sps[j].z;
+          const d2 = dx * dx + dz * dz;
+          if (d2 < minDistSq) minDistSq = d2;
+        }
+        dist = Math.sqrt(minDistSq);
+
+        // Vertex color blending based on track distance
+        const vCol = new THREE.Color();
+        if (dist < 4.5) {
+          vCol.copy(colNear);
+        } else if (dist < 28.0) {
+          const t = (dist - 4.5) / 23.5;
+          vCol.lerpColors(colNear, colMid, t);
+        } else {
+          const t = Math.min(1.0, (dist - 28.0) / 45.0);
+          vCol.lerpColors(colMid, colFar, t);
+        }
+        // Subtle natural dirt noise
+        vCol.r += (Math.random() - 0.5) * 0.03;
+        vCol.g += (Math.random() - 0.5) * 0.025;
+        vCol.b += (Math.random() - 0.5) * 0.02;
+        colors.push(vCol.r, vCol.g, vCol.b);
+      } else {
+        colors.push(colNear.r, colNear.g, colNear.b);
+      }
+
+      // Slightly tuck the terrain under the ribbon by 0.06m directly under track to prevent z-fighting
+      const isUnderRibbon = dist <= 2.6;
+      pos.setY(i, isUnderRibbon ? rawY - 0.06 : rawY);
     }
+
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     geo.computeVertexNormals();
 
     const terrainMat = new THREE.MeshStandardMaterial({
-      color: 0x7a6348,
+      vertexColors: true,
       roughness: 0.94,
       metalness: 0.02,
-      flatShading: true
+      flatShading: false,
+      side: THREE.DoubleSide
     });
 
     terrainMesh = new THREE.Mesh(geo, terrainMat);
@@ -253,23 +302,31 @@
     terrainMesh.name = 'Hollister_Terrain';
     scene.add(terrainMesh);
 
-    // Add environmental oak trees and course markers in the backdrop
     createScenicProps();
   }
 
   function createScenicProps() {
+    if (!sceneryGroup) {
+      sceneryGroup = new THREE.Group();
+      scene.add(sceneryGroup);
+    } else {
+      while (sceneryGroup.children.length > 0) {
+        sceneryGroup.remove(sceneryGroup.children[0]);
+      }
+    }
+
     const oakGeo = new THREE.ConeGeometry(3.5, 7.0, 5);
     const trunkGeo = new THREE.CylinderGeometry(0.5, 0.7, 3.0, 5);
     const oakMat = new THREE.MeshStandardMaterial({ color: 0x2e4225, roughness: 0.9 });
     const trunkMat = new THREE.MeshStandardMaterial({ color: 0x3d2817, roughness: 0.95 });
 
-    // Distant perimeter vegetation
+    // Distant perimeter oaks centered around (48, -72)
     for (let i = 0; i < 48; i++) {
       const angle = (i / 48) * Math.PI * 2;
-      const dist = 140 + (i % 5) * 25 + Math.random() * 20;
-      const tx = 90 + Math.cos(angle) * dist;
-      const tz = -90 + Math.sin(angle) * dist;
-      const ty = getOutdoorTerrainElevation(tx, tz);
+      const dist = 140 + (i % 5) * 22 + Math.random() * 20;
+      const tx = 48 + Math.cos(angle) * dist;
+      const tz = -72 + Math.sin(angle) * dist;
+      const ty = getSurfaceElevation(tx, tz);
 
       const treeGroup = new THREE.Group();
       treeGroup.position.set(tx, ty, tz);
@@ -286,40 +343,8 @@
 
       const scale = 0.8 + Math.random() * 0.6;
       treeGroup.scale.set(scale, scale, scale);
-      scene.add(treeGroup);
+      sceneryGroup.add(treeGroup);
     }
-  }
-
-  // Unified Surface Elevation (Track Ribbon + Free Roam Terrain)
-  function getSurfaceElevation(x, z) {
-    // 1. High precision track ribbon elevation & banking
-    if (window.TrackBuilder && typeof window.TrackBuilder.getSurfaceAt === 'function') {
-      const trackY = window.TrackBuilder.getSurfaceAt(x, z);
-      if (trackY !== null && isFinite(trackY)) {
-        return trackY;
-      }
-    }
-
-    // 2. Track segments registered in collision list
-    for (let i = 0; i < state.trackObstacles.length; i++) {
-      const obs = state.trackObstacles[i];
-      if (obs.type === 'track_segment') {
-        const dx = x - obs.x;
-        const dz = z - obs.z;
-        const cosR = Math.cos(-(obs.rotation || 0));
-        const sinR = Math.sin(-(obs.rotation || 0));
-        const lx = dx * cosR + dz * sinR;
-        const lz = -dx * sinR + dz * cosR;
-        if (Math.abs(lx) <= obs.width / 2 && Math.abs(lz) <= (obs.length || 0) / 2) {
-          let segY = obs.baseY;
-          if (obs.bank) segY += Math.sin(obs.bank * Math.PI / 180) * lx;
-          return segY;
-        }
-      }
-    }
-
-    // 3. Natural free-roam dirt terrain
-    return getOutdoorTerrainElevation(x, z);
   }
 
   function registerTrackObstacle(obs) {
@@ -846,6 +871,9 @@
     // Build the track ribbon & 3D gates
     const result = window.TrackBuilder.build(trackData, scene, registerTrackObstacle);
 
+    // Build seamless outdoor free-roam terrain anchored to the compiled track
+    createOutdoorTerrain();
+
     state.world.mode = 'track';
     state.world.activeMap = mapName;
 
@@ -1362,7 +1390,6 @@
   function initGame() {
     initDOMElements();
     initThreeScene();
-    createOutdoorTerrain();
     initParticlesAndFX();
     loadX7BoardModel();
     initControls();

@@ -83,10 +83,7 @@
       // 5. Build and register features (tabletops, kickers, etc.)
       this._buildFeatures(trackData, registerObstacleFn);
 
-      // 6. Build terrain skirt around the track
-      this._buildTerrainSkirt(trackData);
-
-      // Add everything to scene
+      // Add track group to scene
       scene.add(this._trackGroup);
 
       this._built = true;
@@ -1252,76 +1249,60 @@
       };
     },
 
-    // -----------------------------------------------------------------------
-    // Internal: Terrain Skirt (ground around the track)
-    // -----------------------------------------------------------------------
-
-    _buildTerrainSkirt: function (trackData) {
-      // Build a simple ground plane around the track so the rider doesn't
-      // see the void. Uses a large disc with vertex-colored terrain.
-      var radius = 200;
-      var segments = 64;
-      var geo = new THREE.CircleGeometry(radius, segments);
-      geo.rotateX(-Math.PI / 2);
-
-      // Color the terrain based on distance from the track centerline
-      var pos = geo.attributes.position;
-      var colors = [];
-
-      for (var i = 0; i < pos.count; i++) {
-        var vx = pos.getX(i);
-        var vz = pos.getZ(i);
-
-        // Find nearest spline point distance
-        var minDist = Infinity;
-        var nearestY = 0;
-        for (var j = 0; j < this._splinePoints.length; j += 4) { // Sample every 4th for speed
-          var sp = this._splinePoints[j];
-          var d = Math.hypot(vx - sp.x, vz - sp.z);
-          if (d < minDist) {
-            minDist = d;
-            nearestY = sp.y;
-          }
-        }
-
-        // Terrain height: rises gently away from track
-        var terrainY = nearestY - 0.5 + Math.max(0, (minDist - 15) * 0.08);
-        pos.setY(i, Math.max(-1, terrainY));
-
-        // Color: brown dirt near track, fading to olive/green scrub farther out
-        var col = new THREE.Color();
-        if (minDist < 8) {
-          col.setHSL(0.08, 0.5, 0.28);
-        } else if (minDist < 30) {
-          var blend = (minDist - 8) / 22;
-          col.setHSL(0.08 + blend * 0.04, 0.45, 0.28 - blend * 0.06);
-        } else {
-          col.setHSL(0.12, 0.35, 0.22);
-        }
-
-        // Add some noise
-        col.r += (Math.random() - 0.5) * 0.04;
-        col.g += (Math.random() - 0.5) * 0.03;
-        col.b += (Math.random() - 0.5) * 0.02;
-
-        colors.push(col.r, col.g, col.b);
+    /**
+     * Get seamless ground elevation anywhere in the world, anchored to the nearest track point.
+     * Guaranteed to match the track ribbon at the edges and slope naturally outward into the open world.
+     */
+    getGroundElevationAt: function (worldX, worldZ) {
+      if (!this._built || !this._splinePoints || this._splinePoints.length === 0) {
+        return 1.0;
       }
 
-      geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-      geo.computeVertexNormals();
+      let bestDistSq = Infinity;
+      let bestIdx = 0;
 
-      var mat = new THREE.MeshStandardMaterial({
-        vertexColors: true,
-        roughness: 0.95,
-        metalness: 0.02,
-        side: THREE.DoubleSide,
-      });
+      for (let i = 0; i < this._splinePoints.length; i++) {
+        const sp = this._splinePoints[i];
+        const dx = worldX - sp.x;
+        const dz = worldZ - sp.z;
+        const d2 = dx * dx + dz * dz;
+        if (d2 < bestDistSq) {
+          bestDistSq = d2;
+          bestIdx = i;
+        }
+      }
 
-      var terrainMesh = new THREE.Mesh(geo, mat);
-      terrainMesh.receiveShadow = true;
-      terrainMesh.name = 'TrackTerrain';
+      const nearest = this._splinePoints[bestIdx];
+      const dist = Math.sqrt(bestDistSq);
+      const halfW = (nearest.w || (this._trackData && this._trackData.width) || 5.0) / 2.0;
 
-      this._trackGroup.add(terrainMesh);
+      // 1. If on the track ribbon, return track height with banking tilt
+      if (dist <= halfW) {
+        let y = nearest.y;
+        const tangent = this._splineTangents[bestIdx];
+        if (tangent) {
+          const rightX = -tangent.z;
+          const rightZ = tangent.x;
+          const rightLen = Math.hypot(rightX, rightZ);
+          if (rightLen > 0.001) {
+            const nrx = rightX / rightLen;
+            const nrz = rightZ / rightLen;
+            const lateralDist = (worldX - nearest.x) * nrx + (worldZ - nearest.z) * nrz;
+            const bankRad = (nearest.bank || 0) * Math.PI / 180;
+            y += Math.sin(bankRad) * lateralDist;
+          }
+        }
+        return y;
+      }
+
+      // 2. Seamless dirt shoulder and rolling open terrain
+      const offset = dist - halfW;
+      const shoulderDrop = Math.min(0.35, offset * 0.05);
+      const distantDrop = Math.max(0, offset - 5.0) * 0.03;
+      const rollingHills = (Math.sin(worldX * 0.035 + worldZ * 0.028) + Math.cos(worldX * 0.018 - worldZ * 0.022)) * 0.7;
+
+      const groundY = nearest.y - shoulderDrop - Math.min(3.5, distantDrop) + (offset > 10 ? rollingHills : 0);
+      return Math.max(0.2, groundY);
     },
   };
 
