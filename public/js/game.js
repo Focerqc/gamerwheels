@@ -2371,9 +2371,12 @@
 
   function onWindowResize() {
     if (!camera || !renderer) return;
-    camera.aspect = window.innerWidth / window.innerHeight;
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    camera.aspect = width / height;
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   }
 
   // ==========================================================================
@@ -2409,6 +2412,10 @@
     initControls();
 
     window.addEventListener('resize', onWindowResize);
+    window.addEventListener('orientationchange', () => setTimeout(onWindowResize, 100));
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', onWindowResize);
+    }
 
     // Immediately load & compile Hollister Hills RFTR Track
     if (window.TRACK_DATA_HOLLISTER) {

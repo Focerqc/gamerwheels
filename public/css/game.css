@@ -85,18 +85,27 @@ body {
   margin-bottom: 2rem;
 }
 
-/* Proper Full Game Viewport Frame */
+/* Proper Full Game Viewport Frame - Full-Bleed 100% Viewport */
 .exp9-viewport-container {
-  position: relative;
-  width: 100%;
-  height: 750px;
+  position: fixed;
+  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
   background: #090e17;
-  border: 1px solid rgba(99, 102, 241, 0.35);
-  border-radius: var(--radius-lg);
+  border: none;
+  border-radius: 0;
   overflow: hidden;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65), 0 0 35px rgba(99, 102, 241, 0.15);
+  box-shadow: none;
+  margin: 0;
+  padding: 0;
   user-select: none;
   touch-action: none;
+  z-index: 1;
 }
 
 #gameCanvas {
@@ -1170,34 +1179,144 @@ body {
   }
 }
 
-/* Mobile Responsiveness */
-@media (max-width: 768px) {
+/* /* Mobile & Tablet Responsiveness (Max-Width 850px) */
+@media (max-width: 850px) {
   .exp9-viewport-container {
-    height: 540px;
+    height: 100vh !important;
+    height: 100dvh !important;
+  }
+
+  .exp9-hud-layer {
+    padding: 0.5rem 0.65rem;
+  }
+
+  .exp9-hud-top-row {
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.35rem;
+  }
+
+  .exp9-hud-top-left {
+    gap: 0.3rem;
   }
 
   .exp9-brand-card {
-    height: 72px;
-    padding: 0.35rem 0.65rem;
+    height: 46px;
+    padding: 0.2rem 0.5rem;
+    border-radius: 10px;
+  }
+  .exp9-brand-badge {
+    font-size: 0.55rem;
+    margin-bottom: 0;
   }
   .exp9-brand-title {
-    font-size: 1.05rem;
+    font-size: 0.82rem;
   }
+
   .exp9-speedo-card {
-    width: 72px;
-    height: 72px;
+    width: 46px;
+    height: 46px;
+    padding: 0.15rem;
+    border-radius: 10px;
   }
   .exp9-speedo-num {
-    font-size: 1.35rem;
+    font-size: 1.1rem;
   }
+  .exp9-speedo-unit {
+    font-size: 0.5rem;
+    margin-top: 0;
+  }
+  .exp9-speedo-bar-track {
+    display: none;
+  }
+
   .exp9-compass-card {
-    width: 50px;
-    height: 50px;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
   }
-  .exp9-hud-top-row {
-    flex-wrap: wrap;
-    gap: 0.4rem;
+  .exp9-compass-text {
+    font-size: 0.55rem;
   }
+
+  .exp9-hud-top-right {
+    gap: 0.25rem;
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+
+  /* Collapse button text on mobile to display clean touch icons */
+  .exp9-hud-btn .exp9-btn-text,
+  .exp9-controls-btn .exp9-btn-text {
+    display: none !important;
+  }
+
+  .exp9-hud-btn {
+    padding: 0.4rem 0.5rem;
+    gap: 0.15rem;
+    font-size: 0.75rem;
+    border-radius: 10px;
+  }
+
+  .exp9-controls-btn {
+    padding: 0.4rem 0.5rem;
+    border-radius: 10px;
+  }
+
+  .exp9-online-badge {
+    padding: 0.35rem 0.55rem;
+    font-size: 0.72rem;
+  }
+
+  .exp9-zoom-controls {
+    display: flex;
+  }
+
+  /* Nico Split Timer Overlay: Compact Top Pill on Mobile */
+  .exp9-track-racing-hud {
+    top: 56px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 10px;
+    gap: 8px;
+    border-radius: 9999px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55);
+    z-index: 35;
+  }
+
+  .exp9-track-hud-reset-hint {
+    display: none !important;
+  }
+
+  .exp9-track-hud-main {
+    gap: 10px;
+  }
+
+  .exp9-track-hud-pill {
+    font-size: 0.6rem;
+    padding: 2px 7px;
+  }
+
+  .exp9-track-hud-label {
+    font-size: 0.5rem;
+    margin-bottom: 0;
+  }
+
+  .exp9-track-hud-timer {
+    font-size: 0.95rem;
+    min-width: 68px;
+  }
+
+  .exp9-track-hud-split {
+    font-size: 0.85rem;
+    min-width: 52px;
+  }
+
+  .exp9-track-hud-target {
+    font-size: 0.78rem;
+  }
+
   .exp9-checkpoints-bar {
     order: 3;
     width: 100%;
