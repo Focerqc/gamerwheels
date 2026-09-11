@@ -736,10 +736,11 @@
       var extrudeSettings = { depth: width, bevelEnabled: false };
       var geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
 
-      // The track runs along +Z, so the feature geometry needs to be rotated so its
-      // length follows the track direction instead of the default +X axis.
+      // Center the geometry on its own origin before placing it on the spline.
+      // This keeps the ramp physically sitting on the track centerline instead of
+      // drifting off to the side after the rotation.
       geo.rotateY(-Math.PI / 2);
-      geo.translate(-width / 2, 0, -halfLen);
+      geo.center();
 
       var mat = new THREE.MeshStandardMaterial({
         color: 0x8B6914,
@@ -789,7 +790,7 @@
       var width = props.w || this._trackData.width;
       var halfLen = feat.length / 2;
 
-      // Visual wedge mesh aligned with the track direction instead of a flat box.
+      // Center the geometry on its own origin before placing it on the spline.
       var shape = new THREE.Shape();
       shape.moveTo(0, 0);
       shape.lineTo(feat.length, feat.height);
@@ -799,7 +800,7 @@
       var extrudeSettings = { depth: width, bevelEnabled: false };
       var geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
       geo.rotateY(-Math.PI / 2);
-      geo.translate(-width / 2, 0, -halfLen);
+      geo.center();
 
       var mat = new THREE.MeshStandardMaterial({
         color: 0x9B7B2C,
