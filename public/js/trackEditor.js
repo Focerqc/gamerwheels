@@ -140,9 +140,180 @@
       });
     }
 
+    // 3D Inspection Mode
+    function enter3DInspection() {
+      syncToGlobalTrackData();
+      saveDraft();
+
+      // Compile current track directly into Three.js scene
+      if (typeof window.loadTrackMap === 'function') {
+        window.loadTrackMap('RFTR_Hollister', window.TRACK_DATA_HOLLISTER);
+      }
+
+      // Switch camera to inspect mode
+      if (window.GamerWheels && window.GamerWheels.setCameraMode) {
+        if (editorState.selectedFeatureIndex !== -1 && editorState.trackData.features && editorState.trackData.features[editorState.selectedFeatureIndex]) {
+          const feat = editorState.trackData.features[editorState.selectedFeatureIndex];
+          window.GamerWheels.focusFeature(feat);
+        } else if (editorState.selectedNodeIndex !== -1 && editorState.trackData.nodes && editorState.trackData.nodes[editorState.selectedNodeIndex]) {
+          const n = editorState.trackData.nodes[editorState.selectedNodeIndex];
+          window.GamerWheels.setCameraMode('inspect', { x: n.x, y: n.y || 0, z: n.z });
+        } else {
+          window.GamerWheels.setCameraMode('inspect');
+        }
+      }
+
+      populate3DFocusSelector();
+
+      const cont = document.getElementById('trackEditorContainer');
+      if (cont) cont.classList.add('view-3d-active');
+
+      const bar = document.getElementById('editor3DInspectionBar');
+      if (bar) bar.style.display = 'flex';
+
+      const tips = document.getElementById('editor3DInspectionTips');
+      if (tips) tips.style.display = 'block';
+    }
+
+    function exit3DInspection() {
+      const cont = document.getElementById('trackEditorContainer');
+      if (cont) cont.classList.remove('view-3d-active');
+
+      const bar = document.getElementById('editor3DInspectionBar');
+      if (bar) bar.style.display = 'none';
+
+      const tips = document.getElementById('editor3DInspectionTips');
+      if (tips) tips.style.display = 'none';
+
+      draw();
+    }
+
+    function toggle3DInspection() {
+      const cont = document.getElementById('trackEditorContainer');
+      if (cont && cont.classList.contains('view-3d-active')) {
+        exit3DInspection();
+      } else {
+        enter3DInspection();
+      }
+    }
+
+    function populate3DFocusSelector() {
+      const sel = document.getElementById('select3DFocusFeature');
+      if (!sel) return;
+      sel.innerHTML = '';
+
+      const optSpawn = document.createElement('option');
+      optSpawn.value = 'spawn';
+      optSpawn.textContent = '🏁 Start Chute / Spawn';
+      sel.appendChild(optSpawn);
+
+      const features = editorState.trackData.features || [];
+      features.forEach((feat, idx) => {
+        const opt = document.createElement('option');
+        opt.value = `feat_${idx}`;
+        const name = feat.name || (feat.type === 'kicker' ? 'Kicker' : (feat.type === 'tabletop' ? 'Lilypad' : feat.type));
+        const numStr = feat.number ? `#${feat.number} ` : '';
+        opt.textContent = `🎯 ${numStr}${name} (${feat.type})`;
+        if (editorState.selectedFeatureIndex === idx) {
+          opt.selected = true;
+        }
+        sel.appendChild(opt);
+      });
+
+      const optFinish = document.createElement('option');
+      optFinish.value = 'finish';
+      optFinish.textContent = '🏁 Finish Line Gate';
+      sel.appendChild(optFinish);
+    }
+
+    const btnToggle3DInspect = document.getElementById('btnToggle3DInspect');
+    if (btnToggle3DInspect) {
+      btnToggle3DInspect.addEventListener('click', toggle3DInspection);
+    }
+
+    const btnExit3DInspect = document.getElementById('btnExit3DInspect');
+    if (btnExit3DInspect) {
+      btnExit3DInspect.addEventListener('click', exit3DInspection);
+    }
+
+    const sel3DFocus = document.getElementById('select3DFocusFeature');
+    if (sel3DFocus) {
+      sel3DFocus.addEventListener('change', (e) => {
+        const val = e.target.value;
+        if (val === 'spawn') {
+          const spawn = editorState.trackData.spawn || { x: 160, y: 1.5, z: -69.1 };
+          if (window.GamerWheels && window.GamerWheels.setCameraMode) {
+            window.GamerWheels.setCameraMode('inspect', spawn);
+          }
+        } else if (val.startsWith('feat_')) {
+          const fIdx = parseInt(val.replace('feat_', ''), 10);
+          const feat = editorState.trackData.features[fIdx];
+          if (feat && window.GamerWheels && window.GamerWheels.focusFeature) {
+            window.GamerWheels.focusFeature(feat);
+          }
+        } else if (val === 'finish') {
+          const nodes = editorState.trackData.nodes;
+          if (nodes && nodes.length > 0) {
+            const last = nodes[nodes.length - 1];
+            if (window.GamerWheels && window.GamerWheels.setCameraMode) {
+              window.GamerWheels.setCameraMode('inspect', { x: last.x, y: last.y || 0, z: last.z });
+            }
+          }
+        }
+      });
+    }
+
+    const btn3DPresetIso = document.getElementById('btn3DPresetIso');
+    if (btn3DPresetIso) {
+      btn3DPresetIso.addEventListener('click', () => {
+        if (window.GamerWheels && window.GamerWheels.setCameraMode) {
+          window.GamerWheels.setCameraMode('isometric');
+        }
+        btn3DPresetIso.classList.add('active');
+        document.getElementById('btn3DPresetTop')?.classList.remove('active');
+        document.getElementById('btn3DPresetOrbit')?.classList.remove('active');
+      });
+    }
+
+    const btn3DPresetTop = document.getElementById('btn3DPresetTop');
+    if (btn3DPresetTop) {
+      btn3DPresetTop.addEventListener('click', () => {
+        if (window.GamerWheels && window.GamerWheels.setCameraMode) {
+          window.GamerWheels.setCameraMode('topdown');
+        }
+        btn3DPresetTop.classList.add('active');
+        document.getElementById('btn3DPresetIso')?.classList.remove('active');
+        document.getElementById('btn3DPresetOrbit')?.classList.remove('active');
+      });
+    }
+
+    const btn3DPresetOrbit = document.getElementById('btn3DPresetOrbit');
+    if (btn3DPresetOrbit) {
+      btn3DPresetOrbit.addEventListener('click', () => {
+        if (window.GamerWheels && window.GamerWheels.setCameraMode) {
+          window.GamerWheels.setCameraMode('inspect');
+        }
+        btn3DPresetOrbit.classList.add('active');
+        document.getElementById('btn3DPresetIso')?.classList.remove('active');
+        document.getElementById('btn3DPresetTop')?.classList.remove('active');
+      });
+    }
+
+    const btn3DPlaytestRide = document.getElementById('btn3DPlaytestRide');
+    if (btn3DPlaytestRide) {
+      btn3DPlaytestRide.addEventListener('click', () => {
+        exit3DInspection();
+        window.closeTrackStudio();
+        if (window.GamerWheels && window.GamerWheels.setCameraMode) {
+          window.GamerWheels.setCameraMode('follow');
+        }
+      });
+    }
+
     const btnExitEditor = document.getElementById('btnExitEditor');
     if (btnExitEditor) {
       btnExitEditor.addEventListener('click', () => {
+        exit3DInspection();
         const cont = document.getElementById('trackEditorContainer');
         if (cont) cont.style.display = 'none';
       });
@@ -413,6 +584,12 @@
     const btnTree = document.getElementById('btnToolTree');
     if (btnTree) btnTree.classList.toggle('active', tool === 'tree');
     
+    // Toggle Foliage Panel visibility in sidebar based on active tool
+    const foliagePanel = document.getElementById('foliagePanel');
+    if (foliagePanel) {
+      foliagePanel.style.display = (tool === 'tree') ? 'block' : 'none';
+    }
+
     // Canvas cursor
     if (editorState.canvas) {
       if (tool === 'pan') editorState.canvas.style.cursor = 'grab';
@@ -503,6 +680,7 @@
     }
 
     setTool('pan');
+    updateInspector();
     const lbl = document.getElementById('lblLoopState');
     if (lbl) lbl.innerText = editorState.trackData.closed ? 'Closed' : 'Open';
     updateLoopTargetUI();
@@ -1452,6 +1630,22 @@
   function handleKeyDown(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
 
+    if (e.key === '3') {
+      toggle3DInspection();
+      return;
+    } else if (e.key === 'Escape') {
+      const cont = document.getElementById('trackEditorContainer');
+      if (cont && cont.classList.contains('view-3d-active')) {
+        exit3DInspection();
+        return;
+      }
+    } else if (e.code === 'Tab') {
+      e.preventDefault();
+      exit3DInspection();
+      window.toggleTrackStudio();
+      return;
+    }
+
     if (e.code === 'Space' && !editorState.isSpacePressed) {
       editorState.isSpacePressed = true;
       if (editorState.canvas) editorState.canvas.style.cursor = 'grab';
@@ -1640,9 +1834,24 @@
   function updateInspector() {
     const noSelectNotice = document.getElementById('noNodeSelectedNotice');
     const form = document.getElementById('nodeSelectedForm');
+    const nodeInspectorPanel = document.getElementById('nodeInspectorPanel');
+    const elevationTool = document.getElementById('elevationTool');
+
     const nodes = editorState.trackData.nodes;
     const nodeIdx = editorState.selectedNodeIndex;
-    const node = nodes[nodeIdx];
+    const hasSelectedNode = (nodeIdx !== -1 && nodes[nodeIdx]) || (editorState.selectedNodes && editorState.selectedNodes.size > 0);
+    const node = (nodeIdx !== -1) ? nodes[nodeIdx] : null;
+
+    if (!hasSelectedNode) {
+      if (nodeInspectorPanel) nodeInspectorPanel.style.display = 'none';
+      if (elevationTool) elevationTool.style.display = 'none';
+      if (noSelectNotice) noSelectNotice.style.display = 'block';
+      if (form) form.style.display = 'none';
+      return;
+    }
+
+    if (nodeInspectorPanel) nodeInspectorPanel.style.display = 'block';
+    if (elevationTool) elevationTool.style.display = 'block';
 
     if (!node) {
       if (noSelectNotice) noSelectNotice.style.display = 'block';
@@ -2914,110 +3123,112 @@
       ctx.restore();
     }
 
-    // 6.5 Draw Foliage & Trees (Photo-Accurate Multi-Lobed Canopies & Studio Selection Pins)
-    const scenery = editorState.trackData.scenery || [];
-    for (let i = 0; i < scenery.length; i++) {
-      const tree = scenery[i];
-      const { screenX, screenY } = worldToScreen(tree.x, tree.z);
-      const isSelected = (editorState.selectedTreeIndex === i);
-      const isHovered = (editorState.hoveredTreeIndex === i);
-      const isDragging = (editorState.isDraggingTree && editorState.selectedTreeIndex === i);
-      const scale = (tree.scale || 1.0) * (editorState.scale / 3.5);
+    // 6.5 Draw Foliage & Trees (Only drawn on map when Trees & Bushes tool is toggled ON)
+    if (editorState.currentTool === 'tree') {
+      const scenery = editorState.trackData.scenery || [];
+      for (let i = 0; i < scenery.length; i++) {
+        const tree = scenery[i];
+        const { screenX, screenY } = worldToScreen(tree.x, tree.z);
+        const isSelected = (editorState.selectedTreeIndex === i);
+        const isHovered = (editorState.hoveredTreeIndex === i);
+        const isDragging = (editorState.isDraggingTree && editorState.selectedTreeIndex === i);
+        const scale = (tree.scale || 1.0) * (editorState.scale / 3.5);
 
-      ctx.save();
+        ctx.save();
 
-      // Selection / Hover Halo Ring
-      if (isSelected || isHovered || isDragging) {
-        ctx.beginPath();
-        const haloR = (tree.type === 'mature_oak' ? 24 : (tree.type === 'mid_oak' ? 18 : 12)) * scale;
-        ctx.arc(screenX, screenY, Math.max(14, haloR), 0, Math.PI * 2);
-        ctx.fillStyle = isSelected ? 'rgba(0, 255, 255, 0.35)' : 'rgba(255, 255, 255, 0.25)';
-        ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = isSelected ? '#00ffff' : '#ffffff';
-        ctx.stroke();
+        // Selection / Hover Halo Ring
+        if (isSelected || isHovered || isDragging) {
+          ctx.beginPath();
+          const haloR = (tree.type === 'mature_oak' ? 24 : (tree.type === 'mid_oak' ? 18 : 12)) * scale;
+          ctx.arc(screenX, screenY, Math.max(14, haloR), 0, Math.PI * 2);
+          ctx.fillStyle = isSelected ? 'rgba(0, 255, 255, 0.35)' : 'rgba(255, 255, 255, 0.25)';
+          ctx.fill();
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = isSelected ? '#00ffff' : '#ffffff';
+          ctx.stroke();
+        }
+
+        // 2D Realistic Canopy
+        if (tree.type === 'mature_oak') {
+          const r = 16 * scale;
+          // Shadow underneath
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+          ctx.beginPath();
+          ctx.ellipse(screenX + 3 * scale, screenY + 4 * scale, r * 1.05, r * 0.75, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Multi-lobe Live Oak Canopy
+          const lobes = [
+            { ox: 0, oy: 0, rad: r * 0.95, col: '#1b4332' },
+            { ox: -6 * scale, oy: -3 * scale, rad: r * 0.7, col: '#2d6a4f' },
+            { ox: 6 * scale, oy: -4 * scale, rad: r * 0.72, col: '#2d6a4f' },
+            { ox: -4 * scale, oy: 4 * scale, rad: r * 0.65, col: '#40916c' },
+            { ox: 5 * scale, oy: 3 * scale, rad: r * 0.68, col: '#40916c' },
+            { ox: 0, oy: -2 * scale, rad: r * 0.55, col: '#52b788' }
+          ];
+          lobes.forEach(l => {
+            ctx.beginPath();
+            ctx.arc(screenX + l.ox, screenY + l.oy, l.rad, 0, Math.PI * 2);
+            ctx.fillStyle = l.col;
+            ctx.fill();
+          });
+
+          // Center trunk dot
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, Math.max(2, 2.5 * scale), 0, Math.PI * 2);
+          ctx.fillStyle = '#2e2017';
+          ctx.fill();
+        } else if (tree.type === 'mid_oak') {
+          const r = 11 * scale;
+          // Shadow underneath
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+          ctx.beginPath();
+          ctx.ellipse(screenX + 2 * scale, screenY + 3 * scale, r * 1.05, r * 0.7, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // 3-Lobe Oak Canopy
+          const lobes = [
+            { ox: 0, oy: 0, rad: r * 0.9, col: '#2d6a4f' },
+            { ox: -4 * scale, oy: -2 * scale, rad: r * 0.65, col: '#40916c' },
+            { ox: 4 * scale, oy: -1 * scale, rad: r * 0.65, col: '#52b788' }
+          ];
+          lobes.forEach(l => {
+            ctx.beginPath();
+            ctx.arc(screenX + l.ox, screenY + l.oy, l.rad, 0, Math.PI * 2);
+            ctx.fillStyle = l.col;
+            ctx.fill();
+          });
+
+          // Center trunk dot
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, Math.max(1.8, 2.0 * scale), 0, Math.PI * 2);
+          ctx.fillStyle = '#2e2017';
+          ctx.fill();
+        } else {
+          // Bush / Chaparral Scrub
+          const r = 7.5 * scale;
+          // Shadow
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+          ctx.beginPath();
+          ctx.ellipse(screenX + 1.5 * scale, screenY + 2 * scale, r * 1.0, r * 0.65, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Bush Cluster
+          const lobes = [
+            { ox: 0, oy: 0, rad: r * 0.85, col: '#3d502a' },
+            { ox: -2.5 * scale, oy: 1 * scale, rad: r * 0.6, col: '#4a5d33' },
+            { ox: 2.5 * scale, oy: -1 * scale, rad: r * 0.6, col: '#56673a' }
+          ];
+          lobes.forEach(l => {
+            ctx.beginPath();
+            ctx.arc(screenX + l.ox, screenY + l.oy, l.rad, 0, Math.PI * 2);
+            ctx.fillStyle = l.col;
+            ctx.fill();
+          });
+        }
+
+        ctx.restore();
       }
-
-      // 2D Realistic Canopy
-      if (tree.type === 'mature_oak') {
-        const r = 16 * scale;
-        // Shadow underneath
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-        ctx.beginPath();
-        ctx.ellipse(screenX + 3 * scale, screenY + 4 * scale, r * 1.05, r * 0.75, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Multi-lobe Live Oak Canopy
-        const lobes = [
-          { ox: 0, oy: 0, rad: r * 0.95, col: '#1b4332' },
-          { ox: -6 * scale, oy: -3 * scale, rad: r * 0.7, col: '#2d6a4f' },
-          { ox: 6 * scale, oy: -4 * scale, rad: r * 0.72, col: '#2d6a4f' },
-          { ox: -4 * scale, oy: 4 * scale, rad: r * 0.65, col: '#40916c' },
-          { ox: 5 * scale, oy: 3 * scale, rad: r * 0.68, col: '#40916c' },
-          { ox: 0, oy: -2 * scale, rad: r * 0.55, col: '#52b788' }
-        ];
-        lobes.forEach(l => {
-          ctx.beginPath();
-          ctx.arc(screenX + l.ox, screenY + l.oy, l.rad, 0, Math.PI * 2);
-          ctx.fillStyle = l.col;
-          ctx.fill();
-        });
-
-        // Center trunk dot
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, Math.max(2, 2.5 * scale), 0, Math.PI * 2);
-        ctx.fillStyle = '#2e2017';
-        ctx.fill();
-      } else if (tree.type === 'mid_oak') {
-        const r = 11 * scale;
-        // Shadow underneath
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-        ctx.beginPath();
-        ctx.ellipse(screenX + 2 * scale, screenY + 3 * scale, r * 1.05, r * 0.7, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 3-Lobe Oak Canopy
-        const lobes = [
-          { ox: 0, oy: 0, rad: r * 0.9, col: '#2d6a4f' },
-          { ox: -4 * scale, oy: -2 * scale, rad: r * 0.65, col: '#40916c' },
-          { ox: 4 * scale, oy: -1 * scale, rad: r * 0.65, col: '#52b788' }
-        ];
-        lobes.forEach(l => {
-          ctx.beginPath();
-          ctx.arc(screenX + l.ox, screenY + l.oy, l.rad, 0, Math.PI * 2);
-          ctx.fillStyle = l.col;
-          ctx.fill();
-        });
-
-        // Center trunk dot
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, Math.max(1.8, 2.0 * scale), 0, Math.PI * 2);
-        ctx.fillStyle = '#2e2017';
-        ctx.fill();
-      } else {
-        // Bush / Chaparral Scrub
-        const r = 7.5 * scale;
-        // Shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-        ctx.beginPath();
-        ctx.ellipse(screenX + 1.5 * scale, screenY + 2 * scale, r * 1.0, r * 0.65, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Bush Cluster
-        const lobes = [
-          { ox: 0, oy: 0, rad: r * 0.85, col: '#3d502a' },
-          { ox: -2.5 * scale, oy: 1 * scale, rad: r * 0.6, col: '#4a5d33' },
-          { ox: 2.5 * scale, oy: -1 * scale, rad: r * 0.6, col: '#56673a' }
-        ];
-        lobes.forEach(l => {
-          ctx.beginPath();
-          ctx.arc(screenX + l.ox, screenY + l.oy, l.rad, 0, Math.PI * 2);
-          ctx.fillStyle = l.col;
-          ctx.fill();
-        });
-      }
-
-      ctx.restore();
     }
 
     // 6.6 Tree Brush Preview Ring

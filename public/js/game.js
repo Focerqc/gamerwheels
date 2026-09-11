@@ -57,9 +57,12 @@
       targetDistance: 4.2,
       manualTimer: 0,
       isOrbiting: false,
+      isPanning: false,
       lastPointerX: 0,
       lastPointerY: 0,
-      lookTarget: null
+      lookTarget: null,
+      mode: 'follow', // 'follow' | 'orbit' | 'riding_isometric' | 'inspect' | 'isometric' | 'topdown'
+      inspectTarget: { x: 160, y: 1.5, z: -69.1 }
     },
     input: {
       up: false,
@@ -1556,6 +1559,33 @@
         case 'KeyR':
           respawnPlayer();
           break;
+
+        case 'KeyC': {
+          const editorCont = document.getElementById('trackEditorContainer');
+          const isEditorOpen = editorCont && editorCont.style.display === 'flex';
+          if (!isEditorOpen) {
+            if (state.camera.mode === 'follow') {
+              state.camera.mode = 'orbit';
+              showTrickToast('CAMERA: FREE ORBIT 🎥');
+            } else if (state.camera.mode === 'orbit') {
+              state.camera.mode = 'riding_isometric';
+              showTrickToast('CAMERA: 45° ISOMETRIC 📐');
+            } else {
+              state.camera.mode = 'follow';
+              showTrickToast('CAMERA: THIRD-PERSON 🏁');
+              snapCamera();
+            }
+          }
+          break;
+        }
+
+        case 'Tab': {
+          e.preventDefault();
+          if (typeof window.toggleTrackStudio === 'function') {
+            window.toggleTrackStudio();
+          }
+          break;
+        }
       }
     });
 
@@ -1624,6 +1654,7 @@
     window.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       state.camera.isOrbiting = false;
+      state.camera.isPanning = false;
     });
 
     // Reset input state when focus is lost
@@ -1643,18 +1674,28 @@
       state.input.butterTailLeft = false;
       state.input.butterTailRight = false;
       state.camera.isOrbiting = false;
+      state.camera.isPanning = false;
     });
 
-    // Mouse Drag Orbit Camera
+    // Mouse Drag Orbit Camera & Right-Click Pan in 3D Inspect
     window.addEventListener('mousedown', (e) => {
-      if (e.target === gameCanvas) {
-        state.camera.isOrbiting = true;
+      const editorCont = document.getElementById('trackEditorContainer');
+      const is3DInspect = editorCont && editorCont.classList.contains('view-3d-active');
+      if (e.target === gameCanvas || is3DInspect) {
+        if (e.button === 0) {
+          state.camera.isOrbiting = true;
+          state.camera.isPanning = false;
+        } else if (e.button === 2 || e.button === 1) {
+          state.camera.isPanning = true;
+          state.camera.isOrbiting = false;
+        }
         state.camera.lastPointerX = e.clientX;
         state.camera.lastPointerY = e.clientY;
       }
     });
 
     window.addEventListener('mousemove', (e) => {
+      const isInspect = (state.camera.mode === 'inspect' || state.camera.mode === 'isometric' || state.camera.mode === 'topdown');
       if (state.camera.isOrbiting) {
         const dx = e.clientX - state.camera.lastPointerX;
         const dy = e.clientY - state.camera.lastPointerY;
@@ -1662,13 +1703,33 @@
         state.camera.lastPointerY = e.clientY;
 
         state.camera.yaw -= dx * 0.005;
-        state.camera.pitch = THREE.MathUtils.clamp(state.camera.pitch + dy * 0.005, 0.05, 1.25);
+        const minPitch = (state.camera.mode === 'topdown') ? 1.35 : 0.05;
+        const maxPitch = (state.camera.mode === 'topdown') ? 1.55 : (isInspect ? 1.45 : 1.25);
+        state.camera.pitch = THREE.MathUtils.clamp(state.camera.pitch + dy * 0.005, minPitch, maxPitch);
         state.camera.manualTimer = 1.0;
+      } else if (state.camera.isPanning && isInspect) {
+        const dx = e.clientX - state.camera.lastPointerX;
+        const dy = e.clientY - state.camera.lastPointerY;
+        state.camera.lastPointerX = e.clientX;
+        state.camera.lastPointerY = e.clientY;
+
+        const panSpeed = Math.max(0.02, state.camera.distance * 0.0018);
+        const forwardX = -Math.sin(state.camera.yaw);
+        const forwardZ = -Math.cos(state.camera.yaw);
+        const rightX = Math.cos(state.camera.yaw);
+        const rightZ = -Math.sin(state.camera.yaw);
+
+        state.camera.inspectTarget.x += (-rightX * dx + forwardX * dy) * panSpeed;
+        state.camera.inspectTarget.z += (-rightZ * dx + forwardZ * dy) * panSpeed;
+        if (typeof getSurfaceElevation === 'function') {
+          state.camera.inspectTarget.y = getSurfaceElevation(state.camera.inspectTarget.x, state.camera.inspectTarget.z);
+        }
       }
     });
 
     window.addEventListener('mouseup', () => {
       state.camera.isOrbiting = false;
+      state.camera.isPanning = false;
     });
 
     window.addEventListener('wheel', (e) => {
@@ -1677,13 +1738,27 @@
   }
 
   function adjustZoom(delta) {
-    state.camera.targetDistance = THREE.MathUtils.clamp(state.camera.targetDistance + delta, 1.8, 8.5);
+    const isInspect = (state.camera.mode === 'inspect' || state.camera.mode === 'isometric' || state.camera.mode === 'topdown');
+    if (isInspect) {
+      const zoomFactor = Math.max(1.8, state.camera.targetDistance * 0.15);
+      const step = delta > 0 ? zoomFactor : -zoomFactor;
+      state.camera.targetDistance = THREE.MathUtils.clamp(state.camera.targetDistance + step, 2.5, 350.0);
+    } else {
+      state.camera.targetDistance = THREE.MathUtils.clamp(state.camera.targetDistance + delta, 1.8, 8.5);
+    }
   }
 
   // ==========================================================================
   // 9. Physics Simulation & Movement Loop
   // ==========================================================================
   function updatePhysics(dt) {
+    // If inspecting in 3D or in Track Studio, pause rider simulation
+    const editorCont = document.getElementById('trackEditorContainer');
+    const isStudioOpen = editorCont && editorCont.style.display === 'flex';
+    if (state.camera.mode === 'inspect' || state.camera.mode === 'isometric' || state.camera.mode === 'topdown' || isStudioOpen) {
+      return;
+    }
+
     const p = state.player;
 
     // 1. Input Direction
@@ -1920,26 +1995,93 @@
   // 10. Camera Tracking & HUD Updates
   // ==========================================================================
   function updateCamera(dt) {
+    const isInspect = (state.camera.mode === 'inspect' || state.camera.mode === 'isometric' || state.camera.mode === 'topdown');
+    
+    // 3D Inspection / Studio Flyaround Mode
+    if (isInspect) {
+      // Smooth zoom distance
+      state.camera.distance = THREE.MathUtils.lerp(state.camera.distance, state.camera.targetDistance, dt * 10);
+
+      // WASD / Arrow Keys fly navigation
+      let moveForward = 0;
+      let moveRight = 0;
+      if (state.input.up) moveForward += 1;
+      if (state.input.down) moveForward -= 1;
+      if (state.input.left) moveRight -= 1;
+      if (state.input.right) moveRight += 1;
+
+      if (moveForward !== 0 || moveRight !== 0) {
+        const flySpeed = Math.max(18.0, state.camera.distance * 0.9);
+        const forwardX = -Math.sin(state.camera.yaw);
+        const forwardZ = -Math.cos(state.camera.yaw);
+        const rightX = Math.cos(state.camera.yaw);
+        const rightZ = -Math.sin(state.camera.yaw);
+
+        state.camera.inspectTarget.x += (forwardX * moveForward + rightX * moveRight) * flySpeed * dt;
+        state.camera.inspectTarget.z += (forwardZ * moveForward + rightZ * moveRight) * flySpeed * dt;
+        if (typeof getSurfaceElevation === 'function') {
+          state.camera.inspectTarget.y = THREE.MathUtils.lerp(state.camera.inspectTarget.y, getSurfaceElevation(state.camera.inspectTarget.x, state.camera.inspectTarget.z), dt * 6.0);
+        }
+      }
+
+      const hDist = state.camera.distance * Math.cos(state.camera.pitch);
+      const targetCamX = state.camera.inspectTarget.x + hDist * Math.sin(state.camera.yaw);
+      const targetCamY = state.camera.inspectTarget.y + Math.max(1.0, state.camera.distance * Math.sin(state.camera.pitch));
+      const targetCamZ = state.camera.inspectTarget.z + hDist * Math.cos(state.camera.yaw);
+
+      camera.position.set(targetCamX, targetCamY, targetCamZ);
+      camera.lookAt(state.camera.inspectTarget.x, state.camera.inspectTarget.y + 0.5, state.camera.inspectTarget.z);
+
+      if (sunLight) {
+        sunLight.position.set(state.camera.inspectTarget.x + 100, state.camera.inspectTarget.y + 160, state.camera.inspectTarget.z + 70);
+        sunLight.target.position.set(state.camera.inspectTarget.x, state.camera.inspectTarget.y, state.camera.inspectTarget.z);
+        sunLight.target.updateMatrixWorld();
+      }
+      return;
+    }
+
+    // In-game riding isometric camera mode
+    if (state.camera.mode === 'riding_isometric') {
+      const p = state.player;
+      state.camera.distance = THREE.MathUtils.lerp(state.camera.distance, state.camera.targetDistance, dt * 10);
+      const isoDist = 28.0;
+      const isoPitch = 0.65;
+      const isoYaw = Math.PI / 4;
+      const hDist = isoDist * Math.cos(isoPitch);
+      const targetCamX = p.x + hDist * Math.sin(isoYaw);
+      const targetCamY = p.y + isoDist * Math.sin(isoPitch);
+      const targetCamZ = p.z + hDist * Math.cos(isoYaw);
+
+      camera.position.set(targetCamX, targetCamY, targetCamZ);
+      camera.lookAt(p.x, p.y + 0.5, p.z);
+
+      if (sunLight) {
+        sunLight.position.set(p.x + 100, p.y + 160, p.z + 70);
+        sunLight.target.position.set(p.x, p.y, p.z);
+        sunLight.target.updateMatrixWorld();
+      }
+      return;
+    }
+
+    // Default Follow Riding Camera
     const p = state.player;
     const isDriving = (p.speed > 0.6) || (Math.hypot(state.input.right ? 1 : (state.input.left ? -1 : 0), state.input.up ? 1 : (state.input.down ? -1 : 0)) > 0.1);
 
-    // If driving or manual timer expired, auto-track behind board
-    if (isDriving) {
-      state.camera.manualTimer = Math.max(0, state.camera.manualTimer - dt * 5.0);
-    } else if (state.camera.manualTimer > 0) {
-      state.camera.manualTimer -= dt;
-    }
+    if (state.camera.mode !== 'orbit') {
+      if (isDriving) {
+        state.camera.manualTimer = Math.max(0, state.camera.manualTimer - dt * 5.0);
+      } else if (state.camera.manualTimer > 0) {
+        state.camera.manualTimer -= dt;
+      }
 
-    if (state.camera.manualTimer <= 0) {
-      // Auto-align camera behind board travel heading
-      let targetYaw = p.heading + Math.PI;
-      let diff = targetYaw - state.camera.yaw;
-      while (diff < -Math.PI) diff += Math.PI * 2;
-      while (diff > Math.PI) diff -= Math.PI * 2;
-      state.camera.yaw += diff * Math.min(1.0, dt * (isDriving ? 4.8 : 2.8));
-
-      // Also gently return pitch to default comfortable riding angle (0.26 rad)
-      state.camera.pitch = THREE.MathUtils.lerp(state.camera.pitch, 0.26, dt * 2.8);
+      if (state.camera.manualTimer <= 0) {
+        let targetYaw = p.heading + Math.PI;
+        let diff = targetYaw - state.camera.yaw;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        state.camera.yaw += diff * Math.min(1.0, dt * (isDriving ? 4.8 : 2.8));
+        state.camera.pitch = THREE.MathUtils.lerp(state.camera.pitch, 0.26, dt * 2.8);
+      }
     }
 
     state.camera.distance = THREE.MathUtils.lerp(state.camera.distance, state.camera.targetDistance, dt * 10);
@@ -2105,6 +2247,79 @@
           }
         });
       }
+    },
+    setCameraMode(mode, targetPoint) {
+      state.camera.mode = mode;
+      if (mode === 'inspect') {
+        if (targetPoint) {
+          state.camera.inspectTarget.x = targetPoint.x;
+          state.camera.inspectTarget.y = targetPoint.y !== undefined ? targetPoint.y : (typeof getSurfaceElevation === 'function' ? getSurfaceElevation(targetPoint.x, targetPoint.z) : 0);
+          state.camera.inspectTarget.z = targetPoint.z;
+        } else {
+          state.camera.inspectTarget.x = state.player.x;
+          state.camera.inspectTarget.y = state.player.y;
+          state.camera.inspectTarget.z = state.player.z;
+        }
+        state.camera.targetDistance = 24.0;
+        state.camera.distance = 24.0;
+        state.camera.pitch = 0.42;
+        state.camera.isOrbiting = false;
+        state.camera.isPanning = false;
+      } else if (mode === 'isometric') {
+        if (targetPoint) {
+          state.camera.inspectTarget.x = targetPoint.x;
+          state.camera.inspectTarget.y = targetPoint.y !== undefined ? targetPoint.y : (typeof getSurfaceElevation === 'function' ? getSurfaceElevation(targetPoint.x, targetPoint.z) : 0);
+          state.camera.inspectTarget.z = targetPoint.z;
+        }
+        state.camera.targetDistance = 60.0;
+        state.camera.distance = 60.0;
+        state.camera.pitch = Math.PI / 4;
+        state.camera.yaw = Math.PI / 4;
+        state.camera.isOrbiting = false;
+        state.camera.isPanning = false;
+      } else if (mode === 'topdown') {
+        if (targetPoint) {
+          state.camera.inspectTarget.x = targetPoint.x;
+          state.camera.inspectTarget.y = targetPoint.y !== undefined ? targetPoint.y : (typeof getSurfaceElevation === 'function' ? getSurfaceElevation(targetPoint.x, targetPoint.z) : 0);
+          state.camera.inspectTarget.z = targetPoint.z;
+        }
+        state.camera.targetDistance = 95.0;
+        state.camera.distance = 95.0;
+        state.camera.pitch = 1.52;
+        state.camera.isOrbiting = false;
+        state.camera.isPanning = false;
+      } else if (mode === 'follow') {
+        state.camera.mode = 'follow';
+        snapCamera();
+      }
+    },
+    focusFeature(feat) {
+      if (!feat) return;
+      let fx = 0, fz = 0, fy = 0;
+      if (feat.x !== undefined && feat.z !== undefined) {
+        fx = feat.x;
+        fz = feat.z;
+        fy = feat.y !== undefined ? feat.y : (typeof getSurfaceElevation === 'function' ? getSurfaceElevation(fx, fz) : 0);
+      } else if (feat.nodeIndex !== undefined && window.TRACK_DATA_HOLLISTER && window.TRACK_DATA_HOLLISTER.nodes && window.TRACK_DATA_HOLLISTER.nodes[feat.nodeIndex]) {
+        const n = window.TRACK_DATA_HOLLISTER.nodes[feat.nodeIndex];
+        fx = n.x;
+        fz = n.z;
+        fy = n.y !== undefined ? n.y : (typeof getSurfaceElevation === 'function' ? getSurfaceElevation(fx, fz) : 0);
+      }
+      state.camera.mode = 'inspect';
+      state.camera.inspectTarget.x = fx;
+      state.camera.inspectTarget.y = fy;
+      state.camera.inspectTarget.z = fz;
+      state.camera.targetDistance = 20.0;
+      state.camera.pitch = 0.38;
+      state.camera.isOrbiting = false;
+      state.camera.isPanning = false;
+    },
+    get isInspectMode() {
+      return state.camera.mode === 'inspect' || state.camera.mode === 'isometric' || state.camera.mode === 'topdown';
+    },
+    get cameraMode() {
+      return state.camera.mode;
     }
   };
 

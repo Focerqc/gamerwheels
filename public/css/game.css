@@ -1751,6 +1751,84 @@ body.exp9-standalone-page .exp9-hud-layer {
   overflow: hidden;
 }
 
+/* 3D Inspection Mode: Hide 2D tools, transparent canvas overlay */
+.exp9-track-editor-container.view-3d-active {
+  background: transparent !important;
+  pointer-events: none !important;
+}
+
+.exp9-track-editor-container.view-3d-active .editor-header,
+.exp9-track-editor-container.view-3d-active .editor-main-workspace {
+  display: none !important;
+}
+
+.editor-3d-bar {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 9999px;
+  padding: 8px 18px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55), 0 0 20px rgba(6, 182, 212, 0.25);
+  z-index: 10005;
+  pointer-events: auto !important;
+  user-select: none;
+}
+
+.editor-mini-pill {
+  padding: 5px 12px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #94a3b8;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  outline: none;
+}
+
+.editor-mini-pill:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #f8fafc;
+}
+
+.editor-mini-pill.active {
+  background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+  border-color: #38bdf8;
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.45);
+}
+
+.editor-3d-tips {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+  padding: 7px 20px;
+  color: #cbd5e1;
+  font-size: 0.78rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  z-index: 10005;
+  pointer-events: none;
+  user-select: none;
+}
+
 /* Studio Header */
 .editor-header {
   height: 64px;

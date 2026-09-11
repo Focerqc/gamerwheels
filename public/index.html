@@ -363,6 +363,9 @@
       </div>
 
       <div class="editor-header-actions">
+        <button type="button" class="editor-action-btn" id="btnToggle3DInspect" title="Inspect track in 3D Isometric / Orbit View (Hotkey: 3)" style="background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%); color: #ffffff; font-weight: 600;">
+          <span class="btn-icon">🌐</span> 3D Inspect
+        </button>
         <button type="button" class="editor-action-btn success" id="btnOpenExport" title="Export track data as JSON file or copy to clipboard">
           <span class="btn-icon">💾</span> Export JSON
         </button>
@@ -377,6 +380,41 @@
         </button>
       </div>
     </header>
+
+    <!-- 3D Inspection Floating Controls (visible only in 3D Inspect Mode) -->
+    <div class="editor-3d-bar" id="editor3DInspectionBar" style="display: none;">
+      <button type="button" class="editor-action-btn" id="btnExit3DInspect" title="Return to 2D Studio (Hotkey: Esc or 3)">
+        <span class="btn-icon">◀</span> 2D Studio
+      </button>
+      <div class="editor-divider" style="height: 24px;"></div>
+      <div class="editor-btn-group">
+        <button type="button" class="editor-mini-pill" id="btn3DPresetIso" title="45° Classic Isometric Track Overview">
+          📐 Isometric 45°
+        </button>
+        <button type="button" class="editor-mini-pill" id="btn3DPresetTop" title="90° Overhead Bird's-Eye 3D View">
+          🦅 Top-Down
+        </button>
+        <button type="button" class="editor-mini-pill active" id="btn3DPresetOrbit" title="Free 360° Mouse Orbit and Flyaround">
+          🕹️ Free Orbit
+        </button>
+      </div>
+      <div class="editor-divider" style="height: 24px;"></div>
+      <div class="flex-input" style="align-items: center; gap: 8px;">
+        <span style="font-size: 0.8rem; font-weight: 600; color: #38bdf8;">🎯 Focus:</span>
+        <select id="select3DFocusFeature" class="exp9-name-input" style="padding: 5px 10px; font-size: 0.82rem; min-width: 175px; background: rgba(15, 23, 42, 0.9);">
+          <option value="spawn">🏁 Start Chute / Spawn</option>
+        </select>
+      </div>
+      <div class="editor-divider" style="height: 24px;"></div>
+      <button type="button" class="editor-action-btn primary" id="btn3DPlaytestRide" title="Drop in and ride this track!">
+        <span class="btn-icon">🎮</span> Ride
+      </button>
+    </div>
+
+    <!-- 3D Inspection Navigation Tip Pill -->
+    <div class="editor-3d-tips" id="editor3DInspectionTips" style="display: none;">
+      <span>🖱️ <strong>Left-Drag:</strong> Orbit • <strong>Right-Drag:</strong> Pan • <strong>Scroll:</strong> Zoom (2m–350m) • <strong>WASD / Arrows:</strong> Fly • <strong>Esc:</strong> Back to 2D</span>
+    </div>
 
     <!-- Main Studio Workspace -->
     <div class="editor-main-workspace">
@@ -401,7 +439,7 @@
         </div>
 
         <!-- Foliage & Trees Panel -->
-        <div class="editor-panel" id="foliagePanel">
+        <div class="editor-panel" id="foliagePanel" style="display: none;">
           <h3 class="panel-title">🌲 Trees & Foliage</h3>
           <p class="tool-desc" style="font-size: 0.78rem; color: #94a3b8; margin-bottom: 8px;">
             Click map to plant, drag to move, right-click/Del to remove:
@@ -468,7 +506,7 @@
         </div>
 
         <!-- Node Inspector -->
-        <div class="editor-panel" id="nodeInspectorPanel">
+        <div class="editor-panel" id="nodeInspectorPanel" style="display: none;">
           <h3 class="panel-title">📍 Selected Node</h3>
           <div id="noNodeSelectedNotice" class="panel-empty-text">Click a node to inspect & edit elevation</div>
           <div id="nodeSelectedForm" style="display: none;">
@@ -507,7 +545,7 @@
         </div>
 
         <!-- Grade Interpolation Tool -->
-        <div class="editor-panel" id="elevationTool">
+        <div class="editor-panel" id="elevationTool" style="display: none;">
           <h3 class="panel-title">📈 Grade Interpolator</h3>
           <p class="tool-desc">Shift+Click two nodes to select a range and interpolate elevation smoothly.</p>
           <div class="elevation-input-group">
