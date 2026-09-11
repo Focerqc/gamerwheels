@@ -1,103 +1,150 @@
 # GamerWheels
 
-GamerWheels is now focused on a modern asset-first workflow: blockout geometry, raw mesh imports, and a clean path into Unreal or other standard runtime pipelines. The project no longer depends on legacy THPS/THUG map converters, proprietary park formats, or Blender addon tricks for content ingestion.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
+[![Three.js](https://img.shields.io/badge/Three.js-r128-black.svg)](https://threejs.org/)
+[![Socket.io](https://img.shields.io/badge/Socket.io-v4.7-purple.svg)](https://socket.io/)
+
+**GamerWheels** is a real-time multiplayer 3D PEV (Personal Electric Vehicle / Onewheel) trail carving, street park, and RFTR (Race for the Rail) track racing simulator built with **Three.js**, **Node.js**, **Express**, and **Socket.io**.
+
+It combines custom board physics, dynamic multi-camera tracking, real-time multiplayer rider synchronization, an interactive 2D track editor with 3D inspection support, and a modern asset-first content pipeline.
 
 ---
 
-## New Direction
+## Key Features
 
-This workspace now emphasizes:
-
-- Standard asset sources such as FBX, GLTF, and GLB
-- Clean blockout folders for early layout and gameplay iteration
-- Lightweight authoring flows that bypass old engine-specific parsers
-- Physics and gameplay validation in a modern 3D runtime
-- Reusable content pipelines for real-world production work
-
-The goal is to move from brittle format conversion to a straightforward content pipeline:
-
-1. Create blockouts in a standard modeling tool
-2. Export to FBX / GLTF / GLB
-3. Place files in the repo under the content and asset folders
-4. Validate and import directly into the active engine or runtime
+- **Custom PEV / Onewheel Physics**: Realistic carving mechanics, pitch/roll tilt control, airborne dynamics, trick execution, and jump/launch ramps.
+- **Real-Time Multiplayer (.IO Architecture)**: Low-latency socket synchronization of rider positions, orientation, speeds, customizable board colors, and tricks powered by Node.js and Socket.io.
+- **Interactive 2D Track Editor & 3D Inspector**:
+  - Draw track centerlines, adjust node coordinates, and place elevation markers (peaks & valleys).
+  - Add discrete track features (Tabletops, Kickers, Rollers, Drops, Banked Berms, Gap Jumps).
+  - Inspect generated 3D spline tracks in real-time with full 3D viewport controls.
+- **RFTR Racing Engine**: Lap timing, checkpoint/gate validation, split times against target ghosts (e.g., Nico), and track HUD.
+- **Track Markup Protocol**: Image markup protocol to quickly convert overhead satellite photos or Figma designs into playable 3D track splines. See [`TRACK_MARKUP_PROTOCOL.md`](file:///c:/Users/quinn/Documents/GitHub/gamerwheels/TRACK_MARKUP_PROTOCOL.md).
+- **Asset-First Modern Pipeline**: Support for standard 3D file formats (`.gltf`, `.glb`, `.fbx`, `.obj`) with automated blockout ingestion scripts, removing dependency on legacy game engine conversion formats.
 
 ---
 
 ## Project Layout
 
 ```text
-.
-├── assets/
-│   └── models/
-│       └── README.md
-├── content/
-│   └── blockouts/
-│       └── README.md
-├── public/
-│   └── ...game client assets...
+gamerwheels/
+├── assets/                  # Runtime 3D asset directory
+│   └── models/              # Cleaned & runtime-ready imported meshes (.glb / .gltf)
+├── content/                 # Blockout geometry & source layout prototypes
+│   └── blockouts/           # Raw FBX/GLTF blockouts for rapid prototyping
+├── public/                  # Static web application & game client
+│   ├── css/                 # Modern design system & HUD styling (game.css)
+│   ├── images/              # Satellite maps, ground textures, and thumbnails
+│   ├── js/
+│   │   ├── game.js          # Core Three.js render loop, physics engine & controls
+│   │   ├── trackEditor.js   # Interactive 2D track editor & 3D inspection modal
+│   │   ├── trackBuilder.js  # Procedural track mesh & spline generation engine
+│   │   ├── trackData_*.js   # Pre-configured track datasets (e.g., Hollister Hills)
+│   │   ├── mapLoader.js     # Terrain mesh & environment asset loader
+│   │   └── multiplayer.js  # Socket.io client connection & rider state interpolator
+│   └── index.html           # Main web entry point and HUD UI layout
 ├── scripts/
-│   └── export_blockout.py
-├── server.js
-├── package.json
-├── README.md
-├── render.yaml
-├── railway.json
-└── .gitignore
+│   └── export_blockout.py   # Python utility for ingestion & manifest creation
+├── server.js                # Express & Socket.io multiplayer server backend
+├── TRACK_MARKUP_PROTOCOL.md # Satellite markup specification for track creation
+├── render.yaml              # Render cloud hosting blueprint configuration
+├── railway.json             # Railway.app deployment configuration
+└── package.json             # Project dependencies & npm scripts
 ```
-
-### Asset folders
-
-- `content/blockouts/` holds raw blockout and layout prototypes.
-- `assets/models/` is reserved for cleaned or runtime-ready imported meshes.
-- `scripts/export_blockout.py` is a template for ingesting standard mesh formats without legacy THPS conversion logic.
 
 ---
 
-## Standard import workflow
+## Getting Started
 
-Use standard source files from your DCC tool, such as:
+### Prerequisites
 
-- `.fbx`
-- `.gltf`
-- `.glb`
-- `.obj` (optional for testing-only staging)
+- [Node.js](https://nodejs.org/) v18.0.0 or higher
+- [Python](https://www.python.org/) 3.x (optional, for asset blockout scripts)
 
-Then place them in `content/blockouts/` or `assets/models/` as appropriate, depending on whether they are early concept geometry or final import candidates.
+### Installation & Local Server
 
-Example:
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/quinncfoster/gamerwheels.git
+   cd gamerwheels
+   ```
 
-```bash
-python scripts/export_blockout.py --source content/blockouts --dest assets/models --extensions .fbx .gltf .glb
-```
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
 
-The script is intentionally simple: it scans for valid standard meshes and prepares a clean, portable asset manifest without proprietary THPS conversion behavior.
+3. **Run the local development server:**
+   ```bash
+   npm run dev
+   ```
+   Or for production mode:
+   ```bash
+   npm start
+   ```
+
+4. **Access the game:**
+   Open your browser and navigate to `http://localhost:3000`.
 
 ---
 
-## Local development
+## Interactive Track Editor & 3D Inspection
 
-```bash
-npm install
-npm start
-```
+GamerWheels includes a built-in track editor for designing and previewing tracks directly in the browser:
 
-Then open the project locally in the browser or runtime target you are validating against.
+- **2D Canvas Editor**: Draw centerlines, insert control points, modify track width, set banking angles, and configure feature properties (kickers, tabletops, rollers, berms).
+- **3D Inspector Mode**: Instantly visualize the generated 3D spline mesh, camera orbit controls, surface materials, and feature geometries.
+- **Export / Import**: Save track data as JSON objects compatible with `trackBuilder.js`.
 
 ---
 
-## Legacy cleanup
+## Track Markup Protocol
 
-The repository has been stripped of the old THPS/THUG conversion pipeline, including:
+We maintain a dead-simple visual convention for drawing over satellite imagery or layout blueprints to quickly build tracks.
 
-- Blender addon folders
-- THPS map conversion tools
-- old PRK/park conversion assets
-- stale generated GLB export outputs
+For full specifications, color codes, marker shapes, and elevation rules, refer to [`TRACK_MARKUP_PROTOCOL.md`](file:///c:/Users/quinn/Documents/GitHub/gamerwheels/TRACK_MARKUP_PROTOCOL.md).
 
-This project now treats those as permanently retired and unsupported.
+Quick color reference:
+- **Cyan (`#00FFFF`)**: Track Centerline & Direction
+- **Green (`#00FF00`)**: Elevation Peak
+- **Red (`#FF0000`)**: Elevation Valley / Drop Feature
+- **Orange (`#FF8800`)**: Tabletop Jump
+- **Magenta (`#FF00FF`)**: Kicker Ramp
+- **Blue (`#0088FF`)**: Banked Berm
+
+---
+
+## Modern Asset Pipeline
+
+GamerWheels uses a clean asset ingestion pipeline designed for modern 3D modeling tools (Blender, Maya, 3ds Max):
+
+1. Prototype layout geometry in your DCC tool.
+2. Export to `.fbx`, `.gltf`, or `.glb`.
+3. Place files in `content/blockouts/` or `assets/models/`.
+4. Run the export script to prepare manifests:
+   ```bash
+   npm run build:assets
+   # or directly:
+   python scripts/export_blockout.py --source content/blockouts --dest assets/models
+   ```
+
+---
+
+## Server & Deployment
+
+The backend server ([`server.js`](file:///c:/Users/quinn/Documents/GitHub/gamerwheels/server.js)) is powered by Node.js, Express, and Socket.io.
+
+- **Health Check Endpoint**: `GET /health` (returns server status, active rider count, and uptime).
+- **Container / Cloud Deployment**: Standard Node.js environment variable `PORT` is automatically respected for cloud hosting.
+- **Render.com Deployment**: Declarative Blueprint provided via [`render.yaml`](file:///c:/Users/quinn/Documents/GitHub/gamerwheels/render.yaml) for zero-config Web Service deploys with automatic `/health` checks.
+- **Railway Deployment**: Configured via [`railway.json`](file:///c:/Users/quinn/Documents/GitHub/gamerwheels/railway.json) using Nixpacks builder and automatic restarts.
 
 ---
 
 ## License
 
-MIT © Quinn Foster
+Distributed under the MIT License. See `LICENSE` for details.
+
+Developed by **Quinn Foster**.
+
