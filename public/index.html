@@ -309,25 +309,31 @@
 
       <div class="editor-toolbar">
         <div class="editor-btn-group">
-          <button type="button" class="editor-tool-btn active" id="btnToolDraw" title="Click along satellite path to add spline points (Hotkey: P)">
+          <button type="button" class="editor-tool-btn active" id="btnToolPan" title="Look around and pan map view without modifying nodes (Hotkey: H or Q)">
+            <span class="btn-icon">🖐️</span> Look Around
+          </button>
+          <button type="button" class="editor-tool-btn" id="btnToolDraw" title="Click along satellite path to add spline points (Hotkey: P)">
             <span class="btn-icon">✏️</span> Draw Spline
           </button>
           <button type="button" class="editor-tool-btn" id="btnToolSelect" title="Select and drag nodes to adjust curve (Hotkey: V)">
             <span class="btn-icon">👆</span> Move Nodes
           </button>
-          <button type="button" class="editor-tool-btn" id="btnToolInsert" title="Click directly on spline to insert a node">
+          <button type="button" class="editor-tool-btn" id="btnToolInsert" title="Click directly on spline to insert a node (Hotkey: I)">
             <span class="btn-icon">➕</span> Insert Node
+          </button>
+          <button type="button" class="editor-tool-btn" id="btnToolTree" title="Place, move, scale and remove trees & bushes (Hotkey: T)">
+            <span class="btn-icon">🌲</span> Trees & Bushes
           </button>
         </div>
 
         <div class="editor-divider"></div>
 
         <div class="editor-btn-group">
-          <button type="button" class="editor-action-btn" id="btnToggleLoop" title="Toggle closed loop circuit">
-            <span class="btn-icon">🔁</span> <span id="lblLoopState">Loop: Closed</span>
+          <button type="button" class="editor-action-btn compact" id="btnToggleLoop" title="Toggle closed loop circuit (Closed / Open)">
+            <span class="btn-icon">🔁</span> <span id="lblLoopState">Closed</span>
           </button>
-          <button type="button" class="editor-action-btn" id="btnConnectLoopNode" title="Select which node the track loops back into (e.g. Node #6 for tracks with a separate start chute)">
-            <span class="btn-icon">🔗</span> Loop to: <span id="lblLoopTargetNode">Node #1</span>
+          <button type="button" class="editor-action-btn compact" id="btnConnectLoopNode" title="Select which node the track loops back into (e.g. Node #5 for tracks with a separate start chute)">
+            <span class="btn-icon">🔗</span> Loop: <span id="lblLoopTargetNode">#1</span>
           </button>
           <button type="button" class="editor-action-btn" id="btnUndo" title="Undo last action (Ctrl+Z)">
             <span class="btn-icon">↩️</span> Undo
@@ -341,8 +347,17 @@
           <button type="button" class="editor-action-btn" id="btnResetView" title="Center and fit map view">
             <span class="btn-icon">🎯</span> Fit View
           </button>
-          <button type="button" class="editor-action-btn" id="btnToggleRefMap" title="Toggle marked RFTR reference map overlay (pins & race path)">
-            <span class="btn-icon">🗺️</span> <span id="lblRefMap">Ref Map: Off</span>
+          <button type="button" class="editor-action-btn" id="btnToggleGhostPath" title="Toggle Nico's recorded Floaty GPS telemetry path overlay">
+            <span class="btn-icon">👻</span> <span id="lblGhostPath">Nico Path: On</span>
+          </button>
+          <button type="button" class="editor-action-btn" id="btnToggleEditGhost" title="Toggle Ghost Node editing mode to drag Nico's telemetry points directly">
+            <span class="btn-icon">✏️</span> <span id="lblEditGhost">Edit Ghost: Off</span>
+          </button>
+          <button type="button" class="editor-action-btn active" id="btnToggleElevLabels" title="Toggle node elevation text: Color-Coded ➔ Plain White ➔ Off">
+            <span class="btn-icon">🏷️</span> <span id="lblElevLabels">Labels: Color</span>
+          </button>
+          <button type="button" class="editor-action-btn" id="btnToggleElevationColor" title="Toggle color-coded elevation view: Off ➔ Track ➔ Nico GPS ➔ Off (Default: Off)">
+            <span class="btn-icon">🏔️</span> <span id="lblElevationColor">Elevation: Off</span>
           </button>
         </div>
       </div>
@@ -385,6 +400,73 @@
           </div>
         </div>
 
+        <!-- Foliage & Trees Panel -->
+        <div class="editor-panel" id="foliagePanel">
+          <h3 class="panel-title">🌲 Trees & Foliage</h3>
+          <p class="tool-desc" style="font-size: 0.78rem; color: #94a3b8; margin-bottom: 8px;">
+            Click map to plant, drag to move, right-click/Del to remove:
+          </p>
+
+          <div class="input-field-group">
+            <label for="selectFoliageType">Brush Type:</label>
+            <select id="selectFoliageType" class="exp9-name-input" style="width: 100%; padding: 6px 10px; font-size: 0.85rem;">
+              <option value="mature_oak">🌳 Mature Live Oak (Spread Canopy)</option>
+              <option value="mid_oak">🌲 Mid Oak (Hillside Scrub Oak)</option>
+              <option value="bush">🌿 Chaparral Bush (Ground Scrub)</option>
+            </select>
+          </div>
+
+          <div class="input-field-group" style="margin-top: 8px;">
+            <label for="inputFoliageScale">Brush Scale: <span id="lblFoliageScale">1.0x</span></label>
+            <div class="flex-input stepper-input-row">
+              <input type="range" id="inputFoliageScale" min="0.5" max="2.5" step="0.1" value="1.0" style="flex: 1; accent-color: #10b981;" />
+              <div class="stepper-btn-pair">
+                <button type="button" id="btnScaleDown" class="stepper-arrow-btn" title="Decrease scale (-0.1x)">▼</button>
+                <button type="button" id="btnScaleUp" class="stepper-arrow-btn" title="Increase scale (+0.1x)">▲</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Selected Tree Inspector Form -->
+          <div id="selectedTreeForm" style="display: none; margin-top: 10px; padding: 8px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(0, 255, 255, 0.3); border-radius: 6px;">
+            <div style="font-size: 0.8rem; font-weight: bold; color: #00ffff; margin-bottom: 6px;">📍 Selected Item</div>
+            <div class="panel-row">
+              <span class="label">Position:</span>
+              <span class="value" id="inspectTreeCoords">0.0m, 0.0m</span>
+            </div>
+            <div class="input-field-group" style="margin-top: 4px;">
+              <label for="selectInspectTreeType">Type:</label>
+              <select id="selectInspectTreeType" class="exp9-name-input" style="width: 100%; padding: 4px 8px; font-size: 0.8rem;">
+                <option value="mature_oak">🌳 Mature Oak</option>
+                <option value="mid_oak">🌲 Mid Oak</option>
+                <option value="bush">🌿 Bush</option>
+              </select>
+            </div>
+            <div class="input-field-group" style="margin-top: 4px;">
+              <label for="inputInspectTreeScale">Scale: <span id="lblInspectTreeScale">1.0x</span></label>
+              <input type="range" id="inputInspectTreeScale" min="0.5" max="2.5" step="0.1" value="1.0" style="width: 100%; accent-color: #00ffff;" />
+            </div>
+            <button type="button" id="btnDeleteSelectedTree" class="editor-btn-delete-node" style="margin-top: 6px;">🗑️ Delete Selected Foliage</button>
+          </div>
+
+          <!-- Utility actions -->
+          <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 10px;">
+            <button type="button" id="btnResetPhotoFoliage" class="editor-btn secondary" style="width: 100%; font-size: 0.8rem; justify-content: center;" title="Reset to photo-accurate trees matching the real aerial image">
+              🔄 Photo-Accurate Preset
+            </button>
+            <button type="button" id="btnAutoCleanTrackTrees" class="editor-btn secondary" style="width: 100%; font-size: 0.8rem; justify-content: center;" title="Automatically delete any tree or bush that clips the track or riding line">
+              🚫 Clear Track Obstructions
+            </button>
+            <button type="button" id="btnClearAllTrees" class="editor-btn danger" style="width: 100%; font-size: 0.8rem; justify-content: center;">
+              🗑️ Clear All Trees
+            </button>
+          </div>
+
+          <div id="treeCountSummary" style="font-size: 0.78rem; color: #38bdf8; margin-top: 8px; text-align: center;">
+            Total Foliage: 0
+          </div>
+        </div>
+
         <!-- Node Inspector -->
         <div class="editor-panel" id="nodeInspectorPanel">
           <h3 class="panel-title">📍 Selected Node</h3>
@@ -400,15 +482,23 @@
             </div>
             <div class="input-field-group">
               <label for="inspectNodeElevation">Elevation (Y meters):</label>
-              <div class="flex-input">
-                <input type="number" step="0.5" id="inspectNodeElevation" class="exp9-name-input" value="0.0" />
+              <div class="flex-input stepper-input-row">
+                <input type="number" step="0.5" id="inspectNodeElevation" class="exp9-name-input stepper-number-input" value="0.0" />
+                <div class="stepper-btn-pair">
+                  <button type="button" id="btnElevationDown" class="stepper-arrow-btn" title="Decrease Elevation (-0.5m, Shift: -1.0m)">▼</button>
+                  <button type="button" id="btnElevationUp" class="stepper-arrow-btn" title="Increase Elevation (+0.5m, Shift: +1.0m)">▲</button>
+                </div>
                 <button type="button" id="btnUpdateElevation" class="editor-mini-btn">Set</button>
               </div>
             </div>
             <div class="input-field-group">
               <label for="inspectNodeBank">Banking (Degrees):</label>
-              <div class="flex-input">
-                <input type="number" step="1" id="inspectNodeBank" class="exp9-name-input" value="0" placeholder="e.g. 15 or -15" />
+              <div class="flex-input stepper-input-row">
+                <input type="number" step="1" id="inspectNodeBank" class="exp9-name-input stepper-number-input" value="0" placeholder="e.g. 15 or -15" />
+                <div class="stepper-btn-pair">
+                  <button type="button" id="btnBankDown" class="stepper-arrow-btn" title="Decrease Banking (-1°, Shift: -5°)">▼</button>
+                  <button type="button" id="btnBankUp" class="stepper-arrow-btn" title="Increase Banking (+1°, Shift: +5°)">▲</button>
+                </div>
                 <button type="button" id="btnUpdateBank" class="editor-mini-btn">Set</button>
               </div>
             </div>
@@ -422,8 +512,14 @@
           <p class="tool-desc">Shift+Click two nodes to select a range and interpolate elevation smoothly.</p>
           <div class="elevation-input-group">
             <label for="elevationDelta">Elevation Delta (m):</label>
-            <input type="number" step="0.5" id="elevationDelta" class="exp9-name-input" placeholder="e.g. +6 or -4" />
-            <button type="button" id="btnApplyElevation" class="editor-primary-btn" style="margin-top: 6px;">Smooth Interpolate</button>
+            <div class="flex-input stepper-input-row" style="margin-bottom: 6px;">
+              <input type="number" step="0.5" id="elevationDelta" class="exp9-name-input stepper-number-input" placeholder="e.g. +6 or -4" />
+              <div class="stepper-btn-pair">
+                <button type="button" id="btnDeltaDown" class="stepper-arrow-btn" title="Decrease Delta (-0.5m, Shift: -1.0m)">▼</button>
+                <button type="button" id="btnDeltaUp" class="stepper-arrow-btn" title="Increase Delta (+0.5m, Shift: +1.0m)">▲</button>
+              </div>
+            </div>
+            <button type="button" id="btnApplyElevation" class="editor-primary-btn">Smooth Interpolate</button>
           </div>
         </div>
 
@@ -467,10 +563,13 @@
               <input type="checkbox" id="chkShowRibbon" checked /> Show Track Ribbon Width
             </label>
           </div>
-          <div class="checkbox-row">
-            <label>
-              <input type="checkbox" id="chkShowLabels" checked /> Show Elevation Labels
-            </label>
+          <div class="input-field-group" style="margin-top: 10px;">
+            <label for="selectElevLabels">Node Elevation Text:</label>
+            <select id="selectElevLabels" class="exp9-name-input" style="width: 100%; padding: 6px 10px; font-size: 0.85rem;">
+              <option value="color">🌈 Color-Coded (Heatmap)</option>
+              <option value="plain">⚪ Plain White (High-Vis)</option>
+              <option value="off">🚫 Hidden (Off)</option>
+            </select>
           </div>
         </div>
       </aside>
@@ -484,6 +583,8 @@
           <div class="hud-item"><span class="hud-label">Nodes:</span> <span class="hud-val" id="hudNodeCount">0</span></div>
           <div class="hud-divider"></div>
           <div class="hud-item"><span class="hud-label">Length:</span> <span class="hud-val" id="hudLength">0.0m</span></div>
+          <div class="hud-divider"></div>
+          <div class="hud-item"><span class="hud-label">Trees:</span> <span class="hud-val" id="hudTreeCount">0</span></div>
           <div class="hud-divider"></div>
           <div class="hud-item"><span class="hud-label">Loop:</span> <span class="hud-val" id="hudLoopStatus">Open</span></div>
           <div class="hud-divider"></div>

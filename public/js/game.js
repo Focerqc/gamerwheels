@@ -248,15 +248,24 @@
       const rawY = getSurfaceElevation(px, pz);
 
       let dist = Infinity;
+      let closestBank = 0;
+      let closestW = 5.0;
+
       if (sps && sps.length > 0) {
         let minDistSq = Infinity;
-        for (let j = 0; j < sps.length; j += 2) {
+        let bestIdx = 0;
+        for (let j = 0; j < sps.length; j++) {
           const dx = px - sps[j].x;
           const dz = pz - sps[j].z;
           const d2 = dx * dx + dz * dz;
-          if (d2 < minDistSq) minDistSq = d2;
+          if (d2 < minDistSq) {
+            minDistSq = d2;
+            bestIdx = j;
+          }
         }
         dist = Math.sqrt(minDistSq);
+        closestBank = sps[bestIdx].bank || 0;
+        closestW = sps[bestIdx].w || 5.0;
 
         // Vertex color blending based on track distance
         const vCol = new THREE.Color();
@@ -278,12 +287,23 @@
         colors.push(colNear.r, colNear.g, colNear.b);
       }
 
-      // Depress the terrain cleanly under the track ribbon by 0.22m with smooth shoulder bevel to prevent z-fighting
+      // Safe roadbed clearance:
+      // Track ribbon now has continuous downward skirts (1.10m deep).
+      // We lower the terrain under the track so 5m grid quads never punch through the ribbon surface,
+      // while the 1.10m skirts bury deep into the ground to ensure no gap/daylight is ever visible.
+      const halfW = closestW / 2.0;
+      const bankRad = Math.abs(closestBank) * Math.PI / 180;
+      const bankDrop = Math.sin(bankRad) * halfW;
+      const targetDepression = 0.35 + Math.min(0.40, bankDrop * 0.70);
+
+      const innerZone = halfW + 0.6;
+      const outerZone = halfW + 4.5;
       let depression = 0;
-      if (dist <= 3.8) {
-        depression = 0.22;
-      } else if (dist < 7.5) {
-        depression = 0.22 * (1.0 - (dist - 3.8) / 3.7);
+      if (dist <= innerZone) {
+        depression = targetDepression;
+      } else if (dist < outerZone) {
+        const t = (dist - innerZone) / (outerZone - innerZone);
+        depression = targetDepression * (1.0 - t * t);
       }
       pos.setY(i, rawY - depression);
     }
@@ -317,35 +337,277 @@
       }
     }
 
-    const oakGeo = new THREE.ConeGeometry(3.5, 7.0, 5);
-    const trunkGeo = new THREE.CylinderGeometry(0.5, 0.7, 3.0, 5);
-    const oakMat = new THREE.MeshStandardMaterial({ color: 0x2e4225, roughness: 0.9 });
-    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x3d2817, roughness: 0.95 });
+    // Shared Materials for California Oak Woodland & Foothills
+    const trunkMat1 = new THREE.MeshStandardMaterial({ color: 0x2e2017, roughness: 0.95, flatShading: true });
+    const trunkMat2 = new THREE.MeshStandardMaterial({ color: 0x3d2b1f, roughness: 0.95, flatShading: true });
+    const branchMat = new THREE.MeshStandardMaterial({ color: 0x271a12, roughness: 0.95 });
 
-    // Distant perimeter oaks centered around (48, -72)
-    for (let i = 0; i < 48; i++) {
-      const angle = (i / 48) * Math.PI * 2;
-      const dist = 140 + (i % 5) * 22 + Math.random() * 20;
-      const tx = 48 + Math.cos(angle) * dist;
-      const tz = -72 + Math.sin(angle) * dist;
-      const ty = getSurfaceElevation(tx, tz);
+    const leafMats = [
+      new THREE.MeshStandardMaterial({ color: 0x22381b, roughness: 0.88, flatShading: true }), // Deep Coastal Live Oak
+      new THREE.MeshStandardMaterial({ color: 0x2d4422, roughness: 0.88, flatShading: true }), // Classic Hollister Oak
+      new THREE.MeshStandardMaterial({ color: 0x384f27, roughness: 0.88, flatShading: true }), // Sunlit Olive Oak
+      new THREE.MeshStandardMaterial({ color: 0x445a2e, roughness: 0.88, flatShading: true }), // Chaparral Golden-Green
+      new THREE.MeshStandardMaterial({ color: 0x4f6336, roughness: 0.88, flatShading: true }), // Sage Scrub Green
+      new THREE.MeshStandardMaterial({ color: 0x1a2c14, roughness: 0.90, flatShading: true })  // Shadow Undercanopy
+    ];
 
-      const treeGroup = new THREE.Group();
-      treeGroup.position.set(tx, ty, tz);
+    const bushMats = [
+      new THREE.MeshStandardMaterial({ color: 0x3d502a, roughness: 0.90, flatShading: true }),
+      new THREE.MeshStandardMaterial({ color: 0x4a5d33, roughness: 0.90, flatShading: true }),
+      new THREE.MeshStandardMaterial({ color: 0x56673a, roughness: 0.90, flatShading: true })
+    ];
 
-      const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+    // Shared Geometries for organic multi-lobe oak canopies
+    const trunkGeoMature = new THREE.CylinderGeometry(0.55, 0.95, 4.2, 7);
+    const trunkGeoMid = new THREE.CylinderGeometry(0.38, 0.65, 3.2, 6);
+    const branchGeo = new THREE.CylinderGeometry(0.22, 0.38, 2.6, 5);
+
+    const lobeGeoCenter = new THREE.DodecahedronGeometry(3.6, 0);
+    const lobeGeoSide = new THREE.DodecahedronGeometry(2.7, 0);
+    const lobeGeoTop = new THREE.DodecahedronGeometry(2.3, 0);
+    const lobeGeoCompact = new THREE.DodecahedronGeometry(2.4, 0);
+    const bushLobeGeo = new THREE.DodecahedronGeometry(1.4, 0);
+
+    function isClearOfTrack(wx, wz, minClearance) {
+      if (window.TrackBuilder && typeof window.TrackBuilder.isPointClearOfTrack === 'function') {
+        return window.TrackBuilder.isPointClearOfTrack(wx, wz, minClearance, 1.2);
+      }
+      return true;
+    }
+
+    // Helper: Build Broad Spreading California Live Oak (Mature)
+    function buildMatureOak(x, z, scale = 1.0, variant = 0) {
+      const y = getSurfaceElevation(x, z);
+      const tree = new THREE.Group();
+      tree.position.set(x, y, z);
+
+      const trunkM = (variant % 2 === 0) ? trunkMat1 : trunkMat2;
+      const trunk = new THREE.Mesh(trunkGeoMature, trunkM);
+      trunk.position.y = 2.0;
+      trunk.rotation.y = (variant * 1.3) % (Math.PI * 2);
+      trunk.rotation.z = ((variant % 5) - 2) * 0.04;
+      trunk.castShadow = true;
+      tree.add(trunk);
+
+      // Angled branch limb
+      const b1 = new THREE.Mesh(branchGeo, branchMat);
+      b1.position.set(0.6, 3.0, 0.4);
+      b1.rotation.z = -0.55;
+      b1.rotation.y = (variant * 0.8) % (Math.PI * 2);
+      tree.add(b1);
+
+      // Multi-lobed rounded canopy clusters
+      const matCenter = leafMats[variant % leafMats.length];
+      const matSide1 = leafMats[(variant + 1) % leafMats.length];
+      const matSide2 = leafMats[(variant + 2) % leafMats.length];
+      const matTop = leafMats[(variant + 3) % leafMats.length];
+
+      // Central dome
+      const mCenter = new THREE.Mesh(lobeGeoCenter, matCenter);
+      mCenter.position.set(0, 5.2, 0);
+      mCenter.scale.set(1.15, 0.88, 1.1);
+      mCenter.castShadow = true;
+      tree.add(mCenter);
+
+      // Lateral shoulder lobes (gives broad oak silhouette)
+      const mSide1 = new THREE.Mesh(lobeGeoSide, matSide1);
+      mSide1.position.set(2.2, 4.4, 0.6);
+      mSide1.scale.set(1.05, 0.82, 0.95);
+      mSide1.castShadow = true;
+      tree.add(mSide1);
+
+      const mSide2 = new THREE.Mesh(lobeGeoSide, matSide2);
+      mSide2.position.set(-2.0, 4.6, -0.8);
+      mSide2.scale.set(1.0, 0.85, 1.05);
+      mSide2.castShadow = true;
+      tree.add(mSide2);
+
+      // Crest lobe
+      const mTop = new THREE.Mesh(lobeGeoTop, matTop);
+      mTop.position.set(0.3, 6.8, -0.2);
+      mTop.scale.set(0.95, 0.85, 0.95);
+      mTop.castShadow = true;
+      tree.add(mTop);
+
+      tree.scale.set(scale, scale, scale);
+      tree.rotation.y = (variant * 2.1) % (Math.PI * 2);
+      sceneryGroup.add(tree);
+    }
+
+    // Helper: Build Hillside Scrub / Medium Oak
+    function buildMidOak(x, z, scale = 1.0, variant = 0) {
+      const y = getSurfaceElevation(x, z);
+      const tree = new THREE.Group();
+      tree.position.set(x, y, z);
+
+      const trunkM = (variant % 2 === 0) ? trunkMat2 : trunkMat1;
+      const trunk = new THREE.Mesh(trunkGeoMid, trunkM);
       trunk.position.y = 1.5;
       trunk.castShadow = true;
-      treeGroup.add(trunk);
+      tree.add(trunk);
 
-      const foliage = new THREE.Mesh(oakGeo, oakMat);
-      foliage.position.y = 5.5;
-      foliage.castShadow = true;
-      treeGroup.add(foliage);
+      const matA = leafMats[variant % leafMats.length];
+      const matB = leafMats[(variant + 2) % leafMats.length];
 
-      const scale = 0.8 + Math.random() * 0.6;
-      treeGroup.scale.set(scale, scale, scale);
-      sceneryGroup.add(treeGroup);
+      const lobe1 = new THREE.Mesh(lobeGeoCompact, matA);
+      lobe1.position.set(0, 3.8, 0);
+      lobe1.scale.set(1.1, 0.85, 1.05);
+      lobe1.castShadow = true;
+      tree.add(lobe1);
+
+      const lobe2 = new THREE.Mesh(lobeGeoCompact, matB);
+      lobe2.position.set(1.2, 3.4, 0.5);
+      lobe2.scale.set(0.9, 0.75, 0.9);
+      lobe2.castShadow = true;
+      tree.add(lobe2);
+
+      tree.scale.set(scale, scale, scale);
+      tree.rotation.y = (variant * 1.7) % (Math.PI * 2);
+      sceneryGroup.add(tree);
+    }
+
+    // Helper: Build Chaparral Scrub Bush
+    function buildChaparralBush(x, z, scale = 1.0, variant = 0) {
+      const y = getSurfaceElevation(x, z);
+      const bush = new THREE.Group();
+      bush.position.set(x, y, z);
+
+      const mat = bushMats[variant % bushMats.length];
+      const lobe1 = new THREE.Mesh(bushLobeGeo, mat);
+      lobe1.position.set(0, 0.8, 0);
+      lobe1.scale.set(1.2, 0.75, 1.1);
+      lobe1.castShadow = true;
+      bush.add(lobe1);
+
+      const lobe2 = new THREE.Mesh(bushLobeGeo, bushMats[(variant + 1) % bushMats.length]);
+      lobe2.position.set(0.65, 0.65, 0.35);
+      lobe2.scale.set(0.85, 0.65, 0.85);
+      bush.add(lobe2);
+
+      bush.scale.set(scale, scale, scale);
+      bush.rotation.y = (variant * 2.3) % (Math.PI * 2);
+      sceneryGroup.add(bush);
+    }
+
+    // Check if current active track has custom placed scenery
+    const customScenery = (trackSession.activeTrackData && Array.isArray(trackSession.activeTrackData.scenery))
+      ? trackSession.activeTrackData.scenery
+      : (window.TRACK_DATA_HOLLISTER && Array.isArray(window.TRACK_DATA_HOLLISTER.scenery) ? window.TRACK_DATA_HOLLISTER.scenery : null);
+
+    if (customScenery && customScenery.length > 0) {
+      customScenery.forEach((item, idx) => {
+        const type = item.type || 'mature_oak';
+        const scale = item.scale || 1.0;
+        const variant = item.variant !== undefined ? item.variant : idx;
+        const radius = type === 'mature_oak' ? (3.5 * scale) : (type === 'mid_oak' ? (2.4 * scale) : (1.4 * scale));
+
+        if (!isClearOfTrack(item.x, item.z, radius)) return;
+
+        if (type === 'mature_oak') {
+          buildMatureOak(item.x, item.z, scale, variant);
+        } else if (type === 'mid_oak') {
+          buildMidOak(item.x, item.z, scale, variant);
+        } else if (type === 'bush') {
+          buildChaparralBush(item.x, item.z, scale, variant);
+        }
+      });
+      console.log(`🌲 Rendered ${sceneryGroup.children.length} custom scenery props from track data`);
+      return;
+    }
+
+    // =========================================================================
+    // PHOTO-ACCURATE DEFAULT SCENERY (Faithful to the Real Satellite Aerial Photo)
+    // =========================================================================
+    let seed = 42;
+    function pseudoRand() {
+      seed = (seed * 9301 + 49297) % 233280;
+      return seed / 233280;
+    }
+
+    // 1. Northern Hillside Backdrop Forest (Top edge of map, Z < -125)
+    for (let i = 0; i < 110; i++) {
+      const row = Math.floor(i / 22);
+      const col = i % 22;
+      const xSpan = 270;
+      const tx = -90 + (col / 22) * xSpan + (pseudoRand() - 0.5) * 12;
+      const tz = -135 - (row * 24) + (pseudoRand() - 0.5) * 14;
+
+      if (!isClearOfTrack(tx, tz, 4.5)) continue;
+      const scale = 0.95 + pseudoRand() * 0.7;
+      if (i % 3 === 0) {
+        buildMatureOak(tx, tz, scale * 1.1, i);
+      } else {
+        buildMidOak(tx, tz, scale, i);
+      }
+    }
+
+    // 2. Standalone Hillside Oaks along upper ridge pockets
+    const hillsideOaks = [
+      { x: -38, z: -128, scale: 1.3 },
+      { x: -8,  z: -138, scale: 1.4 },
+      { x: 18,  z: -142, scale: 1.35 },
+      { x: 50,  z: -134, scale: 1.3 },
+      { x: 82,  z: -126, scale: 1.4 },
+      { x: 120, z: -126, scale: 1.3 },
+      { x: 148, z: -130, scale: 1.4 }
+    ];
+    hillsideOaks.forEach((item, idx) => {
+      if (isClearOfTrack(item.x, item.z, 4.8)) {
+        buildMatureOak(item.x, item.z, item.scale, idx + 50);
+      }
+    });
+
+    // 3. Natural Infield Copse (The single real grove between turns 46/47 and features 10, 14, 15, 8)
+    const groveTrees = [
+      { x: 62, z: -44, type: 'mature_oak', scale: 1.3 },
+      { x: 68, z: -38, type: 'mature_oak', scale: 1.2 },
+      { x: 75, z: -42, type: 'mid_oak', scale: 1.1 },
+      { x: 60, z: -36, type: 'bush', scale: 1.1 },
+      { x: 72, z: -32, type: 'bush', scale: 0.95 },
+      { x: 82, z: -36, type: 'mid_oak', scale: 1.05 },
+      { x: 92, z: -34, type: 'bush', scale: 0.9 },
+      { x: 86, z: -46, type: 'mature_oak', scale: 1.25 },
+      { x: 98, z: -40, type: 'mid_oak', scale: 1.15 }
+    ];
+    groveTrees.forEach((item, idx) => {
+      const radius = item.type === 'mature_oak' ? 3.5 : (item.type === 'mid_oak' ? 2.4 : 1.4);
+      if (isClearOfTrack(item.x, item.z, radius)) {
+        if (item.type === 'mature_oak') buildMatureOak(item.x, item.z, item.scale, idx + 80);
+        else if (item.type === 'mid_oak') buildMidOak(item.x, item.z, item.scale, idx + 80);
+        else buildChaparralBush(item.x, item.z, item.scale, idx + 80);
+      }
+    });
+
+    // 4. West / Far Left Hillside Woods (around features 2, 6, 12, X < -50)
+    const westWoods = [
+      { x: -65, z: 8, scale: 1.3 },
+      { x: -75, z: -15, scale: 1.25 },
+      { x: -85, z: -40, scale: 1.4 },
+      { x: -68, z: 26, scale: 1.15 }
+    ];
+    westWoods.forEach((item, idx) => {
+      if (isClearOfTrack(item.x, item.z, 4.5)) {
+        buildMatureOak(item.x, item.z, item.scale, idx + 120);
+      }
+    });
+
+    // 5. Perimeter Valley Enclosure (Distant south and east tree belts)
+    for (let i = 0; i < 28; i++) {
+      const angle = (i / 28) * Math.PI * 2;
+      const sinA = Math.sin(angle);
+      if (sinA < -0.3) continue; // Skip north
+
+      const dist = 145 + (i % 5) * 16 + pseudoRand() * 18;
+      const px = 48 + Math.cos(angle) * dist;
+      const pz = -72 + sinA * dist;
+
+      if (!isClearOfTrack(px, pz, 5.5)) continue;
+      const pScale = 0.95 + pseudoRand() * 0.6;
+      if (i % 2 === 0) {
+        buildMatureOak(px, pz, pScale, i + 140);
+      } else {
+        buildMidOak(px, pz, pScale, i + 140);
+      }
     }
   }
 
@@ -362,7 +624,7 @@
 
     for (const obstacle of state.trackObstacles) {
       if (!obstacle || !obstacle.communityMap) continue;
-      if (!['kicker', 'tabletop', 'whoops'].includes(obstacle.type)) continue;
+      if (!['kicker', 'tabletop', 'lilypad', 'whoops'].includes(obstacle.type)) continue;
 
       const rotation = obstacle.rotation || 0;
       const dx = p.x - obstacle.x;
@@ -376,9 +638,9 @@
       const halfW = ((obstacle.width || 3.0) / 2) + 0.55;
       if (Math.abs(localX) > halfW || Math.abs(localZ) > halfLen) continue;
 
-      // Small kicker = light hop, larger tabletop = bigger launch.
+      // Small kicker = light hop, larger tabletop / lilypad = bigger launch.
       let launchStrength = 5.6;
-      if (obstacle.type === 'tabletop') {
+      if (obstacle.type === 'tabletop' || obstacle.type === 'lilypad') {
         launchStrength = (obstacle.length || 4.0) > 6 ? 8.6 : 7.4;
       } else if (obstacle.type === 'whoops') {
         launchStrength = 5.8;
@@ -677,30 +939,49 @@
     if (t >= samples[samples.length - 1].t) return samples[samples.length - 1];
 
     let low = 0, high = samples.length - 1;
+    let idx = 0;
     while (low <= high) {
       const mid = (low + high) >> 1;
       if (samples[mid].t <= t) {
         if (mid === samples.length - 1 || samples[mid + 1].t > t) {
-          const s1 = samples[mid];
-          const s2 = samples[mid + 1];
-          const frac = (t - s1.t) / (s2.t - s1.t || 1);
-          const x = s1.x + frac * (s2.x - s1.x);
-          const z = s1.z + frac * (s2.z - s1.z);
-          const y = s1.y + frac * (s2.y - s1.y);
-
-          let dHeading = s2.heading - s1.heading;
-          while (dHeading > Math.PI) dHeading -= Math.PI * 2;
-          while (dHeading < -Math.PI) dHeading += Math.PI * 2;
-          const heading = s1.heading + frac * dHeading;
-
-          return { x, y, z, heading };
+          idx = mid;
+          break;
         }
         low = mid + 1;
       } else {
         high = mid - 1;
       }
     }
-    return samples[0];
+
+    const s1 = samples[idx];
+    const s2 = samples[Math.min(samples.length - 1, idx + 1)];
+    const s0 = samples[Math.max(0, idx - 1)];
+    const s3 = samples[Math.min(samples.length - 1, idx + 2)];
+
+    const frac = (t - s1.t) / (s2.t - s1.t || 1);
+
+    // Catmull-Rom spline interpolation helper
+    const catmull = (p0, p1, p2, p3, u) => {
+      const u2 = u * u;
+      const u3 = u2 * u;
+      return 0.5 * (
+        (2 * p1) +
+        (-p0 + p2) * u +
+        (2 * p0 - 5 * p1 + 4 * p2 - p3) * u2 +
+        (-p0 + 3 * p1 - 3 * p2 + p3) * u3
+      );
+    };
+
+    const x = catmull(s0.x, s1.x, s2.x, s3.x, frac);
+    const z = catmull(s0.z, s1.z, s2.z, s3.z, frac);
+    const y = catmull(s0.y || 1, s1.y || 1, s2.y || 1, s3.y || 1, frac);
+
+    let dHeading = s2.heading - s1.heading;
+    while (dHeading > Math.PI) dHeading -= Math.PI * 2;
+    while (dHeading < -Math.PI) dHeading += Math.PI * 2;
+    const heading = s1.heading + frac * dHeading;
+
+    return { x, y, z, heading };
   }
 
   function formatRaceTime(sec) {
@@ -864,38 +1145,49 @@
       if (ghostData && ghostData.samples && ghostData.samples.length > 1 && trackSession.ghostEntity) {
         const duration = ghostData.duration || 135.01;
         const ghostElapsed = (now - trackSession.ghostStartTime) / 1000;
-        const ghostLapElapsed = ghostElapsed % duration;
         const currentGhostLap = Math.floor(ghostElapsed / duration);
+        const ghostLapElapsed = ghostElapsed % duration;
         const MAX_GHOST_LAPS = 3;
 
         if (currentGhostLap < MAX_GHOST_LAPS) {
-          // Still within 3 laps — animate normally
+          // Still within 3 continuous laps — animate normally
           const sample = sampleGhostAtTime(ghostData.samples, ghostLapElapsed);
           if (sample) {
             trackSession.ghostEntity.visible = true;
             trackSession.ghostEntity.position.x = sample.x;
             trackSession.ghostEntity.position.z = sample.z;
-            const surfY = window.TrackBuilder.getSurfaceAt(sample.x, sample.z);
+            const surfY = window.TrackBuilder ? window.TrackBuilder.getSurfaceAt(sample.x, sample.z) : null;
             trackSession.ghostEntity.position.y = surfY !== null ? surfY : sample.y;
             trackSession.ghostEntity.rotation.y = sample.heading;
           }
         } else {
           // 3 laps done — park at start gate briefly, then begin a fresh 3-lap cycle
-          const respawnDelay = 2.5;
-          const timeSinceEnd = ghostElapsed - MAX_GHOST_LAPS * duration;
-          if (timeSinceEnd >= respawnDelay) {
-            // Reset clock for next 3-lap cycle
-            trackSession.ghostStartTime = now - (timeSinceEnd - respawnDelay) * 1000;
-          } else {
-            // Show ghost parked at the start position during the respawn pause
+          const respawnDelay = 3.0;
+          const totalCycleDuration = (MAX_GHOST_LAPS * duration) + respawnDelay;
+          const cycleTime = ghostElapsed % totalCycleDuration;
+
+          if (cycleTime >= (MAX_GHOST_LAPS * duration)) {
+            // Show ghost parked at the start chute position during the respawn pause
             const firstSample = ghostData.samples[0];
             if (firstSample) {
               trackSession.ghostEntity.visible = true;
               trackSession.ghostEntity.position.x = firstSample.x;
               trackSession.ghostEntity.position.z = firstSample.z;
-              const surfY = window.TrackBuilder.getSurfaceAt(firstSample.x, firstSample.z);
+              const surfY = window.TrackBuilder ? window.TrackBuilder.getSurfaceAt(firstSample.x, firstSample.z) : null;
               trackSession.ghostEntity.position.y = surfY !== null ? surfY : firstSample.y;
               trackSession.ghostEntity.rotation.y = firstSample.heading;
+            }
+          } else {
+            // New 3-lap cycle in progress
+            const newLapElapsed = cycleTime % duration;
+            const sample = sampleGhostAtTime(ghostData.samples, newLapElapsed);
+            if (sample) {
+              trackSession.ghostEntity.visible = true;
+              trackSession.ghostEntity.position.x = sample.x;
+              trackSession.ghostEntity.position.z = sample.z;
+              const surfY = window.TrackBuilder ? window.TrackBuilder.getSurfaceAt(sample.x, sample.z) : null;
+              trackSession.ghostEntity.position.y = surfY !== null ? surfY : sample.y;
+              trackSession.ghostEntity.rotation.y = sample.heading;
             }
           }
         }
@@ -1069,6 +1361,20 @@
     showTrickToast('🏁 RESTART AT START CHUTE');
   }
 
+  function teleportPlayer(x, y, z, heading) {
+    const p = state.player;
+    p.x = x;
+    p.y = y;
+    p.z = z;
+    p.groundY = y;
+    p.vx = 0;
+    p.vy = 0;
+    p.vz = 0;
+    p.speed = 0;
+    if (heading !== undefined) p.heading = heading;
+    snapCamera();
+  }
+
   function snapCamera() {
     const p = state.player;
     state.camera.yaw = p.heading + Math.PI;
@@ -1182,6 +1488,17 @@
         case 'KeyD':
         case 'ArrowRight':
           state.input.right = true;
+          break;
+
+        // Debug/Verification Track Location Teleport
+        case 'Digit1':
+          teleportPlayer(160, 1.5, -69.1, -1.716);
+          break;
+        case 'Digit2':
+          teleportPlayer(25, 7.5, -55.4, -2.8);
+          break;
+        case 'Digit3':
+          teleportPlayer(75, 4.0, -100, 1.4);
           break;
 
         // Numpad Controls: Nose & Tail Butters + Aerial Tricks
@@ -1303,6 +1620,31 @@
       }
     });
 
+    // Prevent context menu on game window so right click doesn't steal focus or freeze controls
+    window.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      state.camera.isOrbiting = false;
+    });
+
+    // Reset input state when focus is lost
+    window.addEventListener('blur', () => {
+      state.input.up = false;
+      state.input.down = false;
+      state.input.left = false;
+      state.input.right = false;
+      state.input.jump = false;
+      state.input.jumpPressed = false;
+      state.input.twistUp = false;
+      state.input.twistDown = false;
+      state.input.twistLeft = false;
+      state.input.twistRight = false;
+      state.input.butterNoseLeft = false;
+      state.input.butterNoseRight = false;
+      state.input.butterTailLeft = false;
+      state.input.butterTailRight = false;
+      state.camera.isOrbiting = false;
+    });
+
     // Mouse Drag Orbit Camera
     window.addEventListener('mousedown', (e) => {
       if (e.target === gameCanvas) {
@@ -1364,22 +1706,36 @@
     const inputMag = Math.min(1.0, Math.hypot(inputX, inputY));
 
     // Current board local directions
-    const fwdX = Math.sin(p.heading);
-    const fwdZ = Math.cos(p.heading);
-    const rightX = Math.cos(p.heading);
-    const rightZ = -Math.sin(p.heading);
+    let fwdX = Math.sin(p.heading);
+    let fwdZ = Math.cos(p.heading);
+    let rightX = Math.cos(p.heading);
+    let rightZ = -Math.sin(p.heading);
 
     let vFwd = p.vx * fwdX + p.vz * fwdZ;
     let vLat = p.vx * rightX + p.vz * rightZ;
 
-    // 2. Throttle & Steering
+    // 2. Slope Calculation (for gravity and pitch)
+    let slopeFwd = 0;
+    if (!p.isAirborne) {
+      const epsG = 0.45;
+      const hE = getSurfaceElevation(p.x + epsG, p.z);
+      const hW = getSurfaceElevation(p.x - epsG, p.z);
+      const hS = getSurfaceElevation(p.x, p.z + epsG);
+      const hN = getSurfaceElevation(p.x, p.z - epsG);
+
+      const slopeX = (hW - hE) / (epsG * 2);
+      const slopeZ = (hN - hS) / (epsG * 2);
+      slopeFwd = slopeX * fwdX + slopeZ * fwdZ;
+    }
+
+    // 3. Throttle & Steering with Smart Motor Compensation
     if (inputMag > 0.05) {
       const desiredHeading = Math.atan2(worldDirX, worldDirZ);
       let angleDiff = desiredHeading - p.heading;
       while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
       while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
 
-      const isBraking = p.speed > 1.8 && Math.abs(angleDiff) > (Math.PI * 0.60);
+      const isBraking = p.speed > 2.0 && Math.abs(angleDiff) > (Math.PI * 0.65);
 
       if (isBraking) {
         // Regenerative Braking
@@ -1390,51 +1746,44 @@
         }
         p.roll = THREE.MathUtils.lerp(p.roll, 0, dt * 8);
       } else {
-        // Normal Acceleration & Carving
+        // Smooth Carving & Heading Alignment
         p.heading += angleDiff * Math.min(1.0, dt * TURN_SPEED);
         const rollTarget = THREE.MathUtils.clamp(-angleDiff * 1.5, -0.22, 0.22);
         p.roll = THREE.MathUtils.lerp(p.roll, rollTarget, dt * 10);
 
+        // Motor Acceleration with smooth slope assistance/resistance (no oscillation)
         const targetSpeed = MAX_SPEED * inputMag;
+        const speedRatio = THREE.MathUtils.clamp(vFwd / MAX_SPEED, 0, 1);
+        const torqueFactor = 1.0 - speedRatio * 0.40;
+        const effectiveAccel = ACCELERATION * torqueFactor + (slopeFwd * GRAVITY * 0.35);
+
         if (vFwd < targetSpeed) {
-          const speedRatio = THREE.MathUtils.clamp(vFwd / MAX_SPEED, 0, 1);
-          const torqueFactor = 1.0 - speedRatio * 0.52;
-          vFwd += ACCELERATION * torqueFactor * dt;
-          if (vFwd > targetSpeed) vFwd = targetSpeed;
-        } else if (targetSpeed < vFwd - 0.5) {
-          vFwd = THREE.MathUtils.lerp(vFwd, targetSpeed, dt * 4.5);
+          vFwd = Math.min(targetSpeed, vFwd + Math.max(2.0, effectiveAccel) * dt);
+        } else if (targetSpeed < vFwd - 0.2) {
+          vFwd = THREE.MathUtils.lerp(vFwd, targetSpeed, dt * 3.5);
         }
       }
     } else {
-      // Stationary active motor hold (prevents rolling backwards on slopes when stopped!)
-      if (Math.abs(vFwd) < 0.6) {
+      // Stationary active motor hold (prevents rolling backwards when stopped)
+      if (Math.abs(vFwd) < 0.5) {
         vFwd = THREE.MathUtils.lerp(vFwd, 0, dt * 20.0);
       } else {
-        // Natural rolling coasting friction
+        // Natural rolling coasting with slope gravity
+        vFwd += slopeFwd * GRAVITY * 0.45 * dt;
         vFwd = THREE.MathUtils.lerp(vFwd, 0, dt * 0.85);
       }
       p.roll = THREE.MathUtils.lerp(p.roll, 0, dt * 8);
     }
 
-    // 3. Slope Gravity & Banking
+    // Update forward and right vectors for current heading
+    fwdX = Math.sin(p.heading);
+    fwdZ = Math.cos(p.heading);
+    rightX = Math.cos(p.heading);
+    rightZ = -Math.sin(p.heading);
+
+    // Lateral tyre grip (prevents sliding like ice on banked dirt)
     if (!p.isAirborne) {
-      const epsG = 0.5;
-      const hE = getSurfaceElevation(p.x + epsG, p.z);
-      const hW = getSurfaceElevation(p.x - epsG, p.z);
-      const hS = getSurfaceElevation(p.x, p.z + epsG);
-      const hN = getSurfaceElevation(p.x, p.z - epsG);
-
-      const slopeX = (hW - hE) / (epsG * 2);
-      const slopeZ = (hN - hS) / (epsG * 2);
-
-      const slopeFwd = slopeX * fwdX + slopeZ * fwdZ;
-      // Only apply slope roll if moving or accelerating (Onewheel electronic motor holds when parked)
-      if (inputMag > 0.05 || Math.abs(vFwd) >= 0.4) {
-        vFwd += slopeFwd * GRAVITY * 0.85 * dt;
-      }
-
-      // Lateral tyre grip (prevents sliding like ice on banked dirt)
-      vLat = THREE.MathUtils.lerp(vLat, 0, dt * 14.0);
+      vLat = THREE.MathUtils.lerp(vLat, 0, dt * 16.0);
     }
 
     // 4. Pushback Warning Tilt
@@ -1447,19 +1796,18 @@
       p.pushbackTilt = THREE.MathUtils.lerp(p.pushbackTilt, 0, dt * 6);
     }
 
-    // 5. Recompose Horizontal Velocity
+    // 5. Recompose Horizontal Velocity & Apply Translation
     p.vx = vFwd * fwdX + vLat * rightX;
     p.vz = vFwd * fwdZ + vLat * rightZ;
     p.speed = Math.hypot(p.vx, p.vz);
 
-    // Apply translation
     p.x += p.vx * dt;
     p.z += p.vz * dt;
 
     // 6. Surface Elevation & Grounding
     p.groundY = getSurfaceElevation(p.x, p.z);
 
-    // Feature launch ramps: these are scenic jump surfaces, not solid blockers.
+    // Feature launch ramps: scenic jump surfaces
     applyTrackFeatureLaunches();
 
     // Hop / Jump
@@ -1490,16 +1838,15 @@
         emitDustParticle(p.x, p.y, p.z, -p.vx * 0.3, 0.8, -p.vz * 0.3);
       }
     } else {
-      // 1. Dual-probe smoothed ground slope pitch to prevent nose vibrating
-      const hFront1 = getSurfaceElevation(p.x + fwdX * 0.35, p.z + fwdZ * 0.35);
-      const hRear1 = getSurfaceElevation(p.x - fwdX * 0.35, p.z - fwdZ * 0.35);
-      const hFront2 = getSurfaceElevation(p.x + fwdX * 0.70, p.z + fwdZ * 0.70);
-      const hRear2 = getSurfaceElevation(p.x - fwdX * 0.70, p.z - fwdZ * 0.70);
-      const pitch1 = Math.atan2(hFront1 - hRear1, 0.70);
-      const pitch2 = Math.atan2(hFront2 - hRear2, 1.40);
-      const terrainPitch = (pitch1 * 0.6) + (pitch2 * 0.4);
+      // Grounded — Board sits cleanly on the track surface
+      p.y = p.groundY;
 
-      // 2. Butter & Remote Tilt Inputs
+      // Dual-probe ground slope pitch to align board angle with terrain
+      const hFront = getSurfaceElevation(p.x + fwdX * 0.35, p.z + fwdZ * 0.35);
+      const hRear = getSurfaceElevation(p.x - fwdX * 0.35, p.z - fwdZ * 0.35);
+      const terrainPitch = Math.atan2(hFront - hRear, 0.70);
+
+      // Butter & Remote Tilt Inputs
       let butterPitch = 0;
       if (state.input.butterNoseLeft || (state.input.twistUp && state.input.twistLeft)) {
         butterPitch = 0.20; // Nose down
@@ -1545,20 +1892,7 @@
 
       p.butterTilt = THREE.MathUtils.lerp(p.butterTilt || 0, butterPitch, dt * 12.0);
       const targetPitch = terrainPitch + p.pushbackTilt + p.butterTilt;
-      p.pitch = THREE.MathUtils.lerp(p.pitch, targetPitch, dt * 10.0);
-
-      // 3. Multi-point Bumper Clearance: Ensure neither nose nor tail clips below local ground
-      const bumperDist = 0.38;
-      const hNose = getSurfaceElevation(p.x + fwdX * bumperDist, p.z + fwdZ * bumperDist);
-      const hTail = getSurfaceElevation(p.x - fwdX * bumperDist, p.z - fwdZ * bumperDist);
-      const noseDeltaY = -Math.sin(p.pitch) * bumperDist;
-      const tailDeltaY = Math.sin(p.pitch) * bumperDist;
-      const minCenterForNose = hNose - noseDeltaY + 0.04;
-      const minCenterForTail = hTail - tailDeltaY + 0.04;
-      const targetGround = Math.max(p.groundY, minCenterForNose, minCenterForTail);
-
-      // Smooth suspension snap to ground
-      p.y = THREE.MathUtils.lerp(p.y, targetGround, dt * 20.0);
+      p.pitch = THREE.MathUtils.lerp(p.pitch, targetPitch, dt * 12.0);
 
       // Tire dust while moving
       if (p.speed > 3.0 && Math.random() < 0.35) {
@@ -1575,7 +1909,7 @@
       wheelMesh.rotateX((vFwd / TIRE_RADIUS) * dt);
     }
 
-    // Soft flat drop shadow lying on ground (rotated flat, not upright!)
+    // Soft flat drop shadow lying on ground
     if (boardShadow) {
       boardShadow.position.set(p.x, p.groundY + 0.015, p.z);
       boardShadow.rotation.set(0, p.heading, 0);
@@ -1608,26 +1942,16 @@
       state.camera.pitch = THREE.MathUtils.lerp(state.camera.pitch, 0.26, dt * 2.8);
     }
 
-    state.camera.distance = THREE.MathUtils.lerp(state.camera.distance, state.camera.targetDistance, dt * 8);
+    state.camera.distance = THREE.MathUtils.lerp(state.camera.distance, state.camera.targetDistance, dt * 10);
 
     const hDist = state.camera.distance * Math.cos(state.camera.pitch);
     const targetCamX = p.x + hDist * Math.sin(state.camera.yaw);
     const targetCamY = p.y + 0.65 + state.camera.distance * Math.sin(state.camera.pitch);
     const targetCamZ = p.z + hDist * Math.cos(state.camera.yaw);
 
-    camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetCamX, dt * 10);
-    camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetCamY, dt * 10);
-    camera.position.z = THREE.MathUtils.lerp(camera.position.z, targetCamZ, dt * 10);
-
-    // Look at board & rider stance (y + 0.35m) — keeps board perfectly framed in view!
-    if (!state.camera.lookTarget) {
-      state.camera.lookTarget = new THREE.Vector3(p.x, p.y + 0.35, p.z);
-    } else {
-      state.camera.lookTarget.x = THREE.MathUtils.lerp(state.camera.lookTarget.x, p.x, dt * 14);
-      state.camera.lookTarget.y = THREE.MathUtils.lerp(state.camera.lookTarget.y, p.y + 0.35, dt * 14);
-      state.camera.lookTarget.z = THREE.MathUtils.lerp(state.camera.lookTarget.z, p.z, dt * 14);
-    }
-    camera.lookAt(state.camera.lookTarget);
+    // Smooth, jitter-free camera translation anchored to rider
+    camera.position.set(targetCamX, targetCamY, targetCamZ);
+    camera.lookAt(p.x, p.y + 0.35, p.z);
 
     // Sun follows player for infinite smooth shadow coverage
     if (sunLight) {
@@ -1757,6 +2081,20 @@
     showTrickToast,
     respawnPlayer,
     loadTrackMap,
+    snapCamera,
+    teleport(x, y, z, heading) {
+      const p = state.player;
+      p.x = x;
+      p.y = y;
+      p.z = z;
+      p.groundY = y;
+      p.vx = 0;
+      p.vy = 0;
+      p.vz = 0;
+      p.speed = 0;
+      if (heading !== undefined) p.heading = heading;
+      snapCamera();
+    },
     createBoardMesh: createBoardMeshInternal,
     setPlayerRailColor(hexColor) {
       const colorNum = typeof hexColor === 'string' ? parseInt(hexColor.replace('#', '0x')) : hexColor;

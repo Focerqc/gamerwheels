@@ -404,7 +404,12 @@
 
       var numSamples = this._splinePoints.length;
 
-      // Build a custom ribbon geometry by sweeping a cross-section along the spline
+      // Build a 3D roadbed mesh with downward skirts to completely eliminate floating gaps
+      // Cross-section: 4 vertices:
+      // 0: Left Skirt Base (sunken & flared outward)
+      // 1: Left Track Edge (rideable surface)
+      // 2: Right Track Edge (rideable surface)
+      // 3: Right Skirt Base (sunken & flared outward)
       var positions = [];
       var normals = [];
       var uvs = [];
@@ -412,6 +417,10 @@
       var colors = [];
 
       var accLen = 0;
+
+      // Skirt dimensions: drop skirts 1.1m into the terrain and flare 0.75m outward
+      var SKIRT_DROP = 1.10;
+      var SKIRT_OUTSET = 0.75;
 
       for (var i = 0; i < numSamples; i++) {
         var sp = this._splinePoints[i];
@@ -429,59 +438,106 @@
         }
 
         // Up vector (considering banking)
-        var upY = Math.cos(bankRad);
         var bankLateral = Math.sin(bankRad);
 
-        // Left edge
+        // Rideable track edges
         var lx = sp.x - rightX * halfW;
         var lz = sp.z - rightZ * halfW;
         var ly = sp.y - bankLateral * halfW + RIBBON_Y_OFFSET;
 
-        // Right edge
         var rx = sp.x + rightX * halfW;
         var rz = sp.z + rightZ * halfW;
         var ry = sp.y + bankLateral * halfW + RIBBON_Y_OFFSET;
 
+        // Skirt base vertices (sunken deep into terrain and flared outward)
+        var slx = lx - rightX * SKIRT_OUTSET;
+        var slz = lz - rightZ * SKIRT_OUTSET;
+        var sly = ly - SKIRT_DROP;
+
+        var srx = rx + rightX * SKIRT_OUTSET;
+        var srz = rz + rightZ * SKIRT_OUTSET;
+        var sry = ry - SKIRT_DROP;
+
+        // 4 vertices per cross-section
+        // 0: Left skirt base
+        positions.push(slx, sly, slz);
+        // 1: Left track edge
         positions.push(lx, ly, lz);
+        // 2: Right track edge
         positions.push(rx, ry, rz);
+        // 3: Right skirt base
+        positions.push(srx, sry, srz);
 
-        // Normal — approximate as up
+        // Initial normals
+        normals.push(-rightX * 0.7, 0.7, -rightZ * 0.7);
         normals.push(0, 1, 0);
         normals.push(0, 1, 0);
+        normals.push(rightX * 0.7, 0.7, rightZ * 0.7);
 
-        // UV — u = 0..1 across width, v = accumulated length for tiling
+        // UV — u across cross-section, v along track length
         if (i > 0) {
           var prev = this._splinePoints[i - 1];
           accLen += Math.hypot(sp.x - prev.x, sp.y - prev.y, sp.z - prev.z);
         }
-        uvs.push(0, accLen * 0.2);
-        uvs.push(1, accLen * 0.2);
+        var vCoord = accLen * 0.2;
+        uvs.push(-0.25, vCoord); // Skirt left
+        uvs.push(0.0, vCoord);   // Track left
+        uvs.push(1.0, vCoord);   // Track right
+        uvs.push(1.25, vCoord);  // Skirt right
 
-        // Vertex colors — dirt track brown with variation
+        // Vertex colors — dirt track brown with shaded embankments
         var trackHue = 0.08 + Math.sin(accLen * 0.3) * 0.015;
-        var col = new THREE.Color().setHSL(trackHue, 0.55, 0.30);
-        colors.push(col.r, col.g, col.b);
-        colors.push(col.r, col.g, col.b);
+        var colTrack = new THREE.Color().setHSL(trackHue, 0.55, 0.30);
+        var colSkirt = colTrack.clone().multiplyScalar(0.60); // Darker dirt embankment
+
+        colors.push(colSkirt.r, colSkirt.g, colSkirt.b);
+        colors.push(colTrack.r, colTrack.g, colTrack.b);
+        colors.push(colTrack.r, colTrack.g, colTrack.b);
+        colors.push(colSkirt.r, colSkirt.g, colSkirt.b);
       }
 
-      // Build triangle indices (quad strip)
+      // Build triangle indices for 3 continuous strips: Left Skirt, Track Surface, Right Skirt
       for (var i = 0; i < numSamples - 1; i++) {
-        var a = i * 2;
-        var b = a + 1;
-        var c = a + 2;
-        var d = a + 3;
+        var i0 = i * 4 + 0;
+        var i1 = i * 4 + 1;
+        var i2 = i * 4 + 2;
+        var i3 = i * 4 + 3;
 
-        indices.push(a, c, b);
-        indices.push(b, c, d);
+        var n0 = (i + 1) * 4 + 0;
+        var n1 = (i + 1) * 4 + 1;
+        var n2 = (i + 1) * 4 + 2;
+        var n3 = (i + 1) * 4 + 3;
+
+        // 1. Left Skirt Quad (facing outward/up)
+        indices.push(i0, n0, i1);
+        indices.push(i1, n0, n1);
+
+        // 2. Main Track Surface Quad (facing up)
+        indices.push(i1, n1, i2);
+        indices.push(i2, n1, n2);
+
+        // 3. Right Skirt Quad (facing outward/up)
+        indices.push(i2, n2, i3);
+        indices.push(i3, n2, n3);
       }
 
       // Close the loop if track is closed
       if (trackData.closed && numSamples > 2) {
         var startLoopIdx = (this._isChuteCircuit && this._circuitStartIndex) ? this._circuitStartIndex : 0;
-        var last = (numSamples - 1) * 2;
-        var first = startLoopIdx * 2;
-        indices.push(last, first, last + 1);
-        indices.push(last + 1, first, first + 1);
+        var last0 = (numSamples - 1) * 4;
+        var first0 = startLoopIdx * 4;
+
+        // Left skirt close
+        indices.push(last0 + 0, first0 + 0, last0 + 1);
+        indices.push(last0 + 1, first0 + 0, first0 + 1);
+
+        // Main track surface close
+        indices.push(last0 + 1, first0 + 1, last0 + 2);
+        indices.push(last0 + 2, first0 + 1, first0 + 2);
+
+        // Right skirt close
+        indices.push(last0 + 2, first0 + 2, last0 + 3);
+        indices.push(last0 + 3, first0 + 2, first0 + 3);
       }
 
       var geo = new THREE.BufferGeometry();
@@ -492,7 +548,7 @@
       geo.setIndex(indices);
       geo.computeVertexNormals();
 
-      // Create the dirt track texture procedurally
+      // Create procedural track surface texture
       var trackTexture = this._createTrackTexture(trackData.surfaceMaterial || 'dirt');
 
       var mat = new THREE.MeshStandardMaterial({
@@ -645,7 +701,34 @@
         var feat = trackData.features[i];
         var pos, tangent, rotation;
 
-        if (feat.nodeIndex !== undefined && trackData.nodes[feat.nodeIndex]) {
+        // If the feature has explicit world coordinates (x, z), anchor to them directly along the spline
+        if (feat.x !== undefined && feat.z !== undefined) {
+          var y = feat.y !== undefined ? feat.y : (this.getGroundElevationAt ? this.getGroundElevationAt(feat.x, feat.z) : 1.0);
+          pos = new THREE.Vector3(feat.x, y, feat.z);
+
+          if (feat.heading !== undefined) {
+            rotation = feat.heading;
+            tangent = new THREE.Vector3(Math.sin(rotation), 0, Math.cos(rotation));
+          } else {
+            // Find tangent at nearest spline point
+            var bestDistSq = Infinity;
+            var bestTan = new THREE.Vector3(0, 0, 1);
+            if (this._splinePoints && this._splineTangents) {
+              for (var s = 0; s < this._splinePoints.length; s++) {
+                var sp = this._splinePoints[s];
+                var dx = sp.x - feat.x;
+                var dz = sp.z - feat.z;
+                var d2 = dx * dx + dz * dz;
+                if (d2 < bestDistSq) {
+                  bestDistSq = d2;
+                  bestTan = this._splineTangents[s];
+                }
+              }
+            }
+            tangent = bestTan ? bestTan.clone() : new THREE.Vector3(0, 0, 1);
+            rotation = Math.atan2(tangent.x, tangent.z);
+          }
+        } else if (feat.nodeIndex !== undefined && trackData.nodes[feat.nodeIndex]) {
           var nCurr = trackData.nodes[feat.nodeIndex];
           pos = new THREE.Vector3(nCurr.x, nCurr.y, nCurr.z);
           var nextIdx = (feat.nodeIndex + 1) % trackData.nodes.length;
@@ -664,13 +747,23 @@
             this._buildRFTRFeatureMarker(feat, pos, tangent, rotation);
             break;
           case 'tabletop':
+          case 'lilypad':
             this._buildTabletop(feat, pos, tangent, rotation, registerFn);
+            if (feat.number !== undefined) {
+              this._buildRFTRFeatureMarker(feat, pos, tangent, rotation);
+            }
             break;
           case 'kicker':
             this._buildKicker(feat, pos, tangent, rotation, registerFn);
+            if (feat.number !== undefined) {
+              this._buildRFTRFeatureMarker(feat, pos, tangent, rotation);
+            }
             break;
           case 'roller':
             this._buildRollers(feat, pos, tangent, rotation, registerFn);
+            if (feat.number !== undefined) {
+              this._buildRFTRFeatureMarker(feat, pos, tangent, rotation);
+            }
             break;
           case 'drop':
             this._buildDrop(feat, pos, tangent, rotation, registerFn);
@@ -720,27 +813,30 @@
       var props = feat.t !== undefined ? this._interpolateNodeProps(feat.t, this._trackData) : {};
       var width = props.w || this._trackData.width;
 
-      // Visual mesh — a simple box-like shape
+      // Visual mesh with foundation footing to anchor into hillside
+      var footing = 0.90;
       var shape = new THREE.Shape();
       var takeoff = feat.takeoffLen || feat.length * 0.25;
       var deck = feat.deckLen || feat.length * 0.5;
       var landing = feat.landingLen || feat.length * 0.25;
       var h = feat.height;
 
-      shape.moveTo(0, 0);
+      shape.moveTo(0, -footing);
+      shape.lineTo(0, 0);
       shape.lineTo(takeoff, h);
       shape.lineTo(takeoff + deck, h);
       shape.lineTo(takeoff + deck + landing, 0);
-      shape.lineTo(0, 0);
+      shape.lineTo(takeoff + deck + landing, -footing);
+      shape.lineTo(0, -footing);
 
       var extrudeSettings = { depth: width, bevelEnabled: false };
       var geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
 
-      // Center the geometry on its own origin before placing it on the spline.
-      // This keeps the ramp physically sitting on the track centerline instead of
-      // drifting off to the side after the rotation.
+      // Rotate and center horizontally (X and Z) so the base sits at y=0 (with footing below 0)
       geo.rotateY(-Math.PI / 2);
-      geo.center();
+      geo.computeBoundingBox();
+      var bb = geo.boundingBox;
+      geo.translate(-(bb.min.x + bb.max.x) / 2, 0, -(bb.min.z + bb.max.z) / 2);
 
       var mat = new THREE.MeshStandardMaterial({
         color: 0x8B6914,
@@ -790,17 +886,21 @@
       var width = props.w || this._trackData.width;
       var halfLen = feat.length / 2;
 
-      // Center the geometry on its own origin before placing it on the spline.
+      // Visual mesh with foundation footing to anchor into hillside
+      var footing = 0.90;
       var shape = new THREE.Shape();
-      shape.moveTo(0, 0);
-      shape.lineTo(feat.length, feat.height);
-      shape.lineTo(feat.length, 0);
+      shape.moveTo(0, -footing);
       shape.lineTo(0, 0);
+      shape.lineTo(feat.length, feat.height);
+      shape.lineTo(feat.length, -footing);
+      shape.lineTo(0, -footing);
 
       var extrudeSettings = { depth: width, bevelEnabled: false };
       var geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
       geo.rotateY(-Math.PI / 2);
-      geo.center();
+      geo.computeBoundingBox();
+      var bbK = geo.boundingBox;
+      geo.translate(-(bbK.min.x + bbK.max.x) / 2, 0, -(bbK.min.z + bbK.max.z) / 2);
 
       var mat = new THREE.MeshStandardMaterial({
         color: 0x9B7B2C,
@@ -834,57 +934,187 @@
 
     _buildRollers: function (feat, pos, tangent, rotation, registerFn) {
       var props = feat.t !== undefined ? this._interpolateNodeProps(feat.t, this._trackData) : {};
-      var width = props.w || this._trackData.width;
-      var count = feat.count || 4;
+      var width = props.w || this._trackData.width || 5.0;
+      var totalLen = feat.length || 8.0;
+      var halfLen = totalLen / 2;
 
-      var fwdX = Math.sin(rotation);
-      var fwdZ = Math.cos(rotation);
-      var startX = pos.x - fwdX * feat.length / 2;
-      var startZ = pos.z - fwdZ * feat.length / 2;
-      var endX = pos.x + fwdX * feat.length / 2;
-      var endZ = pos.z + fwdZ * feat.length / 2;
+      // Register obstacle collision for game physics
+      if (registerFn) {
+        registerFn({
+          type: 'whoops',
+          x: pos.x,
+          z: pos.z,
+          width: width,
+          length: totalLen,
+          height: feat.height || 0.28,
+          baseY: pos.y,
+          rotation: rotation,
+          count: 8,
+          communityMap: true,
+        });
+      }
 
-      // Register as whoops obstacle (game's existing type)
-      registerFn({
-        type: 'whoops',
-        x: pos.x,
-        z: pos.z,
-        width: width,
-        length: feat.length,
-        height: feat.height,
-        baseY: pos.y,
-        zStart: startZ,
-        zEnd: endZ,
-        count: count,
-        communityMap: true,
+      var group = new THREE.Group();
+      group.position.set(pos.x, pos.y, pos.z);
+      group.rotation.y = rotation;
+
+      // Dark corrugated plastic HDPE tube material (black/charcoal with subtle sheen)
+      var pipeMat = new THREE.MeshStandardMaterial({
+        color: 0x1a1c20,
+        roughness: 0.55,
+        metalness: 0.2,
       });
 
-      // Visual — individual roller humps
-      var spacing = feat.length / count;
-      for (var i = 0; i < count; i++) {
-        var t2 = (i + 0.5) / count;
-        var rx = startX + (endX - startX) * t2;
-        var rz = startZ + (endZ - startZ) * t2;
+      // Darker interior / groove material for corrugated look
+      var grooveMat = new THREE.MeshStandardMaterial({
+        color: 0x0d0e10,
+        roughness: 0.8,
+        metalness: 0.1,
+      });
 
-        var rollerGeo = new THREE.CylinderGeometry(feat.height, feat.height * 1.5, width, 8, 1, false, 0, Math.PI);
-        rollerGeo.rotateZ(Math.PI / 2);
-        rollerGeo.rotateY(rotation);
+      // Straw bale material (warm golden hay color)
+      var strawMat = new THREE.MeshStandardMaterial({
+        color: 0xd4a359,
+        roughness: 0.95,
+        metalness: 0.02,
+      });
 
-        var rollerMat = new THREE.MeshStandardMaterial({
-          color: 0x7B6424,
-          roughness: 0.9,
-          metalness: 0.05,
-        });
+      // Twine wrapping bands on straw bales
+      var twineMat = new THREE.MeshStandardMaterial({
+        color: 0x6b532f,
+        roughness: 0.9,
+      });
 
-        var rollerMesh = new THREE.Mesh(rollerGeo, rollerMat);
-        rollerMesh.position.set(rx, pos.y, rz);
-        rollerMesh.castShadow = true;
-        rollerMesh.receiveShadow = true;
-        rollerMesh.name = 'Feature_Roller_' + i;
+      // Dirt ramp / bedding under the obstacle
+      var dirtMat = new THREE.MeshStandardMaterial({
+        color: 0x7a5828,
+        roughness: 0.96,
+        metalness: 0.02,
+      });
 
-        this._trackGroup.add(rollerMesh);
-        this._featureMeshes.push(rollerMesh);
+      // Dirt bedding wedge
+      var bedW = width * 1.05;
+      var bedGeo = new THREE.BoxGeometry(bedW, 0.08, totalLen);
+      var bedMesh = new THREE.Mesh(bedGeo, dirtMat);
+      bedMesh.position.set(0, 0.04, 0);
+      bedMesh.receiveShadow = true;
+      group.add(bedMesh);
+
+      var tubeRadius = (feat.height ? feat.height / 2 : 0.14);
+
+      // =========================================================================
+      // Section 1: In-line / Longitudinal Tubes (First half, parallel to travel)
+      // Rider approaches from local -Z towards +Z.
+      // =========================================================================
+      var sec1Len = totalLen * 0.46; // ~3.7m long
+      var numLongTubes = 5; // 5 tubes across the center riding channel as in photo
+      var longSpacing = 0.38;
+      var longTubeGeo = new THREE.CylinderGeometry(tubeRadius, tubeRadius, sec1Len, 16);
+      longTubeGeo.rotateX(Math.PI / 2); // Lay parallel to track Z-axis (direction of travel)
+
+      var sec1CenterZ = -halfLen + (sec1Len / 2);
+      var startX = -((numLongTubes - 1) * longSpacing) / 2;
+
+      for (var l = 0; l < numLongTubes; l++) {
+        var lx = startX + l * longSpacing;
+        var longPipe = new THREE.Mesh(longTubeGeo, pipeMat);
+        longPipe.position.set(lx, tubeRadius + 0.02, sec1CenterZ);
+        longPipe.castShadow = true;
+        longPipe.receiveShadow = true;
+        group.add(longPipe);
+
+        // Add subtle corrugation rings along the longitudinal pipe
+        var numRings = Math.floor(sec1Len / 0.22);
+        for (var r = 0; r < numRings; r++) {
+          var rz = sec1CenterZ - (sec1Len / 2) + (r + 0.5) * 0.22;
+          var ringGeo = new THREE.TorusGeometry(tubeRadius + 0.012, 0.012, 6, 12);
+          var ringMesh = new THREE.Mesh(ringGeo, grooveMat);
+          ringMesh.position.set(lx, tubeRadius + 0.02, rz);
+          group.add(ringMesh);
+        }
       }
+
+      // =========================================================================
+      // Section 2: Perpendicular / Crosswise Tubes (Second half, across track)
+      // Transition from sec1 into transverse culverts across width.
+      // =========================================================================
+      var sec2Len = totalLen * 0.54; // ~4.3m long
+      var crossWidth = width * 0.92;
+      var numCrossTubes = 10;
+      var crossSpacing = sec2Len / numCrossTubes;
+      var crossTubeGeo = new THREE.CylinderGeometry(tubeRadius, tubeRadius, crossWidth, 16);
+      crossTubeGeo.rotateZ(Math.PI / 2); // Lay crosswise across track X-axis (perpendicular)
+
+      var sec2StartZ = -halfLen + sec1Len;
+
+      for (var c = 0; c < numCrossTubes; c++) {
+        var pz = sec2StartZ + (c + 0.5) * crossSpacing;
+        var crossPipe = new THREE.Mesh(crossTubeGeo, pipeMat);
+        crossPipe.position.set(0, tubeRadius + 0.02, pz);
+        crossPipe.castShadow = true;
+        crossPipe.receiveShadow = true;
+        group.add(crossPipe);
+
+        // Add subtle corrugation ribs along the crosswise pipe
+        var numCrossRings = Math.floor(crossWidth / 0.22);
+        for (var cr = 0; cr < numCrossRings; cr++) {
+          var cx = -(crossWidth / 2) + (cr + 0.5) * 0.22;
+          var cRingGeo = new THREE.TorusGeometry(tubeRadius + 0.012, 0.012, 6, 12);
+          cRingGeo.rotateY(Math.PI / 2);
+          var cRingMesh = new THREE.Mesh(cRingGeo, grooveMat);
+          cRingMesh.position.set(cx, tubeRadius + 0.02, pz);
+          group.add(cRingMesh);
+        }
+      }
+
+      // =========================================================================
+      // Straw Bales (Hay Bales) flanking both sides of the obstacle
+      // =========================================================================
+      var baleW = 0.52;
+      var baleH = 0.38;
+      var baleL = 1.05;
+      var baleGeo = new THREE.BoxGeometry(baleW, baleH, baleL);
+      var baleSideOffset = (width / 2) + (baleW / 2) - 0.15;
+      var numBales = Math.floor(totalLen / (baleL + 0.08));
+
+      // Twine bands on bale
+      var bandGeo = new THREE.BoxGeometry(baleW + 0.01, baleH + 0.01, 0.02);
+
+      for (var b = 0; b < numBales; b++) {
+        var bz = -halfLen + (b + 0.5) * (totalLen / numBales);
+
+        // Left bale
+        var leftBale = new THREE.Mesh(baleGeo, strawMat);
+        leftBale.position.set(-baleSideOffset, baleH / 2, bz);
+        leftBale.castShadow = true;
+        leftBale.receiveShadow = true;
+        group.add(leftBale);
+
+        var bandL1 = new THREE.Mesh(bandGeo, twineMat);
+        bandL1.position.set(-baleSideOffset, baleH / 2, bz - 0.25);
+        group.add(bandL1);
+        var bandL2 = new THREE.Mesh(bandGeo, twineMat);
+        bandL2.position.set(-baleSideOffset, baleH / 2, bz + 0.25);
+        group.add(bandL2);
+
+        // Right bale
+        var rightBale = new THREE.Mesh(baleGeo, strawMat);
+        rightBale.position.set(baleSideOffset, baleH / 2, bz);
+        rightBale.castShadow = true;
+        rightBale.receiveShadow = true;
+        group.add(rightBale);
+
+        var bandR1 = new THREE.Mesh(bandGeo, twineMat);
+        bandR1.position.set(baleSideOffset, baleH / 2, bz - 0.25);
+        group.add(bandR1);
+        var bandR2 = new THREE.Mesh(bandGeo, twineMat);
+        bandR2.position.set(baleSideOffset, baleH / 2, bz + 0.25);
+        group.add(bandR2);
+      }
+
+      group.name = 'Feature_PipeDreams_Composite';
+      this._trackGroup.add(group);
+      this._featureMeshes.push(group);
     },
 
     _buildDrop: function (feat, pos, tangent, rotation, registerFn) {
@@ -1708,6 +1938,58 @@
     },
 
     /**
+     * Cache index for fast localized spatial queries
+     */
+    _lastNearestSegmentIdx: 0,
+
+    /**
+     * Check if a world point (with an optional radius & safety margin) is clear of the entire track ribbon.
+     */
+    isPointClearOfTrack: function (worldX, worldZ, radius = 0, extraMargin = 1.5) {
+      if (!this._built || !this._splinePoints || this._splinePoints.length === 0) {
+        return true;
+      }
+
+      const pts = this._splinePoints;
+      const numPts = pts.length;
+      const defaultW = (this._trackData && this._trackData.width) || 5.0;
+      const numSegments = this._isChuteCircuit ? (numPts - 1) : (this._trackData && this._trackData.closed ? numPts : numPts - 1);
+
+      for (let i = 0; i < numSegments; i += 2) {
+        const nextIdx = (i + 1) % numPts;
+        const ax = pts[i].x, az = pts[i].z;
+        const bx = pts[nextIdx].x, bz = pts[nextIdx].z;
+        const abx = bx - ax, abz = bz - az;
+        const lenSq = abx * abx + abz * abz;
+
+        let u = 0;
+        let qx = ax, qz = az;
+        if (lenSq > 0.0001) {
+          u = ((worldX - ax) * abx + (worldZ - az) * abz) / lenSq;
+          if (u < 0) u = 0;
+          else if (u > 1) u = 1;
+          qx = ax + u * abx;
+          qz = az + u * abz;
+        }
+
+        const dx = worldX - qx;
+        const dz = worldZ - qz;
+        const d2 = dx * dx + dz * dz;
+
+        const wA = pts[i].w || defaultW;
+        const wB = pts[nextIdx].w || defaultW;
+        const halfW = (wA + u * (wB - wA)) / 2.0;
+        const reqClearance = halfW + radius + extraMargin;
+
+        if (d2 < reqClearance * reqClearance) {
+          return false;
+        }
+      }
+
+      return true;
+    },
+
+    /**
      * Get seamless ground elevation anywhere in the world, anchored to the nearest track segment.
      * Continuously interpolates elevation, tangents, and banking between spline points to eliminate
      * discrete stepping, bumpiness, and camera/nose jitter.
@@ -1805,7 +2087,15 @@
       const distantDrop = Math.max(0, offset - 4.0) * 0.025;
       const rollingHills = (Math.sin(worldX * 0.035 + worldZ * 0.028) + Math.cos(worldX * 0.018 - worldZ * 0.022)) * 0.45;
 
-      const groundY = centerY - shoulderDrop - Math.min(2.5, distantDrop) + (offset > 8 ? rollingHills : 0);
+      // Realistic Northern Hillside rise behind the upper track loops (Z < -115)
+      let northHillRise = 0;
+      if (worldZ < -115 && offset > 2.0) {
+        const dNorth = Math.abs(worldZ + 115);
+        const ramp = Math.min(1.0, (offset - 2.0) / 10.0);
+        northHillRise = Math.min(26.0, Math.pow(dNorth * 0.12, 1.32)) * ramp;
+      }
+
+      const groundY = centerY - shoulderDrop - Math.min(2.5, distantDrop) + (offset > 8 ? rollingHills : 0) + northHillRise;
       return Math.max(0.2, groundY);
     },
   };
