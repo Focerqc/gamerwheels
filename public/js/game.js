@@ -116,6 +116,9 @@
   let trickToast, trickText, trickTicker, tickerText;
   let btnRespawn, btnFullscreen, btnZoomIn, btnZoomOut, btnOpenTrackStudio;
   let trackRacingHud, trackLapStatus, trackLapTimer, trackLapSplit, trackGhostTarget;
+  let joystickZone, joystickBase, joystickThumb;
+  let rightJoystickZone, rightJoystickBase, rightJoystickThumb;
+  let btnTouchJump;
 
   // ==========================================================================
   // 1. DOM Initialization
@@ -146,6 +149,14 @@
     trackLapTimer = document.getElementById('trackLapTimer') || document.getElementById('trackHudTimer');
     trackLapSplit = document.getElementById('trackLapSplit') || document.getElementById('trackHudSplit');
     trackGhostTarget = document.getElementById('trackGhostTarget') || document.getElementById('trackHudTarget');
+
+    joystickZone = document.getElementById('joystickZone');
+    joystickBase = document.getElementById('joystickBase');
+    joystickThumb = document.getElementById('joystickThumb');
+    rightJoystickZone = document.getElementById('rightJoystickZone');
+    rightJoystickBase = document.getElementById('rightJoystickBase');
+    rightJoystickThumb = document.getElementById('rightJoystickThumb');
+    btnTouchJump = document.getElementById('btnTouchJump');
 
     if (btnRespawn) btnRespawn.addEventListener('click', respawnPlayer);
     if (btnFullscreen) btnFullscreen.addEventListener('click', toggleFullscreen);
@@ -1673,9 +1684,17 @@
       state.input.butterNoseRight = false;
       state.input.butterTailLeft = false;
       state.input.butterTailRight = false;
+      state.input.joystickActive = false;
+      state.input.joystickVector.x = 0;
+      state.input.joystickVector.y = 0;
       state.camera.isOrbiting = false;
       state.camera.isPanning = false;
     });
+
+    // Initialize On-Screen Virtual Joysticks & Touch Controls
+    setupLeftJoystick();
+    setupRightJoystick();
+    setupTouchJumpButton();
 
     // Mouse Drag Orbit Camera & Right-Click Pan in 3D Inspect
     window.addEventListener('mousedown', (e) => {
@@ -1737,6 +1756,200 @@
     }, { passive: true });
   }
 
+  // ==========================================================================
+  // Virtual Joystick & Touch Control Event Handlers
+  // ==========================================================================
+  function setupLeftJoystick() {
+    if (!joystickZone || !joystickBase || !joystickThumb) return;
+
+    let activePointerId = null;
+    let centerX = 0, centerY = 0;
+    const maxRadius = 45;
+
+    function updateStick(clientX, clientY) {
+      let dx = clientX - centerX;
+      let dy = clientY - centerY;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist > maxRadius) {
+        dx = (dx / dist) * maxRadius;
+        dy = (dy / dist) * maxRadius;
+      }
+
+      joystickThumb.style.transform = `translate(${dx}px, ${dy}px)`;
+      joystickThumb.classList.add('active');
+
+      const normX = dx / maxRadius;
+      const normY = -dy / maxRadius;
+
+      state.input.joystickActive = true;
+      state.input.joystickVector.x = normX;
+      state.input.joystickVector.y = normY;
+
+      state.input.up = normY > 0.2;
+      state.input.down = normY < -0.2;
+      state.input.left = normX < -0.2;
+      state.input.right = normX > 0.2;
+    }
+
+    function resetStick() {
+      activePointerId = null;
+      joystickThumb.style.transform = 'translate(0px, 0px)';
+      joystickThumb.classList.remove('active');
+      state.input.joystickActive = false;
+      state.input.joystickVector.x = 0;
+      state.input.joystickVector.y = 0;
+      state.input.up = false;
+      state.input.down = false;
+      state.input.left = false;
+      state.input.right = false;
+    }
+
+    joystickZone.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      activePointerId = e.pointerId;
+      try { joystickZone.setPointerCapture(e.pointerId); } catch (err) {}
+
+      const baseRect = joystickBase.getBoundingClientRect();
+      centerX = baseRect.left + baseRect.width / 2;
+      centerY = baseRect.top + baseRect.height / 2;
+
+      updateStick(e.clientX, e.clientY);
+    });
+
+    joystickZone.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== activePointerId) return;
+      e.preventDefault();
+      updateStick(e.clientX, e.clientY);
+    });
+
+    const endHandler = (e) => {
+      if (e.pointerId !== activePointerId) return;
+      e.preventDefault();
+      try { joystickZone.releasePointerCapture(e.pointerId); } catch (err) {}
+      resetStick();
+    };
+
+    joystickZone.addEventListener('pointerup', endHandler);
+    joystickZone.addEventListener('pointercancel', endHandler);
+  }
+
+  function setupRightJoystick() {
+    if (!rightJoystickZone || !rightJoystickBase || !rightJoystickThumb) return;
+
+    let activePointerId = null;
+    let centerX = 0, centerY = 0;
+    let startX = 0, startY = 0;
+    let startTime = 0;
+    const maxRadius = 40;
+
+    function updateStick(clientX, clientY) {
+      let dx = clientX - centerX;
+      let dy = clientY - centerY;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist > maxRadius) {
+        dx = (dx / dist) * maxRadius;
+        dy = (dy / dist) * maxRadius;
+      }
+
+      rightJoystickThumb.style.transform = `translate(${dx}px, ${dy}px)`;
+      rightJoystickThumb.classList.add('active', 'holding');
+
+      const normX = dx / maxRadius;
+      const normY = -dy / maxRadius;
+
+      state.input.twistUp = normY > 0.25;
+      state.input.twistDown = normY < -0.25;
+      state.input.twistLeft = normX < -0.25;
+      state.input.twistRight = normX > 0.25;
+
+      state.input.butterNoseLeft = (normY > 0.3 && normX < -0.3);
+      state.input.butterNoseRight = (normY > 0.3 && normX > 0.3);
+      state.input.butterTailLeft = (normY < -0.3 && normX < -0.3);
+      state.input.butterTailRight = (normY < -0.3 && normX > 0.3);
+    }
+
+    function resetStick() {
+      activePointerId = null;
+      rightJoystickThumb.style.transform = 'translate(0px, 0px)';
+      rightJoystickThumb.classList.remove('active', 'holding');
+
+      state.input.twistUp = false;
+      state.input.twistDown = false;
+      state.input.twistLeft = false;
+      state.input.twistRight = false;
+      state.input.butterNoseLeft = false;
+      state.input.butterNoseRight = false;
+      state.input.butterTailLeft = false;
+      state.input.butterTailRight = false;
+    }
+
+    rightJoystickZone.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      activePointerId = e.pointerId;
+      try { rightJoystickZone.setPointerCapture(e.pointerId); } catch (err) {}
+
+      const baseRect = rightJoystickBase.getBoundingClientRect();
+      centerX = baseRect.left + baseRect.width / 2;
+      centerY = baseRect.top + baseRect.height / 2;
+      startX = e.clientX;
+      startY = e.clientY;
+      startTime = performance.now();
+
+      updateStick(e.clientX, e.clientY);
+    });
+
+    rightJoystickZone.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== activePointerId) return;
+      e.preventDefault();
+      updateStick(e.clientX, e.clientY);
+    });
+
+    const endHandler = (e) => {
+      if (e.pointerId !== activePointerId) return;
+      e.preventDefault();
+
+      const elapsed = performance.now() - startTime;
+      const totalMoved = Math.hypot(e.clientX - startX, e.clientY - startY);
+
+      // Tap gesture (< 220ms duration, moved < 16px) -> HOP / JUMP
+      if (elapsed < 220 && totalMoved < 16) {
+        if (!state.input.jump) state.input.jumpPressed = true;
+        state.input.jump = true;
+        setTimeout(() => {
+          state.input.jump = false;
+          state.input.jumpPressed = false;
+        }, 120);
+      }
+
+      try { rightJoystickZone.releasePointerCapture(e.pointerId); } catch (err) {}
+      resetStick();
+    };
+
+    rightJoystickZone.addEventListener('pointerup', endHandler);
+    rightJoystickZone.addEventListener('pointercancel', endHandler);
+  }
+
+  function setupTouchJumpButton() {
+    if (!btnTouchJump) return;
+
+    btnTouchJump.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (!state.input.jump) state.input.jumpPressed = true;
+      state.input.jump = true;
+    });
+
+    const releaseJump = (e) => {
+      e.preventDefault();
+      state.input.jump = false;
+      state.input.jumpPressed = false;
+    };
+
+    btnTouchJump.addEventListener('pointerup', releaseJump);
+    btnTouchJump.addEventListener('pointercancel', releaseJump);
+  }
+
   function adjustZoom(delta) {
     const isInspect = (state.camera.mode === 'inspect' || state.camera.mode === 'isometric' || state.camera.mode === 'topdown');
     if (isInspect) {
@@ -1763,13 +1976,18 @@
 
     // 1. Input Direction
     let inputX = 0, inputY = 0;
-    if (state.input.right) inputX += 1;
-    if (state.input.left) inputX -= 1;
-    if (state.input.up) inputY += 1;
-    if (state.input.down) inputY -= 1;
+    if (state.input.joystickActive && (Math.abs(state.input.joystickVector.x) > 0.05 || Math.abs(state.input.joystickVector.y) > 0.05)) {
+      inputX = state.input.joystickVector.x;
+      inputY = state.input.joystickVector.y;
+    } else {
+      if (state.input.right) inputX += 1;
+      if (state.input.left) inputX -= 1;
+      if (state.input.up) inputY += 1;
+      if (state.input.down) inputY -= 1;
 
-    const len = Math.hypot(inputX, inputY);
-    if (len > 0) { inputX /= len; inputY /= len; }
+      const len = Math.hypot(inputX, inputY);
+      if (len > 0) { inputX /= len; inputY /= len; }
+    }
 
     const sinCam = Math.sin(state.camera.yaw);
     const cosCam = Math.cos(state.camera.yaw);

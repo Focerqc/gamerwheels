@@ -12,15 +12,15 @@
   global.TRACK_DATA_HOLLISTER = {
   "name": "Hollister Hills RFTR",
   "version": "2.0",
-  "exportedAt": "2026-09-11T06:35:58.351Z",
+  "exportedAt": "2026-09-11T08:21:52.791Z",
   "closed": true,
   "loopTargetNode": 5,
   "isChuteCircuit": true,
   "width": 5,
   "surfaceMaterial": "dirt",
-  "totalLengthMeters": 894.4289885256754,
+  "totalLengthMeters": 893.8147272397774,
   "chuteLengthMeters": 95.15012152738679,
-  "circuitLengthMeters": 799.2788669982887,
+  "circuitLengthMeters": 798.6646057123907,
   "minElevationMeters": 1,
   "maxElevationMeters": 8.25,
   "nodes": [
@@ -247,19 +247,19 @@
     },
     {
       "x": 15.1,
-      "y": 6.6,
+      "y": 7.1,
       "z": -55.4,
       "bank": 0
     },
     {
       "x": 19.7,
-      "y": 2.5,
+      "y": 5,
       "z": -58.5,
       "bank": 0
     },
     {
       "x": 26.6,
-      "y": 1.5,
+      "y": 2,
       "z": -61.7,
       "bank": 0
     },
@@ -417,15 +417,16 @@
       "type": "tabletop",
       "number": 2,
       "name": "Lilypad",
-      "nodeIndex": 34,
-      "x": 15.1,
-      "y": 6.6,
-      "z": -55.4,
+      "nodeIndex": 35,
+      "x": 12,
+      "y": 6.9,
+      "z": -53,
       "length": 7.2,
       "height": 1.25,
       "takeoffLen": 1.8,
       "deckLen": 3.2,
-      "landingLen": 2.2
+      "landingLen": 2.2,
+      "t": 0.58
     },
     {
       "type": "roller",
@@ -450,6 +451,365 @@
       "heading": 1.406,
       "width": 6.5,
       "t": 0.95
+    }
+  ],
+  "scenery": [
+    {
+      "type": "mature_oak",
+      "x": 62,
+      "z": -44,
+      "scale": 1.3,
+      "variant": 1
+    },
+    {
+      "type": "mature_oak",
+      "x": 68,
+      "z": -38,
+      "scale": 1.2,
+      "variant": 2
+    },
+    {
+      "type": "mid_oak",
+      "x": 75,
+      "z": -42,
+      "scale": 1.1,
+      "variant": 0
+    },
+    {
+      "type": "bush",
+      "x": 60,
+      "z": -36,
+      "scale": 1.1,
+      "variant": 3
+    },
+    {
+      "type": "bush",
+      "x": 72,
+      "z": -32,
+      "scale": 0.95,
+      "variant": 1
+    },
+    {
+      "type": "mid_oak",
+      "x": 82,
+      "z": -36,
+      "scale": 1.05,
+      "variant": 2
+    },
+    {
+      "type": "bush",
+      "x": 92,
+      "z": -34,
+      "scale": 0.9,
+      "variant": 0
+    },
+    {
+      "type": "mature_oak",
+      "x": 86,
+      "z": -46,
+      "scale": 1.25,
+      "variant": 3
+    },
+    {
+      "type": "mid_oak",
+      "x": 98,
+      "z": -40,
+      "scale": 1.15,
+      "variant": 1
+    },
+    {
+      "type": "mature_oak",
+      "x": -38,
+      "z": -128,
+      "scale": 1.3,
+      "variant": 0
+    },
+    {
+      "type": "mature_oak",
+      "x": -8,
+      "z": -138,
+      "scale": 1.4,
+      "variant": 1
+    },
+    {
+      "type": "mature_oak",
+      "x": 18,
+      "z": -142,
+      "scale": 1.35,
+      "variant": 2
+    },
+    {
+      "type": "mature_oak",
+      "x": 50,
+      "z": -134,
+      "scale": 1.3,
+      "variant": 3
+    },
+    {
+      "type": "mature_oak",
+      "x": 82,
+      "z": -126,
+      "scale": 1.4,
+      "variant": 0
+    },
+    {
+      "type": "mature_oak",
+      "x": 120,
+      "z": -126,
+      "scale": 1.3,
+      "variant": 1
+    },
+    {
+      "type": "mature_oak",
+      "x": 148,
+      "z": -130,
+      "scale": 1.4,
+      "variant": 2
+    },
+    {
+      "type": "mature_oak",
+      "x": -65,
+      "z": 8,
+      "scale": 1.3,
+      "variant": 2
+    },
+    {
+      "type": "mature_oak",
+      "x": -75,
+      "z": -15,
+      "scale": 1.25,
+      "variant": 1
+    },
+    {
+      "type": "mature_oak",
+      "x": -85,
+      "z": -40,
+      "scale": 1.4,
+      "variant": 3
+    },
+    {
+      "type": "mid_oak",
+      "x": -68,
+      "z": 26,
+      "scale": 1.15,
+      "variant": 0
+    },
+    {
+      "type": "bush",
+      "x": -58,
+      "z": 16,
+      "scale": 1.05,
+      "variant": 2
+    },
+    {
+      "type": "bush",
+      "x": -78,
+      "z": -28,
+      "scale": 1.1,
+      "variant": 1
+    },
+    {
+      "type": "mature_oak",
+      "x": -85,
+      "z": -145,
+      "scale": 1.25,
+      "variant": 1
+    },
+    {
+      "type": "mid_oak",
+      "x": -68,
+      "z": -140,
+      "scale": 1.1,
+      "variant": 2
+    },
+    {
+      "type": "mature_oak",
+      "x": -50,
+      "z": -152,
+      "scale": 1.35,
+      "variant": 0
+    },
+    {
+      "type": "mid_oak",
+      "x": -30,
+      "z": -148,
+      "scale": 1.15,
+      "variant": 3
+    },
+    {
+      "type": "mature_oak",
+      "x": -15,
+      "z": -160,
+      "scale": 1.4,
+      "variant": 1
+    },
+    {
+      "type": "mature_oak",
+      "x": 5,
+      "z": -155,
+      "scale": 1.3,
+      "variant": 2
+    },
+    {
+      "type": "mid_oak",
+      "x": 25,
+      "z": -150,
+      "scale": 1.2,
+      "variant": 0
+    },
+    {
+      "type": "mature_oak",
+      "x": 42,
+      "z": -162,
+      "scale": 1.35,
+      "variant": 3
+    },
+    {
+      "type": "mid_oak",
+      "x": 65,
+      "z": -145,
+      "scale": 1.15,
+      "variant": 1
+    },
+    {
+      "type": "mature_oak",
+      "x": 85,
+      "z": -152,
+      "scale": 1.4,
+      "variant": 2
+    },
+    {
+      "type": "mid_oak",
+      "x": 105,
+      "z": -142,
+      "scale": 1.1,
+      "variant": 0
+    },
+    {
+      "type": "mature_oak",
+      "x": 128,
+      "z": -148,
+      "scale": 1.3,
+      "variant": 3
+    },
+    {
+      "type": "mid_oak",
+      "x": 145,
+      "z": -140,
+      "scale": 1.15,
+      "variant": 1
+    },
+    {
+      "type": "mature_oak",
+      "x": 165,
+      "z": -145,
+      "scale": 1.35,
+      "variant": 2
+    },
+    {
+      "type": "mature_oak",
+      "x": -70,
+      "z": -170,
+      "scale": 1.4,
+      "variant": 0
+    },
+    {
+      "type": "mature_oak",
+      "x": -25,
+      "z": -175,
+      "scale": 1.45,
+      "variant": 1
+    },
+    {
+      "type": "mature_oak",
+      "x": 20,
+      "z": -172,
+      "scale": 1.35,
+      "variant": 2
+    },
+    {
+      "type": "mature_oak",
+      "x": 70,
+      "z": -178,
+      "scale": 1.4,
+      "variant": 3
+    },
+    {
+      "type": "mature_oak",
+      "x": 115,
+      "z": -168,
+      "scale": 1.35,
+      "variant": 0
+    },
+    {
+      "type": "mature_oak",
+      "x": 155,
+      "z": -165,
+      "scale": 1.4,
+      "variant": 1
+    },
+    {
+      "type": "mature_oak",
+      "x": -45,
+      "z": 45,
+      "scale": 1.25,
+      "variant": 0
+    },
+    {
+      "type": "mid_oak",
+      "x": -10,
+      "z": 52,
+      "scale": 1.1,
+      "variant": 1
+    },
+    {
+      "type": "mature_oak",
+      "x": 28,
+      "z": 48,
+      "scale": 1.3,
+      "variant": 2
+    },
+    {
+      "type": "mid_oak",
+      "x": 65,
+      "z": 55,
+      "scale": 1.15,
+      "variant": 3
+    },
+    {
+      "type": "mature_oak",
+      "x": 105,
+      "z": 42,
+      "scale": 1.25,
+      "variant": 0
+    },
+    {
+      "type": "mature_oak",
+      "x": 140,
+      "z": 30,
+      "scale": 1.3,
+      "variant": 1
+    },
+    {
+      "type": "mature_oak",
+      "x": 170,
+      "z": -10,
+      "scale": 1.35,
+      "variant": 2
+    },
+    {
+      "type": "mid_oak",
+      "x": 175,
+      "z": -45,
+      "scale": 1.15,
+      "variant": 3
+    },
+    {
+      "type": "mature_oak",
+      "x": 168,
+      "z": -85,
+      "scale": 1.3,
+      "variant": 0
     }
   ],
   "ghostData": {
@@ -1506,59 +1866,6 @@
       "name": "Start Gate",
       "t": 0
     }
-  ],
-  "scenery": [
-    { "type": "mature_oak", "x": 62.0, "z": -44.0, "scale": 1.30, "variant": 1 },
-    { "type": "mature_oak", "x": 68.0, "z": -38.0, "scale": 1.20, "variant": 2 },
-    { "type": "mid_oak",    "x": 75.0, "z": -42.0, "scale": 1.10, "variant": 0 },
-    { "type": "bush",       "x": 60.0, "z": -36.0, "scale": 1.10, "variant": 3 },
-    { "type": "bush",       "x": 72.0, "z": -32.0, "scale": 0.95, "variant": 1 },
-    { "type": "mid_oak",    "x": 82.0, "z": -36.0, "scale": 1.05, "variant": 2 },
-    { "type": "bush",       "x": 92.0, "z": -34.0, "scale": 0.90, "variant": 0 },
-    { "type": "mature_oak", "x": 86.0, "z": -46.0, "scale": 1.25, "variant": 3 },
-    { "type": "mid_oak",    "x": 98.0, "z": -40.0, "scale": 1.15, "variant": 1 },
-    { "type": "mature_oak", "x": -38.0, "z": -128.0, "scale": 1.30, "variant": 0 },
-    { "type": "mature_oak", "x": -8.0,  "z": -138.0, "scale": 1.40, "variant": 1 },
-    { "type": "mature_oak", "x": 18.0,  "z": -142.0, "scale": 1.35, "variant": 2 },
-    { "type": "mature_oak", "x": 50.0,  "z": -134.0, "scale": 1.30, "variant": 3 },
-    { "type": "mature_oak", "x": 82.0,  "z": -126.0, "scale": 1.40, "variant": 0 },
-    { "type": "mature_oak", "x": 120.0, "z": -126.0, "scale": 1.30, "variant": 1 },
-    { "type": "mature_oak", "x": 148.0, "z": -130.0, "scale": 1.40, "variant": 2 },
-    { "type": "mature_oak", "x": -65.0, "z": 8.0,   "scale": 1.30, "variant": 2 },
-    { "type": "mature_oak", "x": -75.0, "z": -15.0, "scale": 1.25, "variant": 1 },
-    { "type": "mature_oak", "x": -85.0, "z": -40.0, "scale": 1.40, "variant": 3 },
-    { "type": "mid_oak",    "x": -68.0, "z": 26.0,  "scale": 1.15, "variant": 0 },
-    { "type": "bush",       "x": -58.0, "z": 16.0,  "scale": 1.05, "variant": 2 },
-    { "type": "bush",       "x": -78.0, "z": -28.0, "scale": 1.10, "variant": 1 },
-    { "type": "mature_oak", "x": -85.0, "z": -145.0, "scale": 1.25, "variant": 1 },
-    { "type": "mid_oak",    "x": -68.0, "z": -140.0, "scale": 1.10, "variant": 2 },
-    { "type": "mature_oak", "x": -50.0, "z": -152.0, "scale": 1.35, "variant": 0 },
-    { "type": "mid_oak",    "x": -30.0, "z": -148.0, "scale": 1.15, "variant": 3 },
-    { "type": "mature_oak", "x": -15.0, "z": -160.0, "scale": 1.40, "variant": 1 },
-    { "type": "mature_oak", "x": 5.0,   "z": -155.0, "scale": 1.30, "variant": 2 },
-    { "type": "mid_oak",    "x": 25.0,  "z": -150.0, "scale": 1.20, "variant": 0 },
-    { "type": "mature_oak", "x": 42.0,  "z": -162.0, "scale": 1.35, "variant": 3 },
-    { "type": "mid_oak",    "x": 65.0,  "z": -145.0, "scale": 1.15, "variant": 1 },
-    { "type": "mature_oak", "x": 85.0,  "z": -152.0, "scale": 1.40, "variant": 2 },
-    { "type": "mid_oak",    "x": 105.0, "z": -142.0, "scale": 1.10, "variant": 0 },
-    { "type": "mature_oak", "x": 128.0, "z": -148.0, "scale": 1.30, "variant": 3 },
-    { "type": "mid_oak",    "x": 145.0, "z": -140.0, "scale": 1.15, "variant": 1 },
-    { "type": "mature_oak", "x": 165.0, "z": -145.0, "scale": 1.35, "variant": 2 },
-    { "type": "mature_oak", "x": -70.0, "z": -170.0, "scale": 1.40, "variant": 0 },
-    { "type": "mature_oak", "x": -25.0, "z": -175.0, "scale": 1.45, "variant": 1 },
-    { "type": "mature_oak", "x": 20.0,  "z": -172.0, "scale": 1.35, "variant": 2 },
-    { "type": "mature_oak", "x": 70.0,  "z": -178.0, "scale": 1.40, "variant": 3 },
-    { "type": "mature_oak", "x": 115.0, "z": -168.0, "scale": 1.35, "variant": 0 },
-    { "type": "mature_oak", "x": 155.0, "z": -165.0, "scale": 1.40, "variant": 1 },
-    { "type": "mature_oak", "x": -45.0, "z": 45.0,  "scale": 1.25, "variant": 0 },
-    { "type": "mid_oak",    "x": -10.0, "z": 52.0,  "scale": 1.10, "variant": 1 },
-    { "type": "mature_oak", "x": 28.0,  "z": 48.0,  "scale": 1.30, "variant": 2 },
-    { "type": "mid_oak",    "x": 65.0,  "z": 55.0,  "scale": 1.15, "variant": 3 },
-    { "type": "mature_oak", "x": 105.0, "z": 42.0,  "scale": 1.25, "variant": 0 },
-    { "type": "mature_oak", "x": 140.0, "z": 30.0,  "scale": 1.30, "variant": 1 },
-    { "type": "mature_oak", "x": 170.0, "z": -10.0, "scale": 1.35, "variant": 2 },
-    { "type": "mid_oak",    "x": 175.0, "z": -45.0, "scale": 1.15, "variant": 3 },
-    { "type": "mature_oak", "x": 168.0, "z": -85.0, "scale": 1.30, "variant": 0 }
   ]
 };
 
