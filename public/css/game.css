@@ -2797,3 +2797,47 @@ input[type="number"] {
   box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
 }
 
+
+/* HUD Track Picker */
+.exp9-track-picker {
+  position: relative;
+  display: inline-flex;
+}
+.exp9-track-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 240px;
+  background: rgba(15, 23, 42, 0.96);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 50;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+.exp9-track-menu[hidden] { display: none; }
+.exp9-track-menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #e2e8f0;
+  cursor: pointer;
+  font: inherit;
+}
+.exp9-track-menu-item strong { font-size: 0.85rem; }
+.exp9-track-menu-item small { font-size: 0.72rem; color: #94a3b8; }
+.exp9-track-menu-item:hover { background: rgba(255, 255, 255, 0.07); }
+.exp9-track-menu-item.active {
+  border-color: rgba(0, 255, 255, 0.45);
+  background: rgba(0, 255, 255, 0.08);
+}

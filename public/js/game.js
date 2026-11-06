@@ -162,7 +162,7 @@
     if (btnFullscreen) btnFullscreen.addEventListener('click', toggleFullscreen);
     if (btnZoomIn) btnZoomIn.addEventListener('click', () => adjustZoom(-1.5));
     if (btnZoomOut) btnZoomOut.addEventListener('click', () => adjustZoom(+1.5));
-    if (hudTerrainVal) hudTerrainVal.textContent = 'Hollister Hills RFTR';
+    if (hudTerrainVal) hudTerrainVal.textContent = (window.ACTIVE_TRACK && window.ACTIVE_TRACK.name) || 'GamerWheels';
   }
 
   // ==========================================================================
@@ -245,6 +245,9 @@
     const geo = new THREE.PlaneGeometry(650, 650, 130, 130);
     geo.rotateX(-Math.PI / 2);
 
+    const builtTrack = window.TrackBuilder && window.TrackBuilder._trackData;
+    const tCenter = (builtTrack && builtTrack.terrainCenter) || { x: 48, z: -72 };
+
     const pos = geo.attributes.position;
     const colors = [];
     const colNear = new THREE.Color(0xa0522d); // Warm packed dirt / clay near track
@@ -254,8 +257,8 @@
     const sps = (window.TrackBuilder && window.TrackBuilder._splinePoints) ? window.TrackBuilder._splinePoints : null;
 
     for (let i = 0; i < pos.count; i++) {
-      const px = pos.getX(i) + 48;
-      const pz = pos.getZ(i) - 72;
+      const px = pos.getX(i) + tCenter.x;
+      const pz = pos.getZ(i) + tCenter.z;
       pos.setX(i, px);
       pos.setZ(i, pz);
 
@@ -506,7 +509,7 @@
     // Check if current active track has custom placed scenery
     const customScenery = (trackSession.activeTrackData && Array.isArray(trackSession.activeTrackData.scenery))
       ? trackSession.activeTrackData.scenery
-      : (window.TRACK_DATA_HOLLISTER && Array.isArray(window.TRACK_DATA_HOLLISTER.scenery) ? window.TRACK_DATA_HOLLISTER.scenery : null);
+      : (window.ACTIVE_TRACK && Array.isArray(window.ACTIVE_TRACK.scenery) ? window.ACTIVE_TRACK.scenery : null);
 
     if (customScenery && customScenery.length > 0) {
       customScenery.forEach((item, idx) => {
@@ -1053,7 +1056,7 @@
       window.TrackBuilder.updateDropGate(dt, p);
     }
 
-    const trackData = trackSession.activeTrackData || window.TRACK_DATA_HOLLISTER;
+    const trackData = trackSession.activeTrackData || window.ACTIVE_TRACK;
     if (!trackData) return;
 
     const gates = window.TrackBuilder.getGates ? window.TrackBuilder.getGates() : {};
@@ -1123,9 +1126,9 @@
           const diff = lapTime - ghostTarget;
 
           if (diff < 0) {
-            showTrickToast(`🏆 NEW RECORD! ${formatRaceTime(lapTime)} (Beat Nico by ${Math.abs(diff).toFixed(2)}s!) 🏁`);
+            showTrickToast(`🏆 NEW RECORD! ${formatRaceTime(lapTime)} (Beat ${ghostName()} by ${Math.abs(diff).toFixed(2)}s!) 🏁`);
           } else {
-            showTrickToast(`🏁 FINISH! Official Time: ${formatRaceTime(lapTime)} (+${diff.toFixed(2)}s vs Nico)`);
+            showTrickToast(`🏁 FINISH! Official Time: ${formatRaceTime(lapTime)} (+${diff.toFixed(2)}s vs ${ghostName()})`);
           }
 
           if (!trackSession.bestLapTime || lapTime < trackSession.bestLapTime) {
@@ -1209,8 +1212,32 @@
     }
   }
 
+  // Park the ghost in the adjacent gate bay, ~4.5m behind the start line, beside the player
+  function stageGhostAtStart(trackData) {
+    if (!trackSession.ghostEntity) return;
+    const spawn = (trackData && trackData.spawn) || { x: 160, y: 1, z: -69.1 };
+    const gate = window.TrackBuilder && window.TrackBuilder.getGates ? window.TrackBuilder.getGates().startChute : null;
+    const heading = gate && typeof gate.heading === 'number' ? gate.heading : (spawn.heading || -1.716);
+    const perp = heading + Math.PI / 2;
+    const lateralOffset = 2.2;
+    const back = 4.5;
+    const gx = spawn.x - Math.sin(heading) * back + Math.sin(perp) * lateralOffset;
+    const gz = spawn.z - Math.cos(heading) * back + Math.cos(perp) * lateralOffset;
+    trackSession.ghostEntity.position.set(gx, (spawn.y || 1) + 0.2, gz);
+    trackSession.ghostEntity.rotation.y = heading;
+  }
+
+  function ghostName() {
+    const td = trackSession.activeTrackData || window.ACTIVE_TRACK;
+    return (td && td.ghostData && td.ghostData.rider) || 'Ghost';
+  }
+
   function initTrackModeSession(trackData) {
     trackSession.activeTrackData = trackData;
+    state.player.currentZone = (trackData && trackData.id) || 'hollister';
+    const splitLabel = document.getElementById('trackSplitLabel');
+    if (splitLabel) splitLabel.textContent = 'SPLIT VS ' + ghostName().toUpperCase();
+    if (hudTerrainVal) hudTerrainVal.textContent = (trackData && trackData.name) || 'GamerWheels';
     trackSession.state = 'primed';
     trackSession.lap = 0;
     trackSession.lapStartTime = 0;
@@ -1230,16 +1257,7 @@
 
     // Position ghost at Start Chute staging line next to the player in adjacent gate bay
     if (trackData && trackData.ghostData && trackData.ghostData.samples && trackData.ghostData.samples.length > 0) {
-      const heading = -1.716;
-      const perp = heading + Math.PI / 2;
-      const lateralOffset = 2.2;
-      // Staged 4.5m behind gate beside the player
-      trackSession.ghostEntity.position.set(
-        164.5 + Math.sin(perp) * lateralOffset,
-        1.2,
-        -68.4 + Math.cos(perp) * lateralOffset
-      );
-      trackSession.ghostEntity.rotation.y = heading;
+      stageGhostAtStart(trackData);
       trackSession.ghostEntity.visible = true;
     } else {
       trackSession.ghostEntity.visible = false;
@@ -1271,17 +1289,9 @@
     trackSession.ghostActive = false;
     trackSession.ghostElapsed = 0;
 
-    const trackData = trackSession.activeTrackData || window.TRACK_DATA_HOLLISTER;
+    const trackData = trackSession.activeTrackData || window.ACTIVE_TRACK;
     if (trackSession.ghostEntity && trackData && trackData.ghostData && trackData.ghostData.samples && trackData.ghostData.samples.length > 0) {
-      const heading = -1.716;
-      const perp = heading + Math.PI / 2;
-      const lateralOffset = 2.2;
-      trackSession.ghostEntity.position.set(
-        164.5 + Math.sin(perp) * lateralOffset,
-        1.2,
-        -68.4 + Math.cos(perp) * lateralOffset
-      );
-      trackSession.ghostEntity.rotation.y = heading;
+      stageGhostAtStart(trackData);
       trackSession.ghostEntity.visible = true;
     } else if (trackSession.ghostEntity) {
       trackSession.ghostEntity.visible = false;
@@ -1347,7 +1357,7 @@
     // Initialize track session & ghost
     initTrackModeSession(trackData);
 
-    showTrickToast(`HOLLISTER HILLS RFTR LOADED 🏁`);
+    showTrickToast(`${(trackData.name || 'TRACK').toUpperCase()} LOADED 🏁`);
   }
 
   function respawnPlayer() {
@@ -2418,13 +2428,13 @@
     }
 
     // Immediately load & compile Hollister Hills RFTR Track
-    if (window.TRACK_DATA_HOLLISTER) {
-      loadTrackMap('RFTR_Hollister', window.TRACK_DATA_HOLLISTER);
+    if (window.ACTIVE_TRACK) {
+      loadTrackMap('RFTR_' + (window.ACTIVE_TRACK.id || 'hollister'), window.ACTIVE_TRACK);
     } else {
-      console.warn('[GamerWheels] TRACK_DATA_HOLLISTER not loaded yet; waiting for script');
+      console.warn('[GamerWheels] ACTIVE_TRACK not loaded yet; waiting for script');
       window.addEventListener('load', () => {
-        if (window.TRACK_DATA_HOLLISTER) {
-          loadTrackMap('RFTR_Hollister', window.TRACK_DATA_HOLLISTER);
+        if (window.ACTIVE_TRACK) {
+          loadTrackMap('RFTR_Hollister', window.ACTIVE_TRACK);
         }
       });
     }
@@ -2461,6 +2471,19 @@
       p.speed = 0;
       if (heading !== undefined) p.heading = heading;
       snapCamera();
+    },
+    get cameraYaw() { return state.camera.yaw; },
+    // Analog input hook (same frame as the touch joystick): x = right, y = forward. Pass null to release.
+    setStick(x, y) {
+      if (x === null || x === undefined) {
+        state.input.joystickActive = false;
+        state.input.joystickVector.x = 0;
+        state.input.joystickVector.y = 0;
+        return;
+      }
+      state.input.joystickActive = true;
+      state.input.joystickVector.x = x;
+      state.input.joystickVector.y = y;
     },
     createBoardMesh: createBoardMeshInternal,
     setPlayerRailColor(hexColor) {
@@ -2525,8 +2548,8 @@
         fx = feat.x;
         fz = feat.z;
         fy = feat.y !== undefined ? feat.y : (typeof getSurfaceElevation === 'function' ? getSurfaceElevation(fx, fz) : 0);
-      } else if (feat.nodeIndex !== undefined && window.TRACK_DATA_HOLLISTER && window.TRACK_DATA_HOLLISTER.nodes && window.TRACK_DATA_HOLLISTER.nodes[feat.nodeIndex]) {
-        const n = window.TRACK_DATA_HOLLISTER.nodes[feat.nodeIndex];
+      } else if (feat.nodeIndex !== undefined && window.ACTIVE_TRACK && window.ACTIVE_TRACK.nodes && window.ACTIVE_TRACK.nodes[feat.nodeIndex]) {
+        const n = window.ACTIVE_TRACK.nodes[feat.nodeIndex];
         fx = n.x;
         fz = n.z;
         fy = n.y !== undefined ? n.y : (typeof getSurfaceElevation === 'function' ? getSurfaceElevation(fx, fz) : 0);

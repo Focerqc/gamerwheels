@@ -24,6 +24,7 @@ It combines custom board physics, dynamic multi-camera tracking, real-time multi
   - Draw track centerlines, adjust node coordinates, and place elevation markers (peaks & valleys).
   - Add discrete track features (Tabletops, Kickers, Rollers, Drops, Banked Berms, Gap Jumps).
   - Inspect generated 3D spline tracks in real-time with full 3D viewport controls.
+- **Multiple Tracks**: Pick a track from the 🗺️ menu in the HUD (or `?track=ridgeback` / `?track=hollister`). Ships with **Ridgeback Canyon** (original: hilltop drop-in, banked hairpins, rollers, mesa tabletop, vs. the "Pacer" ghost) and the classic **Hollister Hills RFTR** (vs. Nico's real lap).
 - **RFTR Racing Engine**: Lap timing, checkpoint/gate validation, split times against target ghosts (e.g., Nico), and track HUD.
 - **Track Markup Protocol**: Image markup protocol to quickly convert overhead satellite photos or Figma designs into playable 3D track splines. See [`TRACK_MARKUP_PROTOCOL.md`](TRACK_MARKUP_PROTOCOL.md).
 - **Asset-First Modern Pipeline**: Support for standard 3D file formats (`.gltf`, `.glb`, `.fbx`, `.obj`) with automated blockout ingestion scripts, removing dependency on legacy game engine conversion formats.

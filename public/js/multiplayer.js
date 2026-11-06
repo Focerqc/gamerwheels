@@ -187,6 +187,7 @@
           rp.target.isAirborne = p.isAirborne;
           rp.target.isGrinding = p.isGrinding;
           rp.target.trick = p.trick;
+          rp.zone = p.currentZone;
           rp.score = p.score || 0;
           rp.name = p.name || rp.name;
         }
@@ -451,6 +452,11 @@
       cur.pitch += (tgt.pitch - cur.pitch) * lerpAlpha;
       cur.roll += (tgt.roll - cur.roll) * lerpAlpha;
       cur.speed += (tgt.speed - cur.speed) * lerpAlpha;
+
+      // Only show riders on the same track as us
+      const sameTrack = !rp.zone || !localPlayer.currentZone || rp.zone === localPlayer.currentZone;
+      rp.group.visible = sameTrack;
+      if (rp.shadow) rp.shadow.visible = sameTrack;
 
       // Apply to 3D meshes
       rp.group.position.set(cur.x, cur.y, cur.z);

@@ -73,7 +73,7 @@
               <span class="exp9-track-hud-timer" id="trackLapTimer">00:00.00</span>
             </div>
             <div class="exp9-track-hud-split-block">
-              <span class="exp9-track-hud-label">SPLIT VS NICO</span>
+              <span class="exp9-track-hud-label" id="trackSplitLabel">SPLIT VS GHOST</span>
               <span class="exp9-track-hud-split neutral" id="trackLapSplit">--.--</span>
             </div>
             <div class="exp9-track-hud-target-block">
@@ -189,6 +189,15 @@
             </button>
           </div>
 
+          <div class="exp9-track-picker" id="trackPicker">
+            <button type="button" class="exp9-hud-btn" id="btnTrackPicker" title="Choose track" aria-haspopup="true" aria-expanded="false">
+              <span aria-hidden="true">🗺️</span>
+              <span class="exp9-btn-text" id="lblTrackPicker">Track</span>
+              <span aria-hidden="true">▾</span>
+            </button>
+            <div class="exp9-track-menu" id="trackMenu" role="menu" hidden></div>
+          </div>
+
           <button type="button" class="exp9-hud-btn" id="btnOpenTrackStudio" title="Open RFTR Spline & Elevation Studio">
             <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
@@ -223,7 +232,7 @@
       <!-- Global Trick Ticker Banner (Top Center) -->
       <div class="exp9-global-ticker" id="trickTicker">
         <span class="exp9-ticker-icon">⚡</span>
-        <span class="exp9-ticker-text" id="tickerText">Welcome to Hollister Hills RFTR! Roll to Timing Gate to race Nico.</span>
+        <span class="exp9-ticker-text" id="tickerText">Welcome to GamerWheels! Roll through the start gate to race the ghost.</span>
       </div>
 
       <!-- Center Float: Local Trick / Action Toast -->
@@ -303,7 +312,7 @@
         <span class="editor-logo-icon">➰</span>
         <div>
           <h1 class="editor-title">RFTR Style Spline Studio</h1>
-          <span class="editor-subtitle">Hollister Hills Track Designer</span>
+          <span class="editor-subtitle" id="editorTrackSubtitle">Track Designer</span>
         </div>
       </div>
 
@@ -347,16 +356,16 @@
           <button type="button" class="editor-action-btn" id="btnResetView" title="Center and fit map view">
             <span class="btn-icon">🎯</span> Fit View
           </button>
-          <button type="button" class="editor-action-btn" id="btnToggleGhostPath" title="Toggle Nico's recorded Floaty GPS telemetry path overlay">
-            <span class="btn-icon">👻</span> <span id="lblGhostPath">Nico Path: On</span>
+          <button type="button" class="editor-action-btn" id="btnToggleGhostPath" title="Toggle the ghost rider's path overlay">
+            <span class="btn-icon">👻</span> <span id="lblGhostPath">Ghost Path: On</span>
           </button>
-          <button type="button" class="editor-action-btn" id="btnToggleEditGhost" title="Toggle Ghost Node editing mode to drag Nico's telemetry points directly">
+          <button type="button" class="editor-action-btn" id="btnToggleEditGhost" title="Toggle Ghost Node editing mode to drag the ghost's path points directly">
             <span class="btn-icon">✏️</span> <span id="lblEditGhost">Edit Ghost: Off</span>
           </button>
           <button type="button" class="editor-action-btn active" id="btnToggleElevLabels" title="Toggle node elevation text: Color-Coded ➔ Plain White ➔ Off">
             <span class="btn-icon">🏷️</span> <span id="lblElevLabels">Labels: Color</span>
           </button>
-          <button type="button" class="editor-action-btn" id="btnToggleElevationColor" title="Toggle color-coded elevation view: Off ➔ Track ➔ Nico GPS ➔ Off (Default: Off)">
+          <button type="button" class="editor-action-btn" id="btnToggleElevationColor" title="Toggle color-coded elevation view: Off ➔ Track ➔ Ghost ➔ Off (Default: Off)">
             <span class="btn-icon">🏔️</span> <span id="lblElevationColor">Elevation: Off</span>
           </button>
         </div>
@@ -730,6 +739,9 @@
   <!-- Game Engines -->
   <script src="js/trackBuilder.js"></script>
   <script src="js/trackData_hollisterHills.js"></script>
+  <script src="js/trackData_ridgebackCanyon.js"></script>
+  <script src="js/trackRegistry.js"></script>
+  <script src="js/trackPicker.js"></script>
   <script src="js/trackEditor.js"></script>
   <script src="js/game.js"></script>
   <script src="js/multiplayer.js"></script>

@@ -147,7 +147,7 @@
 
       // Compile current track directly into Three.js scene
       if (typeof window.loadTrackMap === 'function') {
-        window.loadTrackMap('RFTR_Hollister', window.TRACK_DATA_HOLLISTER);
+        window.loadTrackMap('RFTR_Hollister', window.ACTIVE_TRACK);
       }
 
       // Switch camera to inspect mode
@@ -330,7 +330,7 @@
         if (devModal) devModal.style.display = 'none';
 
         if (typeof window.loadTrackMap === 'function') {
-          window.loadTrackMap('RFTR_Hollister', window.TRACK_DATA_HOLLISTER);
+          window.loadTrackMap('RFTR_Hollister', window.ACTIVE_TRACK);
         } else {
           const btn = document.querySelector('button[data-map="RFTR_Hollister"]');
           if (btn) btn.click();
@@ -602,13 +602,13 @@
   }
 
   function initEditor() {
-    // Always refresh ghostData & trackData from window.TRACK_DATA_HOLLISTER
-    if (window.TRACK_DATA_HOLLISTER) {
-      if (window.TRACK_DATA_HOLLISTER.ghostData) {
-        editorState.trackData.ghostData = JSON.parse(JSON.stringify(window.TRACK_DATA_HOLLISTER.ghostData));
+    // Always refresh ghostData & trackData from window.ACTIVE_TRACK
+    if (window.ACTIVE_TRACK) {
+      if (window.ACTIVE_TRACK.ghostData) {
+        editorState.trackData.ghostData = JSON.parse(JSON.stringify(window.ACTIVE_TRACK.ghostData));
       }
       if (!editorState.trackData.nodes || editorState.trackData.nodes.length === 0) {
-        editorState.trackData = JSON.parse(JSON.stringify(window.TRACK_DATA_HOLLISTER));
+        editorState.trackData = JSON.parse(JSON.stringify(window.ACTIVE_TRACK));
       }
     }
 
@@ -636,7 +636,13 @@
       // Load Clean Satellite BG Image
       // Load Satellite BG Image
       editorState.img = new Image();
-      editorState.img.src = 'images/rftr_img.png';
+      // Satellite backdrop only matches the Hollister Hills coordinate frame
+      const activeId = (window.ACTIVE_TRACK && window.ACTIVE_TRACK.id) || 'hollister';
+      if (activeId === 'hollister') {
+        editorState.img.src = 'images/rftr_img.png';
+      } else {
+        setTimeout(() => { resetView(); draw(); }, 0);
+      }
       editorState.img.onload = () => {
         resetView();
         draw();
@@ -645,20 +651,20 @@
       // Only initialize trackData if not already loaded in this active session
       if (!editorState.trackData) {
         try {
-          const saved = localStorage.getItem('gamerwheels_rftr_draft');
+          const saved = localStorage.getItem(draftKey());
           if (saved) {
             const parsed = JSON.parse(saved);
             if (parsed && parsed.nodes && parsed.nodes.length > 0) {
               editorState.trackData = parsed;
-            } else if (window.TRACK_DATA_HOLLISTER) {
-              editorState.trackData = JSON.parse(JSON.stringify(window.TRACK_DATA_HOLLISTER));
+            } else if (window.ACTIVE_TRACK) {
+              editorState.trackData = JSON.parse(JSON.stringify(window.ACTIVE_TRACK));
             }
-          } else if (window.TRACK_DATA_HOLLISTER) {
-            editorState.trackData = JSON.parse(JSON.stringify(window.TRACK_DATA_HOLLISTER));
+          } else if (window.ACTIVE_TRACK) {
+            editorState.trackData = JSON.parse(JSON.stringify(window.ACTIVE_TRACK));
           }
         } catch (err) {
-          if (window.TRACK_DATA_HOLLISTER) {
-            editorState.trackData = JSON.parse(JSON.stringify(window.TRACK_DATA_HOLLISTER));
+          if (window.ACTIVE_TRACK) {
+            editorState.trackData = JSON.parse(JSON.stringify(window.ACTIVE_TRACK));
           }
         }
       }
@@ -693,6 +699,25 @@
     editorState.offsetX = editorState.width / 2;
     editorState.offsetY = editorState.height / 2;
     editorState.scale = 3.5;
+
+    // Tracks without the satellite backdrop: fit the whole layout on screen
+    const activeId = (window.ACTIVE_TRACK && window.ACTIVE_TRACK.id) || 'hollister';
+    const nodes = editorState.trackData && editorState.trackData.nodes;
+    if (activeId !== 'hollister' && nodes && nodes.length > 1) {
+      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      nodes.forEach(n => {
+        minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x);
+        minZ = Math.min(minZ, n.z); maxZ = Math.max(maxZ, n.z);
+      });
+      const margin = 60;
+      const scale = Math.min(
+        (editorState.width - margin * 2) / Math.max(1, maxX - minX),
+        (editorState.height - margin * 2) / Math.max(1, maxZ - minZ)
+      );
+      editorState.scale = Math.max(0.5, Math.min(8, scale));
+      editorState.offsetX = editorState.width / 2 - ((minX + maxX) / 2) * editorState.scale;
+      editorState.offsetY = editorState.height / 2 - ((minZ + maxZ) / 2) * editorState.scale;
+    }
     updateHUD();
     draw();
   }
@@ -1066,8 +1091,8 @@
   }
 
   function findGhostNodeAtScreen(screenX, screenY) {
-    if (!editorState.showGhostPath || !window.TRACK_DATA_HOLLISTER || !window.TRACK_DATA_HOLLISTER.ghostData) return -1;
-    const samples = window.TRACK_DATA_HOLLISTER.ghostData.samples;
+    if (!editorState.showGhostPath || !window.ACTIVE_TRACK || !window.ACTIVE_TRACK.ghostData) return -1;
+    const samples = window.ACTIVE_TRACK.ghostData.samples;
     if (!samples) return -1;
     const { worldX, worldZ } = screenToWorld(screenX, screenY);
     const hitRadiusWorld = 18 / editorState.scale;
@@ -1435,8 +1460,8 @@
     window.addEventListener('mouseup', () => {
       if (editorState.isDraggingGhostNode) {
         editorState.isDraggingGhostNode = false;
-        if (window.TRACK_DATA_HOLLISTER && window.TRACK_DATA_HOLLISTER.ghostData) {
-          editorState.trackData.ghostData = window.TRACK_DATA_HOLLISTER.ghostData;
+        if (window.ACTIVE_TRACK && window.ACTIVE_TRACK.ghostData) {
+          editorState.trackData.ghostData = window.ACTIVE_TRACK.ghostData;
         }
         syncToGlobalTrackData();
         saveDraft();
@@ -1518,7 +1543,7 @@
 
       // Handle Dragging Ghost Node
       if (editorState.isDraggingGhostNode && editorState.selectedGhostIndex !== -1) {
-        const samples = window.TRACK_DATA_HOLLISTER.ghostData.samples;
+        const samples = window.ACTIVE_TRACK.ghostData.samples;
         if (samples && samples[editorState.selectedGhostIndex]) {
           const g = samples[editorState.selectedGhostIndex];
           g.x = Math.round(worldX * 100) / 100;
@@ -1701,9 +1726,15 @@
     saveDraft();
   }
 
+  // Drafts are stored per track (Hollister keeps its original key for existing drafts)
+  function draftKey() {
+    const id = (window.ACTIVE_TRACK && window.ACTIVE_TRACK.id) || 'hollister';
+    return id === 'hollister' ? 'gamerwheels_rftr_draft' : 'gamerwheels_draft_' + id;
+  }
+
   function saveDraft() {
     try {
-      localStorage.setItem('gamerwheels_rftr_draft', JSON.stringify(editorState.trackData));
+      localStorage.setItem(draftKey(), JSON.stringify(editorState.trackData));
     } catch (err) {}
   }
 
@@ -2451,7 +2482,7 @@
 
   function getNicoElevationAtPoint(worldX, worldZ) {
     const ghostData = (editorState.trackData && editorState.trackData.ghostData) ||
-      (window.TRACK_DATA_HOLLISTER && window.TRACK_DATA_HOLLISTER.ghostData);
+      (window.ACTIVE_TRACK && window.ACTIVE_TRACK.ghostData);
     const samples = ghostData?.samples;
     if (!samples || !samples.length) return null;
 
@@ -2514,7 +2545,7 @@
           ctx.fill();
           ctx.stroke();
 
-          // In Compare Mode (Track + Nico), render the outer borders colored by Nico's GPS elevation
+          // In Compare Mode (Track + Ghost), render the outer borders colored by Nico's GPS elevation
           if (isCompareMode) {
             const midWorldX = (pts[i].x + pts[i + 1].x) / 2;
             const midWorldZ = (pts[i].z + pts[i + 1].z) / 2;
@@ -2716,8 +2747,8 @@
     }
 
     // 1.5 Draw Nico's Recorded Floaty GPS Path Overlay & Draggable Ghost Handles
-    if (editorState.showGhostPath && window.TRACK_DATA_HOLLISTER && window.TRACK_DATA_HOLLISTER.ghostData) {
-      const samples = window.TRACK_DATA_HOLLISTER.ghostData.samples;
+    if (editorState.showGhostPath && window.ACTIVE_TRACK && window.ACTIVE_TRACK.ghostData) {
+      const samples = window.ACTIVE_TRACK.ghostData.samples;
       if (samples && samples.length > 1) {
         ctx.save();
         const isGhostElevMode = (editorState.elevationColorMode === 'ghost' || editorState.elevationColorMode === 'track_nico');
@@ -2809,11 +2840,11 @@
         const startPt = worldToScreen(samples[0].x, samples[0].z);
         ctx.fillStyle = isGhostElevMode ? '#f59e0b' : '#00ffff';
         ctx.font = 'bold 11px sans-serif';
-        let ghostLabel = `👻 Nico Floaty Path (${samples.length} pts)`;
+        let ghostLabel = `👻 Ghost Path (${samples.length} pts)`;
         if (editorState.elevationColorMode === 'track_nico') {
-          ghostLabel = `👻 Nico GPS Telemetry (${samples.length} points)`;
+          ghostLabel = `👻 Ghost Telemetry (${samples.length} points)`;
         } else if (isGhostElevMode) {
-          ghostLabel = `👻 Nico Floaty Path (Elevation Mode: ${samples.length} pts)`;
+          ghostLabel = `👻 Ghost Path (Elevation Mode: ${samples.length} pts)`;
         }
         ctx.fillText(ghostLabel, startPt.screenX + 10, startPt.screenY - 8);
         ctx.restore();
@@ -3292,9 +3323,9 @@
       ctx.textBaseline = 'top';
       let modeTitle = '🏔️ Track Elevation Heatmap';
       if (editorState.elevationColorMode === 'track_nico') {
-        modeTitle = '🏔️ Track Surface  vs  👻 Nico GPS Borders';
+        modeTitle = '🏔️ Track Surface  vs  👻 Ghost Borders';
       } else if (editorState.elevationColorMode === 'ghost') {
-        modeTitle = '👻 Nico GPS Elevation Heatmap';
+        modeTitle = '👻 Ghost Elevation Heatmap';
       }
       ctx.fillText(modeTitle, legendX + 10, legendY + 8);
 
@@ -3331,7 +3362,7 @@
         ctx.fillStyle = '#fbbf24';
         ctx.font = 'bold 8.5px "Space Grotesk", sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Surface: Track Y  •  Borders & Dots: Nico GPS Y', gradX + gradW / 2, gradY + gradH + 16);
+        ctx.fillText('Surface: Track Y  •  Borders & Dots: Ghost Y', gradX + gradW / 2, gradY + gradH + 16);
       }
 
       ctx.restore();
@@ -3448,7 +3479,7 @@
     const splineData = getSplineSamples(nodes.length * 20);
 
     const ghostData = (editorState.trackData && editorState.trackData.ghostData) ||
-      (window.TRACK_DATA_HOLLISTER && window.TRACK_DATA_HOLLISTER.ghostData);
+      (window.ACTIVE_TRACK && window.ACTIVE_TRACK.ghostData);
 
     const elevValues = nodes.map(n => n.y !== undefined ? n.y : 1.0);
     const minElev = elevValues.length ? Math.min(...elevValues) : 0;
@@ -3580,8 +3611,8 @@
       if (parsed.name) editorState.trackData.name = parsed.name;
       if (parsed.ghostData) {
         editorState.trackData.ghostData = parsed.ghostData;
-        if (window.TRACK_DATA_HOLLISTER) {
-          window.TRACK_DATA_HOLLISTER.ghostData = parsed.ghostData;
+        if (window.ACTIVE_TRACK) {
+          window.ACTIVE_TRACK.ghostData = parsed.ghostData;
         }
       }
 
@@ -3603,7 +3634,7 @@
     btnGhost.addEventListener('click', () => {
       editorState.showGhostPath = !editorState.showGhostPath;
       const lbl = document.getElementById('lblGhostPath');
-      if (lbl) lbl.innerText = `Nico Path: ${editorState.showGhostPath ? 'On' : 'Off'}`;
+      if (lbl) lbl.innerText = `Ghost Path: ${editorState.showGhostPath ? 'On' : 'Off'}`;
       btnGhost.classList.toggle('active', editorState.showGhostPath);
       draw();
     });
@@ -3624,13 +3655,13 @@
       const lbl = document.getElementById('lblEditGhost');
       if (lbl) lbl.innerText = `Edit Ghost: ${editorState.editGhostMode ? 'On' : 'Off'}`;
       const lblG = document.getElementById('lblGhostPath');
-      if (lblG) lblG.innerText = `Nico Path: ${editorState.showGhostPath ? 'On' : 'Off'}`;
+      if (lblG) lblG.innerText = `Ghost Path: ${editorState.showGhostPath ? 'On' : 'Off'}`;
       btnEditGhost.classList.toggle('active', editorState.editGhostMode);
       draw();
     });
   }
 
-  // Elevation Heatmap Toggle Event Handler (Off ➔ Track ➔ Track + Nico ➔ Nico GPS ➔ Off)
+  // Elevation Heatmap Toggle Event Handler (Off ➔ Track ➔ Track + Ghost ➔ Nico GPS ➔ Off)
   const btnElevColor = document.getElementById('btnToggleElevationColor');
   if (btnElevColor) {
     btnElevColor.addEventListener('click', () => {
@@ -3640,14 +3671,14 @@
         editorState.elevationColorMode = 'track_nico';
         editorState.showGhostPath = true;
         const lblG = document.getElementById('lblGhostPath');
-        if (lblG) lblG.innerText = 'Nico Path: On';
+        if (lblG) lblG.innerText = 'Ghost Path: On';
         const btnG = document.getElementById('btnToggleGhostPath');
         if (btnG) btnG.classList.add('active');
       } else if (editorState.elevationColorMode === 'track_nico') {
         editorState.elevationColorMode = 'ghost';
         editorState.showGhostPath = true;
         const lblG = document.getElementById('lblGhostPath');
-        if (lblG) lblG.innerText = 'Nico Path: On';
+        if (lblG) lblG.innerText = 'Ghost Path: On';
         const btnG = document.getElementById('btnToggleGhostPath');
         if (btnG) btnG.classList.add('active');
       } else {
@@ -3663,10 +3694,10 @@
           lblElev.innerText = 'Elevation: Track';
           btnElevColor.classList.add('active');
         } else if (editorState.elevationColorMode === 'track_nico') {
-          lblElev.innerText = 'Elevation: Track + Nico';
+          lblElev.innerText = 'Elevation: Track + Ghost';
           btnElevColor.classList.add('active');
         } else if (editorState.elevationColorMode === 'ghost') {
-          lblElev.innerText = 'Elevation: Nico GPS';
+          lblElev.innerText = 'Elevation: Ghost';
           btnElevColor.classList.add('active');
         }
       }
@@ -3711,12 +3742,12 @@
 
   // Snap Ghost Telemetry onto Track Spline (Chronological & Direction-Aware)
   function snapGhostToTrackSpline() {
-    if (!window.TRACK_DATA_HOLLISTER || !window.TRACK_DATA_HOLLISTER.ghostData) {
+    if (!window.ACTIVE_TRACK || !window.ACTIVE_TRACK.ghostData) {
       alert('No ghost telemetry data available to snap.');
       return;
     }
 
-    const ghostData = window.TRACK_DATA_HOLLISTER.ghostData;
+    const ghostData = window.ACTIVE_TRACK.ghostData;
     const samples = ghostData.samples;
     if (!samples || samples.length === 0) return;
 
@@ -3778,7 +3809,7 @@
 
     editorState.showGhostPath = true;
     const lbl = document.getElementById('lblGhostPath');
-    if (lbl) lbl.innerText = 'Nico Path: On';
+    if (lbl) lbl.innerText = 'Ghost Path: On';
 
     syncToGlobalTrackData();
     saveDraft();
@@ -3793,8 +3824,8 @@
   window.updateNumberedFeaturesUI = updateNumberedFeaturesUI;
 
   function syncToGlobalTrackData() {
-    window.TRACK_DATA_HOLLISTER = JSON.parse(JSON.stringify(editorState.trackData));
-    console.log('✅ Synchronized editor track data with window.TRACK_DATA_HOLLISTER', window.TRACK_DATA_HOLLISTER);
+    window.ACTIVE_TRACK = JSON.parse(JSON.stringify(editorState.trackData));
+    console.log('✅ Synchronized editor track data with window.ACTIVE_TRACK', window.ACTIVE_TRACK);
   }
 
   // Boot
