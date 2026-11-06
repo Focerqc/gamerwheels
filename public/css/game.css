@@ -1950,13 +1950,16 @@ body.exp9-standalone-page .exp9-hud-layer {
 
 /* Studio Header */
 .editor-header {
-  height: 64px;
+  min-height: 64px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  row-gap: 8px;
   background: rgba(15, 23, 42, 0.95);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 8px 20px;
   gap: 16px;
   z-index: 10;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
@@ -1964,6 +1967,7 @@ body.exp9-standalone-page .exp9-hud-layer {
 
 .editor-brand {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 12px;
 }
@@ -1996,12 +2000,15 @@ body.exp9-standalone-page .exp9-hud-layer {
 /* Studio Toolbar */
 .editor-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 8px 12px;
+  min-width: 0;
 }
 
 .editor-btn-group {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   background: rgba(30, 41, 59, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -2101,6 +2108,19 @@ body.exp9-standalone-page .exp9-hud-layer {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* Row 1: brand + actions (exit always visible). Row 2: tool groups, wrapping as needed */
+.editor-header-actions { order: 2; }
+.editor-header > .editor-toolbar {
+  order: 3;
+  flex-basis: 100%;
+}
+.editor-header > .editor-toolbar > .editor-divider { display: none; }
+@media (max-width: 900px) {
+  .editor-subtitle { display: none; }
 }
 
 /* Workspace Layout */
@@ -2115,6 +2135,8 @@ body.exp9-standalone-page .exp9-hud-layer {
 /* Left Sidebar */
 .editor-sidebar {
   width: 330px;
+  flex-shrink: 0;
+  overflow-x: hidden;
   background: rgba(15, 23, 42, 0.96);
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   padding: 16px;
@@ -2736,6 +2758,7 @@ input[type="number"] {
 
 .feature-name-edit {
   flex: 1;
+  min-width: 0;
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 5px;

@@ -1639,6 +1639,14 @@
         exit3DInspection();
         return;
       }
+      // Esc with no 3D view or open dialog: leave the Studio
+      const openModal = [...document.querySelectorAll('.editor-modal-overlay, .exp9-modal-overlay')]
+        .some(m => getComputedStyle(m).display !== 'none');
+      if (cont && cont.style.display !== 'none' && !openModal) {
+        const exitBtn = document.getElementById('btnExitEditor');
+        if (exitBtn) exitBtn.click();
+        return;
+      }
     } else if (e.code === 'Tab') {
       e.preventDefault();
       exit3DInspection();
