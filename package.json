@@ -1,7 +1,12 @@
 {
   "name": "gamerwheels",
   "version": "1.0.0",
-  "description": "GamerWheels — modern asset blockout and physics-first 3D gameplay project for standard mesh imports and Unreal-friendly workflows.",
+  "description": "GamerWheels \u2014 modern asset blockout and physics-first 3D gameplay project for standard mesh imports and Unreal-friendly workflows.",
+  "homepage": "https://gamerwheels.onrender.com/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Focerqc/gamerwheels.git"
+  },
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

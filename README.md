@@ -4,8 +4,13 @@
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
 [![Three.js](https://img.shields.io/badge/Three.js-r128-black.svg)](https://threejs.org/)
 [![Socket.io](https://img.shields.io/badge/Socket.io-v4.7-purple.svg)](https://socket.io/)
+[![Play Now](https://img.shields.io/badge/%E2%96%B6%20Play%20Now-gamerwheels.onrender.com-ef233c.svg)](https://gamerwheels.onrender.com/)
 
 **GamerWheels** is a real-time multiplayer 3D PEV (Personal Electric Vehicle / Onewheel) trail carving, street park, and RFTR (Race for the Rail) track racing simulator built with **Three.js**, **Node.js**, **Express**, and **Socket.io**.
+
+### ▶ [Play GamerWheels in your browser](https://gamerwheels.onrender.com/)
+
+> Hosted on Render's free tier. If the server has been idle, the first load can take ~30–60 seconds while it wakes up.
 
 It combines custom board physics, dynamic multi-camera tracking, real-time multiplayer rider synchronization, an interactive 2D track editor with 3D inspection support, and a modern asset-first content pipeline.
 
@@ -20,7 +25,7 @@ It combines custom board physics, dynamic multi-camera tracking, real-time multi
   - Add discrete track features (Tabletops, Kickers, Rollers, Drops, Banked Berms, Gap Jumps).
   - Inspect generated 3D spline tracks in real-time with full 3D viewport controls.
 - **RFTR Racing Engine**: Lap timing, checkpoint/gate validation, split times against target ghosts (e.g., Nico), and track HUD.
-- **Track Markup Protocol**: Image markup protocol to quickly convert overhead satellite photos or Figma designs into playable 3D track splines. See [`TRACK_MARKUP_PROTOCOL.md`](file:///c:/Users/quinn/Documents/GitHub/gamerwheels/TRACK_MARKUP_PROTOCOL.md).
+- **Track Markup Protocol**: Image markup protocol to quickly convert overhead satellite photos or Figma designs into playable 3D track splines. See [`TRACK_MARKUP_PROTOCOL.md`](TRACK_MARKUP_PROTOCOL.md).
 - **Asset-First Modern Pipeline**: Support for standard 3D file formats (`.gltf`, `.glb`, `.fbx`, `.obj`) with automated blockout ingestion scripts, removing dependency on legacy game engine conversion formats.
 
 ---
@@ -66,7 +71,7 @@ gamerwheels/
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/quinncfoster/gamerwheels.git
+   git clone https://github.com/Focerqc/gamerwheels.git
    cd gamerwheels
    ```
 
@@ -85,7 +90,7 @@ gamerwheels/
    ```
 
 4. **Access the game:**
-   Open your browser and navigate to `http://localhost:3000`.
+   Open your browser and navigate to `http://localhost:3000`, or play the hosted build at [gamerwheels.onrender.com](https://gamerwheels.onrender.com/).
 
 ---
 
@@ -103,7 +108,7 @@ GamerWheels includes a built-in track editor for designing and previewing tracks
 
 We maintain a dead-simple visual convention for drawing over satellite imagery or layout blueprints to quickly build tracks.
 
-For full specifications, color codes, marker shapes, and elevation rules, refer to [`TRACK_MARKUP_PROTOCOL.md`](file:///c:/Users/quinn/Documents/GitHub/gamerwheels/TRACK_MARKUP_PROTOCOL.md).
+For full specifications, color codes, marker shapes, and elevation rules, refer to [`TRACK_MARKUP_PROTOCOL.md`](TRACK_MARKUP_PROTOCOL.md).
 
 Quick color reference:
 - **Cyan (`#00FFFF`)**: Track Centerline & Direction
@@ -133,12 +138,14 @@ GamerWheels uses a clean asset ingestion pipeline designed for modern 3D modelin
 
 ## Server & Deployment
 
-The backend server ([`server.js`](file:///c:/Users/quinn/Documents/GitHub/gamerwheels/server.js)) is powered by Node.js, Express, and Socket.io.
+Live build: **https://gamerwheels.onrender.com/**
+
+The backend server ([`server.js`](server.js)) is powered by Node.js, Express, and Socket.io.
 
 - **Health Check Endpoint**: `GET /health` (returns server status, active rider count, and uptime).
 - **Container / Cloud Deployment**: Standard Node.js environment variable `PORT` is automatically respected for cloud hosting.
-- **Render.com Deployment**: Declarative Blueprint provided via [`render.yaml`](file:///c:/Users/quinn/Documents/GitHub/gamerwheels/render.yaml) for zero-config Web Service deploys with automatic `/health` checks.
-- **Railway Deployment**: Configured via [`railway.json`](file:///c:/Users/quinn/Documents/GitHub/gamerwheels/railway.json) using Nixpacks builder and automatic restarts.
+- **Render.com Deployment**: Declarative Blueprint provided via [`render.yaml`](render.yaml) for zero-config Web Service deploys with automatic `/health` checks.
+- **Railway Deployment**: Configured via [`railway.json`](railway.json) using Nixpacks builder and automatic restarts.
 
 ---
 
